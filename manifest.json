@@ -1,0 +1,16 @@
+{
+  "name": "BPA-Plus — Gestión de Buenas Prácticas de Almacenamiento",
+  "short_name": "BPA-Plus",
+  "description": "Documentos, capacitaciones y autoinspecciones bajo Buenas Prácticas de Almacenamiento. Aplicación personal, 100% local y sin conexión.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F3F5F7",
+  "theme_color": "#142542",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

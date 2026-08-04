@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#142542">
+  <meta name="description" content="BPA-Plus — gestión de Buenas Prácticas de Almacenamiento: documentos, capacitaciones y autoinspecciones. Aplicación personal, 100% local y sin conexión.">
+  <title>BPA-Plus · Gestión BPA</title>
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar" aria-label="Navegación principal"></aside>
+    <div class="main">
+      <header class="topbar" id="topbar"></header>
+      <main class="content" id="content" role="main">
+        <div class="skel"></div>
+        <div class="skel"></div>
+        <div class="skel"></div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Chrome móvil -->
+  <button class="fab" id="fab" aria-label="Acción rápida">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+  <nav class="bottom-nav" id="bottomNav" aria-label="Navegación"></nav>
+
+  <!-- Área de impresión de actas -->
+  <div id="printArea" class="print-only" aria-hidden="true"></div>
+
+  <!-- Scripts clásicos en orden de dependencia: funciona abriendo el archivo directamente y como PWA -->
+  <script src="js/domain.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/actas.js"></script>
+  <script src="js/views.js"></script>
+  <script src="js/lock.js"></script>
+  <script src="js/drive.js"></script>
+  <script src="js/alerts.js"></script>
+  <script src="js/app.js"></script>
+
+  <script>
+    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function () { /* offline opcional */ });
+      });
+    }
+  </script>
+</body>
+</html>

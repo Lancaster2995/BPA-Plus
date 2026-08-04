@@ -1,0 +1,550 @@
+/* ==========================================================================
+   BPA-Plus — drive.js
+   Integración con Google Drive 100% desde el navegador (sin backend propio).
+   Usa Google Identity Services para el login y llama directamente a la API
+   de Drive con el token obtenido. El token vive solo en memoria (se pierde
+   al cerrar la pestaña) — no se guarda en ningún servidor.
+
+   Requiere que el usuario configure su propio Client ID de OAuth (gratis,
+   se crea en Google Cloud Console). Ver instrucciones en README.md.
+   ========================================================================== */
+(function (global) {
+  'use strict';
+  var D = global.BPAPLUS.domain, UI = global.BPAPLUS.ui;
+
+  var GIS_SRC = 'https://accounts.google.com/gsi/client';
+  var MAMMOTH_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.7.2/mammoth.browser.min.js';
+  var XLSX_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  var SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+
+  var state = { token: null, tokenClient: null, expiresAt: 0 };
+
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+      if (document.querySelector('script[src="' + src + '"]')) return resolve();
+      var s = document.createElement('script'); s.src = src; s.async = true;
+      s.onload = function () { resolve(); }; s.onerror = function () { reject(new Error('No se pudo cargar ' + src)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function getClientId() { try { return localStorage.getItem('bpa-plus-drive-client-id') || ''; } catch (e) { return ''; } }
+  function setClientId(id) { try { localStorage.setItem('bpa-plus-drive-client-id', id); } catch (e) {} }
+
+  function isConnected() { return !!state.token && Date.now() < state.expiresAt; }
+
+  function ensureAuth() {
+    var clientId = getClientId();
+    if (!clientId) return Promise.reject(new Error('NO_CLIENT_ID'));
+    if (isConnected()) return Promise.resolve(state.token);
+    return loadScript(GIS_SRC).then(function () {
+      return new Promise(function (resolve, reject) {
+        try {
+          var client = google.accounts.oauth2.initTokenClient({
+            client_id: clientId, scope: SCOPE,
+            callback: function (resp) {
+              if (resp.error) { reject(new Error(resp.error)); return; }
+              state.token = resp.access_token;
+              state.expiresAt = Date.now() + (Number(resp.expires_in) || 3300) * 1000;
+              resolve(state.token);
+            }
+          });
+          client.requestAccessToken({ prompt: isConnected() ? '' : 'consent' });
+        } catch (e) { reject(e); }
+      });
+    });
+  }
+
+  function api(path, params) {
+    var url = 'https://www.googleapis.com/drive/v3/' + path + (params ? '?' + params : '');
+    return ensureAuth().then(function (token) {
+      return fetch(url, { headers: { Authorization: 'Bearer ' + token } }).then(function (r) {
+        if (!r.ok) return r.text().then(function (t) { throw new Error('Drive API ' + r.status + ': ' + t.slice(0, 200)); });
+        return r;
+      });
+    });
+  }
+
+  function searchFiles(query, pageSize) {
+    var q = "trashed = false and (mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' " +
+      "or mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType = 'application/pdf')" +
+      (query ? " and name contains '" + query.replace(/'/g, "\\'") + "'" : '');
+    var params = 'q=' + encodeURIComponent(q) + '&fields=' + encodeURIComponent('files(id,name,mimeType,webViewLink,modifiedTime)') +
+      '&pageSize=' + (pageSize || 50) + '&orderBy=name';
+    return api('files', params).then(function (r) { return r.json(); }).then(function (d) { return d.files || []; });
+  }
+
+  var LEAF_TYPES = /wordprocessingml|spreadsheetml|application\/pdf/;
+  var FOLDER_TYPE = 'application/vnd.google-apps.folder';
+
+  function listChildren(folderId) {
+    var q = "'" + folderId.replace(/'/g, "\\'") + "' in parents and trashed = false";
+    var params = 'q=' + encodeURIComponent(q) + '&fields=' + encodeURIComponent('files(id,name,mimeType,webViewLink,modifiedTime)') +
+      '&pageSize=200&orderBy=name';
+    return api('files', params).then(function (r) { return r.json(); }).then(function (d) { return d.files || []; });
+  }
+
+  /* Recorre la carpeta y sus subcarpetas (hasta 5 niveles) y devuelve solo
+     archivos hoja (docx/xlsx/pdf) — las carpetas nunca se listan como si
+     fueran documentos importables. */
+  function filesInFolder(folderId, pageSize, _depth, _folderName) {
+    _depth = _depth || 0;
+    return listChildren(folderId).then(function (children) {
+      var leaves = children.filter(function (c) { return c.mimeType !== FOLDER_TYPE && LEAF_TYPES.test(c.mimeType); })
+        .map(function (c) { return Object.assign({}, c, { folderName: _folderName || '' }); });
+      var subfolders = children.filter(function (c) { return c.mimeType === FOLDER_TYPE; });
+      if (!subfolders.length || _depth >= 5) return leaves;
+      return Promise.all(subfolders.map(function (f) { return filesInFolder(f.id, pageSize, _depth + 1, f.name); }))
+        .then(function (nested) { return leaves.concat.apply(leaves, nested); });
+    }).then(function (all) { return pageSize ? all.slice(0, pageSize) : all.slice(0, 300); });
+  }
+
+  function fileMeta(fileId) {
+    return api('files/' + fileId, 'fields=' + encodeURIComponent('id,name,mimeType,webViewLink')).then(function (r) { return r.json(); });
+  }
+
+  function downloadBinary(fileId) {
+    return ensureAuth().then(function (token) {
+      return fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media', { headers: { Authorization: 'Bearer ' + token } })
+        .then(function (r) { if (!r.ok) throw new Error('No se pudo descargar el archivo'); return r.arrayBuffer(); });
+    });
+  }
+
+  function extractIdFromUrl(s) {
+    s = (s || '').trim();
+    var m = s.match(/\/d\/([a-zA-Z0-9_-]{10,})/) || s.match(/[?&]id=([a-zA-Z0-9_-]{10,})/) || s.match(/^([a-zA-Z0-9_-]{20,})$/);
+    return m ? m[1] : null;
+  }
+
+  /* ------------------------------ Lectura de contenido y extracción de datos ------------------------------ */
+  function textFromDocx(buf) {
+    return loadScript(MAMMOTH_SRC).then(function () {
+      return mammoth.extractRawText({ arrayBuffer: buf }).then(function (r) { return r.value || ''; });
+    });
+  }
+  function rowsFromXlsx(buf) {
+    return loadScript(XLSX_SRC).then(function () {
+      var wb = XLSX.read(buf, { type: 'array' });
+      var out = [];
+      wb.SheetNames.forEach(function (name) {
+        var sheet = wb.Sheets[name];
+        var json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false, dateNF: 'dd/mm/yyyy' });
+        (sheet['!merges'] || []).forEach(function (merge) {
+          var value = sheet[XLSX.utils.encode_cell(merge.s)];
+          value = value ? value.v : '';
+          for (var r = merge.s.r; r <= merge.e.r; r++) {
+            json[r] = json[r] || [];
+            for (var c = merge.s.c; c <= merge.e.c; c++) if (json[r][c] === '' || json[r][c] == null) json[r][c] = value;
+          }
+        });
+        out = out.concat(json);
+      });
+      return out;
+    });
+  }
+
+  var MESES_IDX = { ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6, jul: 7, ago: 8, set: 9, sep: 9, oct: 10, nov: 11, dic: 12 };
+  function parseFechaTexto(s) {
+    if (!s) return null;
+    s = String(s).trim();
+    var m = s.match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})/);
+    if (m) {
+      var d = +m[1], mo = +m[2], y = +m[3]; if (y < 100) y += 2000;
+      if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    }
+    m = s.toLowerCase().match(/(\d{1,2})\s+de\s+([a-záéíóú]+)\s+de\s+(\d{4})/);
+    if (m && MESES_IDX[m[2].slice(0, 3)]) return m[3] + '-' + String(MESES_IDX[m[2].slice(0, 3)]).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0');
+    return null;
+  }
+
+  function analizarFilasCronograma(rows, file) {
+    var year = +(String(file.name || '').match(/\b(20\d{2})\b/) || [])[1] || new Date().getFullYear();
+    var headers = [], months = {}, kind = /auto\s*inspe/i.test(file.name || '') ? 'inspecciones' : 'capacitaciones';
+    var result = { capacitaciones: [], inspecciones: [] };
+    var source = { driveFileId: file.id, driveUrl: file.webViewLink || ('https://drive.google.com/file/d/' + file.id + '/view') };
+
+    function cell(row, re) {
+      for (var i = 0; i < headers.length; i++) if (re.test(D.normTxt(headers[i] || ''))) return row[i];
+      return '';
+    }
+    function dateFor(row) {
+      var explicit = cell(row, /\bfecha\b/), parsed = parseFechaTexto(explicit);
+      if (parsed) return parsed;
+      for (var i = 0; i < row.length; i++) {
+        parsed = parseFechaTexto(row[i]); if (parsed) return parsed;
+        if (!months[i] || row[i] == null || String(row[i]).trim() === '') continue;
+        var day = /^\d{1,2}$/.test(String(row[i]).trim()) ? +row[i] : 1;
+        if (day < 1 || day > 31) day = 1;
+        return year + '-' + String(months[i]).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+      }
+      return '';
+    }
+    rows.forEach(function (row) {
+      row = row || [];
+      var line = D.normTxt(row.join(' '));
+      if (/auto\s*inspeccion/.test(line)) kind = 'inspecciones';
+      else if (/cronograma.*capacit|capacitacion/.test(line) && !/auto\s*inspeccion/.test(line)) kind = 'capacitaciones';
+      row.forEach(function (value, i) {
+        var n = D.normTxt(value || '').slice(0, 3);
+        if (MESES_IDX[n]) months[i] = MESES_IDX[n];
+      });
+      var isHeader = /\b(tema|area|frecuencia|fecha|actividad|capacitacion|responsable|dirigido)\b/.test(line);
+      if (isHeader) {
+        row.forEach(function (value, i) { if (String(value || '').trim()) headers[i] = value; });
+        return;
+      }
+      if (!headers.length || !row.some(function (value) { return String(value || '').trim(); })) return;
+      var fecha = dateFor(row); if (!fecha) return;
+      if (kind === 'inspecciones') {
+        var area = String(cell(row, /\b(area|sector|proceso)\b/) || '').trim();
+        if (!area) area = String(row.filter(function (v) { return String(v || '').trim().length > 2; })[0] || '').trim();
+        if (area) result.inspecciones.push(Object.assign({ area: area, prog: fecha }, source));
+      } else {
+        var tema = String(cell(row, /\b(tema|actividad|capacitacion)\b/) || '').trim();
+        var capArea = String(cell(row, /\b(area|dirigido|personal)\b/) || 'Almacén').trim();
+        var frec = String(cell(row, /\bfrecuencia\b/) || 'Anual').trim();
+        if (tema) result.capacitaciones.push(Object.assign({ tema: tema, area: capArea || 'Almacén', frec: frec || 'Anual', fecha: fecha }, source));
+      }
+    });
+    return result;
+  }
+
+  function analizarCronograma(file) {
+    if (!/spreadsheetml/.test(file.mimeType || '')) return Promise.reject(new Error('El cronograma debe ser un archivo XLSX'));
+    return downloadBinary(file.id).then(rowsFromXlsx).then(function (rows) { return analizarFilasCronograma(rows, file); });
+  }
+
+  function tipoFromName(name) {
+    var n = D.normTxt(name);
+    if (/\bpoe\b/.test(n)) return 'POE';
+    if (/\bregistro\b/.test(n)) return 'Registro';
+    if (/\bformato\b/.test(n)) return 'Formato';
+    if (/\binstructivo\b/.test(n)) return 'Instructivo';
+    if (/\bmanual\b/.test(n)) return 'Manual';
+    return 'Otro';
+  }
+  function codigoFromName(name) {
+    var m = name.match(/(POE|REGISTRO|FORMATO|MANUAL|INSTRUCTIVO)\W*(\d{1,4})/i);
+    if (!m) return '';
+    return m[1].toUpperCase() + '-' + m[2].padStart(3, '0');
+  }
+  function nombreFromFile(name, codigo) {
+    var base = name.replace(/\.[^.]+$/, '');
+    if (codigo) { var head = codigo.split('-')[0] + '\\W*' + codigo.split('-')[1].replace(/^0+/, ''); base = base.replace(new RegExp('^' + head, 'i'), '').trim(); }
+    base = base.replace(/^[\s._-]+/, '');
+    return base.charAt(0).toUpperCase() + base.slice(1);
+  }
+
+  /* Analiza un archivo de Drive y devuelve los campos sugeridos para un documento */
+  function analizarArchivo(file) {
+    var isDocx = /wordprocessingml/.test(file.mimeType);
+    var isXlsx = /spreadsheetml/.test(file.mimeType);
+    var codigo = codigoFromName(file.name);
+    var base = {
+      driveFileId: file.id, driveUrl: file.webViewLink || ('https://drive.google.com/file/d/' + file.id + '/view'),
+      codigo: codigo, nombre: nombreFromFile(file.name, codigo), tipo: tipoFromName(file.name),
+      version: 1, rev: '', area: 'Almacén', modifiedTime: file.modifiedTime || ''
+    };
+    if (!isDocx && !isXlsx) return Promise.resolve(base);
+    var reader = isDocx ? downloadBinary(file.id).then(textFromDocx) : downloadBinary(file.id).then(rowsFromXlsx).then(function (rows) {
+      return rows.map(function (r) { return r.join(' | '); }).join('\n');
+    });
+    return reader.then(function (text) {
+      var vig = text.match(/Fecha de vigencia\s*:?\s*([^\n|]+)/i);
+      var revF = text.match(/Fecha de revisi[oó]n\s*:?\s*([^\n|]+)/i);
+      var verM = text.match(/(?<!de\s)(?<!de)\bRevisi[oó]n\s*N?\.?°?\s*:?\s*0*([0-9]{1,3})\b(?!\s*[./]\s*\d)/i) ||
+        text.match(/(?<!de\s)(?<!de)\bVersi[oó]n\s*:?\s*0*([0-9]{1,3})\b(?!\s*[./]\s*\d)/i);
+      var revDate = parseFechaTexto(revF && revF[1]) || parseFechaTexto(vig && vig[1]);
+      if (revDate) base.rev = revDate;
+      if (verM) { var vNum = parseInt(verM[1], 10); base.version = isNaN(vNum) ? 1 : vNum; }
+      return base;
+    }).catch(function () { return base; });
+  }
+
+  /* ------------------------------ Panel de conexión ------------------------------ */
+  function connectPanel(onConnected) {
+    var clientId = getClientId();
+    var m = UI.dialog({
+      title: 'Conectar Google Drive',
+      body:
+        '<p class="dialog-note">La app se conecta directo a tu cuenta de Google desde el navegador — no hay servidor propio de por medio. Necesitás un Client ID de OAuth propio (gratis, se crea una vez en Google Cloud Console). Instrucciones en el README.</p>' +
+        '<div class="field"><label>Client ID de OAuth</label><input class="inp mono" id="dr_cid" value="' + UI.esc(clientId) + '" placeholder="xxxxx.apps.googleusercontent.com"></div>',
+      footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="dr_connect">Conectar</button>',
+      onMount: function (root) {
+        root.querySelector('#dr_connect').onclick = function () {
+          var v = root.querySelector('#dr_cid').value.trim();
+          if (!v) return;
+          setClientId(v);
+          var btn = root.querySelector('#dr_connect'); btn.disabled = true; btn.textContent = 'Conectando…';
+          ensureAuth().then(function () { m.close(); UI.note('Google Drive conectado'); if (onConnected) onConnected(); })
+            .catch(function (e) { btn.disabled = false; btn.textContent = 'Conectar'; UI.note('No se pudo conectar: ' + (e && e.message || e)); });
+        };
+      }
+    });
+  }
+
+  function withAuth(run) {
+    if (!getClientId()) { connectPanel(run); return; }
+    ensureAuth().then(run).catch(function (e) {
+      if (String(e && e.message) === 'NO_CLIENT_ID') return connectPanel(run);
+      UI.note('Google Drive: ' + (e && e.message || 'no se pudo conectar'));
+    });
+  }
+
+  /* ------------------------------ Importar carpeta / búsqueda ------------------------------ */
+  function importPanel(onImport, existingDocs) {
+    withAuth(function () {
+      var m = UI.dialog({
+        title: 'Importar desde Google Drive', wide: true,
+        body:
+          '<div class="grid-2"><div class="field"><label>Carpeta de Drive (URL o ID)</label><input class="inp" id="im_folder" placeholder="https://drive.google.com/drive/folders/…"></div>' +
+          '<div class="field"><label>… o buscar por nombre</label><input class="inp" id="im_q" placeholder="POE, Registro…"></div></div>' +
+          '<button class="btn btn-ghost btn-sm" id="im_go" type="button">' + UI.icon('search', 14) + ' Buscar</button>' +
+          '<div id="im_results" style="margin-top:14px"></div>',
+        footer: '<button class="btn btn-ghost" data-close>Cerrar</button><button class="btn btn-primary" id="im_add" disabled>Agregar seleccionados (0)</button>',
+        onMount: function (root) {
+          var found = [];
+          function renderResults() {
+            var box = root.querySelector('#im_results');
+            if (!found.length) { box.innerHTML = '<div class="row-empty">Sin resultados todavía.</div>'; return; }
+            box.innerHTML = '<div class="list">' + found.map(function (f, i) {
+              return '<label class="drive-pick"><input type="checkbox" class="im-chk" data-i="' + i + '" checked>' +
+                '<span class="drive-pick-name">' + UI.esc(f.name) + (f.folderName ? ' <span class="drive-pick-folder">· ' + UI.esc(f.folderName) + '</span>' : '') + '</span>' +
+                '<span class="drive-pick-date">' + (f.modifiedTime ? UI.esc(f.modifiedTime.slice(0, 10)) : '') + '</span></label>';
+            }).join('') + '</div>';
+            updateCount();
+          }
+          function updateCount() {
+            var n = root.querySelectorAll('.im-chk:checked').length;
+            var btn = root.querySelector('#im_add'); btn.disabled = !n; btn.textContent = 'Agregar seleccionados (' + n + ')';
+          }
+          root.querySelector('#im_results').addEventListener('change', updateCount);
+          root.querySelector('#im_go').onclick = function () {
+            var box = root.querySelector('#im_results'); box.innerHTML = '<div class="row-empty">Buscando…</div>';
+            var folderRaw = root.querySelector('#im_folder').value.trim();
+            var q = root.querySelector('#im_q').value.trim();
+            var folderId = folderRaw ? extractIdFromUrl(folderRaw) : null;
+            var task = folderId ? filesInFolder(folderId) : searchFiles(q);
+            task.then(function (files) { found = files; renderResults(); })
+              .catch(function (e) { box.innerHTML = '<div class="row-empty">Error: ' + UI.esc(e.message || e) + '</div>'; });
+          };
+          root.querySelector('#im_add').onclick = function () {
+            var picked = Array.prototype.map.call(root.querySelectorAll('.im-chk:checked'), function (c) { return found[+c.dataset.i]; });
+            var btn = root.querySelector('#im_add'); btn.disabled = true; btn.textContent = 'Analizando ' + picked.length + '…';
+            Promise.all(picked.map(analizarArchivo)).then(function (drafts) {
+              m.close(); reviewPanel(drafts, onImport, existingDocs);
+            });
+          };
+        }
+      });
+    });
+  }
+
+  /* ------------------------------ Revisión antes de guardar ------------------------------ */
+  /* Normaliza un código para comparar (mismo documento aunque venga de
+     carpetas distintas, ej. "POE 026" vs "poe-026") */
+  function normCodigo(c) { return D.normTxt(c || '').replace(/[^a-z0-9]/g, ''); }
+
+  /* Junta duplicados dentro del mismo lote elegido (ej. el mismo código
+     aparece en la carpeta "POE" y en "POEs"): se queda con el que tenga
+     fecha de revisión, o si ninguno la tiene, con el más reciente. */
+  function mergeBatch(drafts) {
+    var byCode = {}, order = [];
+    drafts.forEach(function (d) {
+      var key = normCodigo(d.codigo) || ('__' + d.driveFileId);
+      if (!byCode[key]) { byCode[key] = d; order.push(key); return; }
+      var prev = byCode[key];
+      var better = (d.rev && !prev.rev) ? d : (!d.rev && prev.rev) ? prev : ((d.modifiedTime || '') > (prev.modifiedTime || '') ? d : prev);
+      byCode[key] = Object.assign({}, better, { _mergedFrom: (prev._mergedFrom || [prev.driveFileId]).concat(d.driveFileId) });
+    });
+    return order.map(function (k) { return byCode[k]; });
+  }
+
+  function reviewPanel(drafts, onImport, existingDocs) {
+    drafts = mergeBatch(drafts);
+    existingDocs = existingDocs || [];
+    var existingByCode = {};
+    existingDocs.forEach(function (d) { existingByCode[normCodigo(d.codigo)] = d; });
+
+    function rowHtml(d, i) {
+      var match = existingByCode[normCodigo(d.codigo)];
+      var tagHtml = d._mergedFrom && d._mergedFrom.length > 1
+        ? '<span class="drive-pick-folder">· fusionado de ' + d._mergedFrom.length + ' archivos duplicados</span>'
+        : match ? '<span class="drive-pick-folder">· ya existe, se actualizará</span>' : '<span class="drive-pick-folder">· nuevo</span>';
+      return '<div class="mini-row drive-row" data-i="' + i + '" data-existing="' + (match ? match.id : '') + '">' +
+        '<input class="inp rv-codigo" value="' + UI.esc(d.codigo) + '" placeholder="Código" style="max-width:120px">' +
+        '<input class="inp rv-nombre" value="' + UI.esc(d.nombre) + '" placeholder="Nombre">' +
+        '<input class="inp rv-version mono" value="' + UI.esc(d.version) + '" placeholder="v" style="max-width:52px">' +
+        '<input class="inp rv-rev" type="date" value="' + UI.esc(d.rev) + '" style="max-width:150px">' +
+        '<button class="icon-btn del" type="button" data-rm aria-label="Quitar">' + UI.icon('x', 16) + '</button>' + tagHtml + '</div>';
+    }
+    var m = UI.dialog({
+      title: 'Revisar antes de guardar (' + drafts.length + ')', wide: true,
+      body: '<p class="dialog-note">Se completó lo que se pudo leer del archivo. Revisá y corregí antes de guardar — quedan vinculados a su archivo original en Drive. Los códigos duplicados en el lote se fusionaron en una sola fila.</p>' +
+        '<div id="rv_list">' + drafts.map(rowHtml).join('') + '</div>',
+      footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="rv_save">Guardar en Documentos</button>',
+      onMount: function (root) {
+        root.querySelector('#rv_list').addEventListener('click', function (e) {
+          var b = e.target.closest('[data-rm]'); if (b) b.closest('.drive-row').remove();
+        });
+        root.querySelector('#rv_save').onclick = function () {
+          var rows = root.querySelectorAll('.drive-row');
+          var results = Array.prototype.map.call(rows, function (r) {
+            var i = +r.dataset.i, d = drafts[i];
+            var vRaw = r.querySelector('.rv-version').value.trim();
+            var vNum = parseInt(vRaw, 10);
+            return Object.assign({}, d, {
+              codigo: r.querySelector('.rv-codigo').value.trim() || '—',
+              nombre: r.querySelector('.rv-nombre').value.trim() || d.nombre,
+              version: isNaN(vNum) ? 1 : vNum,
+              rev: r.querySelector('.rv-rev').value || D.isoDesdeHoy(365),
+              existingId: r.dataset.existing || null
+            });
+          });
+          m.close();
+          if (onImport) onImport(results);
+        };
+      }
+    });
+  }
+
+  /* ------------------------------ Importar cronograma ------------------------------ */
+  function cronogramaPanel(onImport, existingCaps, existingInspecciones) {
+    withAuth(function () {
+      var m = UI.dialog({
+        title: 'Importar cronograma desde Drive', wide: true,
+        body:
+          '<div class="field"><label>Archivo XLSX (URL, ID o nombre)</label><input class="inp" id="cr_q" value="CRONOGRAMA" placeholder="REGISTRO 005 CRONOGRAMA..."></div>' +
+          '<button class="btn btn-ghost btn-sm" id="cr_go" type="button">' + UI.icon('search', 14) + ' Buscar</button>' +
+          '<div id="cr_results" style="margin-top:14px"></div>',
+        footer: '<button class="btn btn-ghost" data-close>Cerrar</button>',
+        onMount: function (root) {
+          function render(files) {
+            var box = root.querySelector('#cr_results');
+            files = files.filter(function (file) { return /spreadsheetml/.test(file.mimeType || ''); });
+            box.innerHTML = files.length ? '<div class="list">' + files.map(function (file, i) {
+              return '<button class="drive-pick" data-cr-pick="' + i + '"><span class="drive-pick-name">' + UI.esc(file.name) + '</span>' +
+                '<span class="drive-pick-date">Analizar</span></button>';
+            }).join('') + '</div>' : '<div class="row-empty">No se encontraron archivos XLSX.</div>';
+            box.querySelectorAll('[data-cr-pick]').forEach(function (button) {
+              button.onclick = function () {
+                var file = files[+button.dataset.crPick];
+                box.innerHTML = '<div class="row-empty">Analizando ' + UI.esc(file.name) + '…</div>';
+                analizarCronograma(file).then(function (drafts) {
+                  m.close(); reviewCronograma(drafts, onImport, existingCaps, existingInspecciones);
+                }).catch(function (error) { box.innerHTML = '<div class="row-empty">Error: ' + UI.esc(error.message || error) + '</div>'; });
+              };
+            });
+          }
+          root.querySelector('#cr_go').onclick = function () {
+            var box = root.querySelector('#cr_results'); box.innerHTML = '<div class="row-empty">Buscando…</div>';
+            var query = root.querySelector('#cr_q').value.trim(), id = extractIdFromUrl(query);
+            (id ? fileMeta(id).then(function (file) { return [file]; }) : searchFiles(query, 30))
+              .then(render).catch(function (error) { box.innerHTML = '<div class="row-empty">Error: ' + UI.esc(error.message || error) + '</div>'; });
+          };
+        }
+      });
+    });
+  }
+
+  function uniqueBy(items, keyOf) {
+    var seen = {};
+    return items.filter(function (item) { var key = keyOf(item); if (!key || seen[key]) return false; seen[key] = true; return true; });
+  }
+
+  function reviewCronograma(drafts, onImport, existingCaps, existingInspecciones) {
+    function capKey(c) { return D.normTxt((c.tema || '') + '|' + (c.area || '')); }
+    function inspKey(i) { return D.normTxt(i.area || ''); }
+    var caps = uniqueBy(drafts.capacitaciones || [], capKey), inspecciones = uniqueBy(drafts.inspecciones || [], inspKey);
+    var capsExisting = {}, inspExisting = {};
+    (existingCaps || []).forEach(function (c) { capsExisting[capKey(c)] = c; });
+    (existingInspecciones || []).forEach(function (i) { inspExisting[inspKey(i)] = i; });
+
+    function capRow(c, i) {
+      var existing = capsExisting[capKey(c)];
+      return '<div class="mini-row drive-row cron-cap" data-i="' + i + '" data-existing="' + (existing ? existing.id : '') + '">' +
+        '<input class="inp cr-tema" value="' + UI.esc(c.tema) + '" placeholder="Tema">' +
+        '<input class="inp cr-area" value="' + UI.esc(c.area) + '" placeholder="Área">' +
+        '<input class="inp cr-frec" value="' + UI.esc(c.frec) + '" placeholder="Frecuencia" style="max-width:120px">' +
+        '<input class="inp cr-fecha" type="date" value="' + UI.esc(c.fecha) + '" style="max-width:150px">' +
+        '<button class="icon-btn del" type="button" data-rm aria-label="Quitar">' + UI.icon('x', 16) + '</button></div>';
+    }
+    function inspRow(i, index) {
+      var existing = inspExisting[inspKey(i)];
+      return '<div class="mini-row drive-row cron-insp" data-i="' + index + '" data-existing="' + (existing ? existing.id : '') + '">' +
+        '<input class="inp cr-area" value="' + UI.esc(i.area) + '" placeholder="Área">' +
+        '<input class="inp cr-fecha" type="date" value="' + UI.esc(i.prog) + '" style="max-width:150px">' +
+        '<button class="icon-btn del" type="button" data-rm aria-label="Quitar">' + UI.icon('x', 16) + '</button></div>';
+    }
+    var m = UI.dialog({
+      title: 'Revisar cronograma', wide: true,
+      body: '<p class="dialog-note">Revisá las fechas detectadas en columnas mensuales antes de guardar.</p>' +
+        '<div class="section-title">Capacitaciones (' + caps.length + ')</div><div id="cr_caps">' + (caps.map(capRow).join('') || '<div class="row-empty">No detectadas.</div>') + '</div>' +
+        '<div class="section-title">Autoinspecciones (' + inspecciones.length + ')</div><div id="cr_insp">' + (inspecciones.map(inspRow).join('') || '<div class="row-empty">No detectadas.</div>') + '</div>',
+      footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="cr_save">Guardar cronograma</button>',
+      onMount: function (root) {
+        root.onclick = function (event) { var button = event.target.closest('[data-rm]'); if (button) button.closest('.drive-row').remove(); };
+        root.querySelector('#cr_save').onclick = function () {
+          var out = { capacitaciones: [], inspecciones: [] };
+          root.querySelectorAll('.cron-cap').forEach(function (row) {
+            var source = caps[+row.dataset.i];
+            out.capacitaciones.push(Object.assign({}, source, {
+              tema: row.querySelector('.cr-tema').value.trim(), area: row.querySelector('.cr-area').value.trim() || 'Almacén',
+              frec: row.querySelector('.cr-frec').value.trim() || 'Anual', fecha: row.querySelector('.cr-fecha').value || D.isoHoy(),
+              existingId: row.dataset.existing || null
+            }));
+          });
+          root.querySelectorAll('.cron-insp').forEach(function (row) {
+            var source = inspecciones[+row.dataset.i];
+            out.inspecciones.push(Object.assign({}, source, {
+              area: row.querySelector('.cr-area').value.trim() || 'Almacén general', prog: row.querySelector('.cr-fecha').value || D.isoHoy(),
+              existingId: row.dataset.existing || null
+            }));
+          });
+          m.close(); if (onImport) onImport(out);
+        };
+      }
+    });
+  }
+
+  /* ------------------------------ Vincular un documento existente ------------------------------ */
+  function linkPanel(doc, onLinked) {
+    withAuth(function () {
+      var m = UI.dialog({
+        title: 'Vincular a Google Drive',
+        body:
+          '<div class="field"><label>Buscar archivo por nombre</label><input class="inp" id="lk_q" value="' + UI.esc(doc.codigo || '') + '"></div>' +
+          '<button class="btn btn-ghost btn-sm" id="lk_go" type="button">' + UI.icon('search', 14) + ' Buscar</button>' +
+          '<div id="lk_results" style="margin-top:12px"></div>',
+        footer: '<button class="btn btn-ghost" data-close>Cerrar</button>',
+        onMount: function (root) {
+          function search() {
+            var box = root.querySelector('#lk_results'); box.innerHTML = '<div class="row-empty">Buscando…</div>';
+            searchFiles(root.querySelector('#lk_q').value.trim(), 15).then(function (files) {
+              box.innerHTML = files.length ? '<div class="list">' + files.map(function (f, i) {
+                return '<div class="row-foot" style="padding:8px 0;border-bottom:1px solid var(--border)"><span class="row-plain" style="flex:1">' + UI.esc(f.name) + '</span>' +
+                  '<button class="link-btn" data-pick="' + i + '">Vincular</button></div>';
+              }).join('') + '</div>' : '<div class="row-empty">Sin resultados.</div>';
+              box.querySelectorAll('[data-pick]').forEach(function (btn) {
+                btn.onclick = function () {
+                  var f = files[+btn.dataset.pick];
+                  onLinked({ driveFileId: f.id, driveUrl: f.webViewLink || ('https://drive.google.com/file/d/' + f.id + '/view') });
+                  m.close(); UI.note('Documento vinculado a Drive');
+                };
+              });
+            });
+          }
+          root.querySelector('#lk_go').onclick = search;
+          search();
+        }
+      });
+    });
+  }
+
+  global.BPAPLUS = global.BPAPLUS || {};
+  global.BPAPLUS.drive = {
+    isConnected: isConnected, getClientId: getClientId, setClientId: setClientId,
+    connectPanel: connectPanel, importPanel: importPanel, cronogramaPanel: cronogramaPanel,
+    analizarCronograma: analizarCronograma, linkPanel: linkPanel, extractIdFromUrl: extractIdFromUrl
+  };
+})(window);
