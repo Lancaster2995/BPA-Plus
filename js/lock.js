@@ -45,8 +45,7 @@
   function showLockScreen(onUnlock) {
     var el = document.createElement('div'); el.className = 'lockscreen';
     el.innerHTML =
-      '<div class="lock-mark">' + (global.BPAPLUS.ui ? global.BPAPLUS.ui.icon('beacon', 26) :
-        '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M8 6h8l2 6H6l2-6z"/></svg>') + '</div>' +
+      '<div class="lock-mark"><img src="icons/icon-192.png" alt=""></div>' +
       '<div class="lock-title">BPA-Plus bloqueada</div>' +
       '<div class="lock-sub">Ingresá tu PIN para continuar</div>' +
       '<div class="lock-dots" id="lockDots"></div>' +

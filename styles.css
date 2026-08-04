@@ -122,10 +122,11 @@ a { color: inherit; }
 /* ------------------------------ Marca ------------------------------ */
 .brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 18px; }
 .brand-mark {
-  width: 36px; height: 36px; border-radius: var(--radius-sm); background: var(--beacon); color: var(--navy);
+  width: 36px; height: 36px; border-radius: var(--radius-sm); overflow: hidden;
   display: flex; align-items: center; justify-content: center; flex: none;
 }
 .brand-mark.sm { width: 32px; height: 32px; }
+.brand-mark img, .lock-mark img { width: 100%; height: 100%; object-fit: cover; }
 .brand-name { font-family: var(--font-display); font-weight: 600; font-size: 17px; letter-spacing: .01em; }
 .brand-sub { font-size: 11px; color: rgba(242,245,250,.6); letter-spacing: .03em; text-transform: uppercase; }
 
@@ -472,7 +473,7 @@ textarea.inp { min-height: 88px; resize: vertical; }
 }
 .lockscreen.shake { animation: lock-shake .32s; }
 @keyframes lock-shake { 20% { transform: translateX(-10px); } 40% { transform: translateX(9px); } 60% { transform: translateX(-6px); } 80% { transform: translateX(4px); } 100% { transform: translateX(0); } }
-.lock-mark { width: 52px; height: 52px; border-radius: 16px; background: var(--beacon); color: var(--navy); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+.lock-mark { width: 52px; height: 52px; border-radius: 16px; overflow: hidden; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
 .lock-title { font-family: var(--font-display); font-size: 20px; font-weight: 600; }
 .lock-sub { font-size: 13px; color: rgba(242,245,250,.65); margin-top: 4px; margin-bottom: 22px; }
 .lock-dots { display: flex; gap: 12px; margin-bottom: 22px; min-height: 12px; }

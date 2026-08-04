@@ -113,7 +113,7 @@
     var side = document.getElementById('sidebar');
     var alertN = global.BPAPLUS.alerts ? global.BPAPLUS.alerts.count() : 0;
     if (side) side.innerHTML =
-      '<div class="brand"><div class="brand-mark">' + UI.icon('beacon', 20) + '</div><div><div class="brand-name">BPA-Plus</div><div class="brand-sub">Gestión BPA</div></div>' +
+      '<div class="brand"><div class="brand-mark"><img src="icons/icon-192.png" alt=""></div><div><div class="brand-name">BPA-Plus</div><div class="brand-sub">Gestión BPA</div></div>' +
         '<button class="bell-btn" id="alertBell" aria-label="Alertas">' + UI.icon('alert', 18) + (alertN ? '<span class="bell-badge">' + alertN + '</span>' : '') + '</button></div>' +
       '<button class="dg-switch" id="dgSwitch"><div class="dg-avatar">' + UI.esc(dg.init || '?') + '</div>' +
         '<div class="dg-txt"><div class="dg-name">' + UI.esc(dg.nombre) + '</div><div class="dg-ruc mono">' + (dg.ruc ? 'RUC ' + UI.esc(dg.ruc) : 'Sin RUC') + '</div></div>' +
@@ -135,7 +135,7 @@
 
     var top = document.getElementById('topbar');
     if (top) top.innerHTML =
-      '<div class="brand-mark sm">' + UI.icon('beacon', 18) + '</div>' +
+      '<div class="brand-mark sm"><img src="icons/icon-192.png" alt=""></div>' +
       '<div class="top-mid"><div class="top-title">' + (NAV.filter(function (n) { return n.view === v; })[0] || { label: 'BPA-Plus' }).label + '</div>' +
       '<div class="top-dg">' + UI.esc(dg.nombre) + '</div></div>' +
       '<button class="icon-btn" id="alertBellM" aria-label="Alertas">' + UI.icon('alert', 20) + (alertN ? '<span class="bell-badge sm">' + alertN + '</span>' : '') + '</button>' +
