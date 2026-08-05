@@ -4,9 +4,9 @@ Aplicación personal para llevar el control de documentos, capacitaciones y
 autoinspecciones bajo Buenas Prácticas de Almacenamiento (BPA) en una o
 varias droguerías. Pensada para una sola persona: vos.
 
-**100 % local. Sin cuentas, sin backend, sin nube.** Todo se guarda en el
-navegador del dispositivo donde la uses (con IndexedDB). Funciona sin
-conexión una vez instalada.
+Usa **Firebase Authentication + Firestore** para proteger y sincronizar la
+información entre dispositivos. Firestore mantiene caché local, por lo que
+la app sigue funcionando sin conexión después del primer acceso.
 
 ## Qué hace
 
@@ -37,15 +37,16 @@ conexión una vez instalada.
   puede, y fusiona automáticamente el mismo código si aparece repetido en
   carpetas distintas) o vinculá un documento existente a su archivo
   original para abrirlo con un clic. Ver la sección de abajo para conectarlo.
-- **Inicio de sesión con PIN** — en la primera apertura se crea y confirma
+- **Cuenta + PIN local** — se inicia sesión con correo y contraseña; después,
+  en la primera apertura de cada dispositivo se crea y confirma
   un PIN de 4 a 6 dígitos; luego se pide al abrir la app. El PIN (salteado y
   con hash SHA-256) vive solo en este dispositivo. Se cambia desde la barra
-  lateral y “Cerrar sesión” vuelve a bloquear la app.
+  lateral. “Cerrar sesión” cierra también la cuenta Firebase.
 - **Tema claro / oscuro**, atajos de teclado, deshacer al eliminar.
 
 ## Cómo usarla
 
-No requiere instalación ni servidor para probarla:
+No requiere un servidor propio:
 
 - **Rápido:** abrí `index.html` directamente en el navegador.
 - **Como app instalada (recomendado):** serví la carpeta por HTTP y
@@ -60,8 +61,8 @@ No requiere instalación ni servidor para probarla:
 
 ### Ponerla en línea gratis (para usarla desde el celular)
 
-Como es una aplicación 100 % estática (sin backend), cualquier hosting
-gratuito de archivos estáticos alcanza. Subís la carpeta y listo:
+El frontend es estático y el backend administrado vive en Firebase, por lo
+que cualquier hosting gratuito de archivos estáticos alcanza:
 
 - **GitHub Pages** — subí la carpeta a un repositorio y activá Pages en
   la configuración del repo.
@@ -86,10 +87,9 @@ problema porque por dentro sigue siendo Chrome real.
 3. "Instalar". Queda como programa en el menú de inicio, en su propia
    ventana.
 
-Como no hay backend ni autenticación, cualquiera con el enlace podría
-abrirla — al ser una URL que solo vos conocés, alcanza para uso personal.
-El acceso con PIN protege los datos en cada dispositivo. No es una cuenta
-en línea: los datos siguen siendo locales y no se sincronizan entre equipos.
+Abrir el enlace no expone los datos: cada usuario solo puede leer y escribir
+su espacio, según las reglas de Firestore. El PIN agrega una segunda barrera
+local en cada dispositivo.
 
 ## Conectar Google Drive
 
@@ -124,16 +124,14 @@ cada vez.
 
 ## Datos y respaldo
 
-Los datos viven únicamente en el dispositivo (IndexedDB). La primera vez
-se cargan datos de ejemplo para explorar la app; borralos y cargá los
-tuyos cuando quieras.
+Los datos viven en Firestore y se sincronizan automáticamente. La primera vez
+se migran los datos locales de la versión anterior, si existen; si no, se
+cargan datos de ejemplo para explorar la app.
 
 - **Exportar respaldo** — genera un `.json` con toda la información.
 - **Importar respaldo** — reemplaza los datos actuales por los del archivo.
 
-Usá el respaldo para mover la información entre el celular y la laptop, o
-como copia de seguridad — no hay sincronización automática entre
-dispositivos porque no hay servidor.
+El respaldo JSON sigue disponible como copia adicional o exportación manual.
 
 ## Estructura
 
@@ -146,7 +144,10 @@ BPA-Plus/
 ├─ icons/                 Iconos de la app
 └─ js/
    ├─ domain.js           Lógica de negocio pura (estados, fechas, clasificación, puntaje)
-   ├─ db.js               Persistencia IndexedDB + datos de ejemplo + exportar/importar
+   ├─ config.js           Configuración pública del proyecto Firebase
+   ├─ cloud.js            Firebase Auth, Firestore y caché offline
+   ├─ auth.js             Pantalla de cuenta y recuperación de contraseña
+   ├─ db.js               Datos, migración local y exportar/importar
    ├─ ui.js                Componentes (notas, diálogos, panel, hoja de acciones, buscador)
    ├─ actas.js             Generación de actas imprimibles
    ├─ views.js             Vistas y formularios
@@ -158,11 +159,11 @@ funciona igual abriendo el archivo local o servida como PWA.
 
 ## Privacidad
 
-Por defecto no se envía información a ningún servidor: solo carga las
-tipografías (Google Fonts) la primera vez que abrís la app con conexión.
+Los registros se almacenan en el proyecto Firebase `bpa-db`, aislados por el
+UID de la cuenta. La configuración web de Firebase es pública por diseño; la
+protección real está en Authentication y en `firestore.rules`.
 
 Si activás **Google Drive**, la app habla directo con la API de Google
-desde tu navegador (nunca pasa por un servidor de BPA-Plus, porque no
-existe uno) para leer los archivos que elijas, y carga dos librerías de
+desde tu navegador para leer los archivos que elijas, y carga dos librerías de
 lectura (mammoth.js y SheetJS) desde CDN la primera vez que las necesita.
 El token de acceso vive solo en la memoria de la pestaña.

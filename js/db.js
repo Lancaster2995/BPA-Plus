@@ -1,8 +1,7 @@
 /* ==========================================================================
    BPA-Plus — db.js
-   Persistencia 100% local con IndexedDB. Sin backend, sin nube, sin cuentas.
-   Todo lo que ves vive únicamente en este dispositivo hasta que exportás
-   un respaldo.
+   Firestore es la fuente principal y conserva cache offline. IndexedDB se
+   mantiene solo para migrar automáticamente datos de versiones anteriores.
    ========================================================================== */
 (function (global) {
   'use strict';
@@ -36,12 +35,12 @@
     });
   }
 
-  function getAll(store) { return tx(store, 'readonly').then(function (os) { return reqP(os.getAll()); }); }
-  function put(store, val) { return tx(store, 'readwrite').then(function (os) { return reqP(os.put(val)); }); }
-  function del(store, id) { return tx(store, 'readwrite').then(function (os) { return reqP(os.delete(id)); }); }
-  function clear(store) { return tx(store, 'readwrite').then(function (os) { return reqP(os.clear()); }); }
+  function localGetAll(store) { return tx(store, 'readonly').then(function (os) { return reqP(os.getAll()); }); }
+  function localPut(store, val) { return tx(store, 'readwrite').then(function (os) { return reqP(os.put(val)); }); }
+  function localDel(store, id) { return tx(store, 'readwrite').then(function (os) { return reqP(os.delete(id)); }); }
+  function localClear(store) { return tx(store, 'readwrite').then(function (os) { return reqP(os.clear()); }); }
 
-  function putMany(store, vals) {
+  function localPutMany(store, vals) {
     return open().then(function (db) {
       return new Promise(function (res, rej) {
         var t = db.transaction(store, 'readwrite'), os = t.objectStore(store);
@@ -52,8 +51,22 @@
     });
   }
 
-  function getMeta(k, def) {
+  function localGetMeta(k, def) {
     return tx('meta', 'readonly').then(function (os) { return reqP(os.get(k)); }).then(function (r) { return r ? r.v : def; });
+  }
+  function localSetMeta(k, v) { return localPut('meta', { k: k, v: v }); }
+
+  function cloud() { return global.BPAPLUS.cloud; }
+  function getAll(store) { return cloud() ? cloud().all(store) : localGetAll(store); }
+  function put(store, val) { return cloud() ? cloud().put(store, val) : localPut(store, val); }
+  function del(store, id) { return cloud() ? cloud().del(store, id) : localDel(store, id); }
+  function clear(store) { return cloud() ? cloud().clear(store) : localClear(store); }
+  function putMany(store, vals) { return cloud() ? cloud().putMany(store, vals) : localPutMany(store, vals); }
+  function getMeta(k, def) {
+    return getAll('meta').then(function (rows) {
+      var row = rows.filter(function (r) { return r.k === k; })[0];
+      return row ? row.v : def;
+    });
   }
   function setMeta(k, v) { return put('meta', { k: k, v: v }); }
 
@@ -110,6 +123,16 @@
   function ensureSeed() {
     return getMeta('seeded', false).then(function (done) {
       if (done) return false;
+      if (cloud()) {
+        return localGetMeta('seeded', false).then(function (hasLocal) {
+          if (!hasLocal) return seed().then(function () { return true; });
+          return Promise.all(STORES.map(function (s) { return localGetAll(s); })).then(function (groups) {
+            return Promise.all(STORES.map(function (s, i) {
+              return groups[i].length ? cloud().putMany(s, groups[i]) : null;
+            }));
+          }).then(function () { return true; });
+        });
+      }
       return seed().then(function () { return true; });
     });
   }

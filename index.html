@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#142542">
-  <meta name="description" content="BPA-Plus — gestión de Buenas Prácticas de Almacenamiento: documentos, capacitaciones y autoinspecciones. Aplicación personal, 100% local y sin conexión.">
+  <meta name="description" content="BPA-Plus — gestión de Buenas Prácticas de Almacenamiento con sincronización segura y acceso sin conexión.">
   <title>BPA-Plus · Gestión BPA</title>
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -37,6 +37,9 @@
   <div id="printArea" class="print-only" aria-hidden="true"></div>
 
   <!-- Scripts clásicos en orden de dependencia: funciona abriendo el archivo directamente y como PWA -->
+  <script src="js/config.js"></script>
+  <script src="js/cloud.js"></script>
+  <script src="js/auth.js"></script>
   <script src="js/domain.js"></script>
   <script src="js/db.js"></script>
   <script src="js/ui.js"></script>

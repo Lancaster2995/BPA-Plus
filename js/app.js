@@ -161,7 +161,10 @@
     var im = document.getElementById('importBtn'); if (im) im.onclick = importData;
     var ex = document.getElementById('exportBtn'); if (ex) ex.onclick = exportData;
     var lk = document.getElementById('lockBtn'); if (lk) lk.onclick = function () { global.BPAPLUS.lock.openSettings(); };
-    var lo = document.getElementById('logoutBtn'); if (lo) lo.onclick = function () { location.reload(); };
+    var lo = document.getElementById('logoutBtn'); if (lo) lo.onclick = function () {
+      var Auth = global.BPAPLUS.auth;
+      if (Auth) Auth.signOut().then(function () { location.reload(); }); else location.reload();
+    };
     var th = document.getElementById('themeBtn'); if (th) th.onclick = toggleTheme;
     var thm = document.getElementById('themeBtnM'); if (thm) thm.onclick = toggleTheme;
     var co = document.getElementById('cmdOpen'); if (co) co.onclick = openCmd;
@@ -330,7 +333,7 @@
     var saved; try { saved = localStorage.getItem('bpa-plus-theme'); } catch (e) {}
     applyTheme(saved || (matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
 
-    var Lock = global.BPAPLUS.lock;
+    var Lock = global.BPAPLUS.lock, Auth = global.BPAPLUS.auth;
     function start() {
       V.setStore(store);
       if (global.BPAPLUS.alerts) global.BPAPLUS.alerts.setStore(store, V);
@@ -347,11 +350,12 @@
         .then(function () { return store.load(); })
         .then(function () { route(); })
         .catch(function (err) {
-          content.innerHTML = '<div class="empty"><span class="es-title">No se pudo iniciar el almacenamiento local</span>' +
+          content.innerHTML = '<div class="empty"><span class="es-title">No se pudieron cargar tus datos</span>' +
             '<span class="es-sub">' + UI.esc(err && err.message || err) + '</span></div>';
         });
     }
-    if (Lock) Lock.gate(start); else start();
+    function unlock() { if (Lock) Lock.gate(start); else start(); }
+    if (Auth) Auth.gate(unlock); else unlock();
   }
 
   global.BPAPLUS = global.BPAPLUS || {};
