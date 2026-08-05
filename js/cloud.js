@@ -4,7 +4,7 @@
 
   var VERSION = '10.12.0';
   var config = global.BPAPLUS_CONFIG && global.BPAPLUS_CONFIG.firebase;
-  var api, auth, db, uid = '', loading;
+  var api, auth, db, storage, uid = '', loading;
 
   function init() {
     if (loading) return loading;
@@ -12,17 +12,19 @@
     loading = Promise.all([
       import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-app.js'),
       import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-auth.js'),
-      import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-firestore.js')
+      import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-firestore.js'),
+      import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-storage.js')
     ]).then(function (mods) {
-      var appMod = mods[0], authMod = mods[1], fireMod = mods[2];
+      var appMod = mods[0], authMod = mods[1], fireMod = mods[2], storageMod = mods[3];
       var app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(config);
       auth = authMod.getAuth(app);
+      storage = storageMod.getStorage(app);
       try {
         db = fireMod.initializeFirestore(app, {
           localCache: fireMod.persistentLocalCache({ tabManager: fireMod.persistentMultipleTabManager() })
         });
       } catch (e) { db = fireMod.getFirestore(app); }
-      api = Object.assign({}, authMod, fireMod);
+      api = Object.assign({}, authMod, fireMod, storageMod);
       return true;
     });
     return loading;
@@ -58,12 +60,29 @@
     });
   }
 
+  function uploadFile(relativePath, file, name) {
+    needUser();
+    var path = 'users/' + uid + '/' + relativePath.replace(/^\/+/, '');
+    var ext = (file.name.split('.').pop() || '').toLowerCase();
+    var contentType = file.type || (ext === 'pdf' ? 'application/pdf' : ext === 'docx'
+      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : ext === 'xlsx'
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/octet-stream');
+    return api.uploadBytes(api.ref(storage, path), file, { contentType: contentType }).then(function (snap) {
+      return {
+        path: snap.ref.fullPath, name: name || file.name, originalName: file.name,
+        size: file.size, contentType: contentType, uploadedAt: Date.now()
+      };
+    });
+  }
+  function fileBlob(path) { needUser(); return api.getBlob(api.ref(storage, path)); }
+
   global.BPAPLUS = global.BPAPLUS || {};
   global.BPAPLUS.cloud = {
     init: init,
     setUid: function (value) { uid = value || ''; },
     getAuth: function () { return auth; },
     api: function () { return api; },
-    all: all, put: put, putMany: putMany, del: del, clear: clear
+    all: all, put: put, putMany: putMany, del: del, clear: clear,
+    uploadFile: uploadFile, fileBlob: fileBlob
   };
 })(window);

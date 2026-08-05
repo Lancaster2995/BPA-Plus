@@ -151,7 +151,13 @@
       for (var i = 1; i <= pdf.numPages; i++) pages.push(pdf.getPage(i).then(function (page) {
         return page.getTextContent().then(function (content) { return content.items.map(function (item) { return item.str; }).join(' '); });
       }));
-      return Promise.all(pages).then(function (text) { return text.join('\n'); });
+      var fields = typeof pdf.getFieldObjects === 'function' ? pdf.getFieldObjects() : Promise.resolve(null);
+      return Promise.all([Promise.all(pages), fields]).then(function (result) {
+        var filled = Object.keys(result[1] || {}).some(function (key) {
+          return (result[1][key] || []).some(function (field) { return String(field.value || '').trim(); });
+        });
+        return result[0].join('\n') + (filled ? '\n__BPA_FILLED__' : '');
+      });
     });
   }
 
@@ -259,6 +265,21 @@
     if (!m) return '';
     return m[1].toUpperCase() + (m[2] ? '-' + m[2].toUpperCase() : '') + '-' + m[3].padStart(3, '0');
   }
+  function normalizeCode(value) {
+    var parts = String(value || '').toUpperCase().trim().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').split('-');
+    if (parts.length && /^\d+$/.test(parts[parts.length - 1])) parts[parts.length - 1] = parts[parts.length - 1].padStart(3, '0');
+    return parts.join('-');
+  }
+  function isStandardCode(value) {
+    return /^(POE|FOR|FORMATO|REG|REGISTRO|INS|INSTRUCTIVO|MAN|MANUAL|PRO|PROGRAMA|ACT|ACTA|POL)(-[A-Z]{2,8})?-\d{3,4}$/.test(normalizeCode(value));
+  }
+  function safePart(value) { return D.normTxt(value || '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 70) || 'documento'; }
+  function standardName(doc, file, role, version) {
+    var ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
+    var code = normalizeCode(doc.codigo), date = (doc.fecha || D.isoHoy()).replace(/-/g, '');
+    if (role === 'registro') return code + '_' + date + '_' + Date.now() + '.' + ext;
+    return code + '_' + safePart(doc.nombre) + '_V' + String(version || doc.version || 1).padStart(2, '0') + '.' + ext;
+  }
   function nombreFromFile(name, codigo) {
     var base = name.replace(/\.[^.]+$/, '');
     if (codigo) {
@@ -278,11 +299,14 @@
     var base = {
       driveFileId: file.localFile ? undefined : file.id, driveUrl: file.localFile ? undefined : (file.webViewLink || ('https://drive.google.com/file/d/' + file.id + '/view')),
       codigo: codigo, nombre: nombreFromFile(file.name, codigo), tipo: tipoFromName(file.name),
-      version: 1, rev: '', area: 'Almacén', modifiedTime: file.modifiedTime || ''
+      version: 1, rev: '', area: 'Almacén', modifiedTime: file.modifiedTime || '', _file: file.localFile || null
     };
     if (!isDocx && !isXlsx && !isPdf) return Promise.resolve(base);
-    var reader = isDocx ? binary(file).then(textFromDocx) : isPdf ? binary(file).then(textFromPdf) : binary(file).then(rowsFromXlsx).then(function (rows) {
-      return rows.map(function (r) { return r.join(' | '); }).join('\n');
+    var reader = binary(file).then(function (buf) {
+      if (!base._file) base._file = new File([buf], file.name, { type: file.mimeType });
+      if (isDocx) return textFromDocx(buf);
+      if (isPdf) return textFromPdf(buf);
+      return rowsFromXlsx(buf).then(function (rows) { return rows.map(function (r) { return r.join(' | '); }).join('\n'); });
     });
     return reader.then(function (text) {
       var vig = text.match(/Fecha de vigencia\s*:?\s*([^\n|]+)/i);
@@ -293,12 +317,69 @@
       if (!base.codigo) { base.codigo = codigoFromName(text); if (base.codigo) base.nombre = nombreFromFile(file.name, base.codigo); }
       var fileType = tipoFromName(file.name);
       base.tipo = fileType === 'Otro' ? tipoFromName(text.slice(0, 1500)) : fileType;
+      base.role = base.tipo === 'Formato' ? (/__BPA_FILLED__/.test(text) ? 'registro' : 'plantilla') : 'controlado';
       var area = text.match(/(?:Área|Proceso|Unidad)\s*:?[ \t]*([^\n|]{3,60})/i);
       if (revDate) base.rev = revDate;
       if (area) base.area = area[1].trim();
       if (verM) { var vNum = parseInt(verM[1], 10); base.version = isNaN(vNum) ? 1 : vNum; }
       return base;
     }).catch(function () { return base; });
+  }
+
+  function storeFile(dgId, doc, file, role, version) {
+    var Cloud = global.BPAPLUS.cloud;
+    role = role || (doc.tipo === 'Formato' ? 'plantilla' : 'controlado');
+    version = +version || +doc.version || 1;
+    var name = standardName(doc, file, role, version);
+    var folder = role === 'registro' ? 'registros' : 'versiones';
+    var relative = 'droguerias/' + dgId + '/documentos/' + doc.id + '/' + folder + '/' + Date.now() + '_' + name;
+    return Cloud.uploadFile(relative, file, name).then(function (meta) {
+      if (role === 'registro') {
+        return Object.assign({}, doc, {
+          role: doc.file ? (doc.role || 'plantilla') : 'plantilla',
+          templateMissing: !doc.file,
+          records: (doc.records || []).concat(meta)
+        });
+      }
+      return Object.assign({}, doc, {
+        role: role, version: version, file: meta, templateMissing: false,
+        history: doc.file ? (doc.history || []).concat(doc.file) : (doc.history || [])
+      });
+    });
+  }
+  function downloadStored(meta) {
+    if (!meta || !meta.path) return Promise.reject(new Error('El archivo no está disponible.'));
+    return global.BPAPLUS.cloud.fileBlob(meta.path).then(function (blob) {
+      var url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = meta.name || 'documento'; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    });
+  }
+  function filePanel(doc, dgId, onSave) {
+    var defaultRole = doc.tipo === 'Formato' ? 'plantilla' : 'controlado';
+    var m = UI.dialog({
+      title: doc.file ? 'Reemplazar archivo' : 'Cargar archivo',
+      body: '<p class="dialog-note">El reemplazo conserva la versión anterior. Los formatos llenados se archivan como registros y no sustituyen la plantilla vacía.</p>' +
+        '<div class="field"><label>PDF, Word o Excel (máximo 25 MB)</label><input class="inp" id="df_file" type="file" accept=".pdf,.docx,.xlsx" required></div>' +
+        '<div class="grid-2"><div class="field"><label>Uso del archivo</label><select class="inp" id="df_role">' +
+          '<option value="controlado"' + (defaultRole === 'controlado' ? ' selected' : '') + '>Documento controlado</option>' +
+          '<option value="plantilla"' + (defaultRole === 'plantilla' ? ' selected' : '') + '>Plantilla vacía</option>' +
+          '<option value="registro">Formato llenado</option></select></div>' +
+        '<div class="field"><label>Versión</label><input class="inp mono" id="df_version" type="number" min="1" value="' + (+(doc.version || 1) + (doc.file ? 1 : 0)) + '"></div></div>',
+      footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="df_save">Subir archivo</button>',
+      onMount: function (root) {
+        root.querySelector('#df_save').onclick = function () {
+          var file = root.querySelector('#df_file').files[0], role = root.querySelector('#df_role').value;
+          if (!file) { UI.note('Selecciona un archivo.'); return; }
+          if (!LEAF_TYPES.test(mimeFromFile(file)) || file.size >= 25 * 1024 * 1024) { UI.note('Usa PDF, DOCX o XLSX de menos de 25 MB.'); return; }
+          var btn = root.querySelector('#df_save'); btn.disabled = true; btn.textContent = 'Subiendo…';
+          storeFile(dgId, doc, file, role, +root.querySelector('#df_version').value || doc.version).then(function (saved) {
+            return onSave(saved);
+          }).then(function () { m.close(); UI.note(role === 'registro' ? 'Registro archivado' : 'Archivo vigente actualizado'); })
+            .catch(function (error) { btn.disabled = false; btn.textContent = 'Subir archivo'; UI.note('No se pudo subir: ' + (error.message || error)); });
+        };
+      }
+    });
   }
 
   /* ------------------------------ Panel de conexión ------------------------------ */
@@ -415,6 +496,7 @@
     function rowHtml(d, i) {
       var codeKey = normCodigo(d.codigo), match = codeKey ? existingByCode[codeKey] : null;
       var types = ['POE', 'Formato', 'Registro', 'Instructivo', 'Manual', 'Otro'];
+      var roles = [{ v: 'controlado', l: 'Documento controlado' }, { v: 'plantilla', l: 'Plantilla vacía' }, { v: 'registro', l: 'Formato llenado' }];
       var tagHtml = d._mergedFrom && d._mergedFrom.length > 1
         ? '<span class="drive-pick-folder">· fusionado de ' + d._mergedFrom.length + ' archivos duplicados</span>'
         : match ? '<span class="drive-pick-folder">· ya existe, se actualizará</span>' : '<span class="drive-pick-folder">· nuevo</span>';
@@ -422,6 +504,7 @@
         '<input class="inp rv-codigo" value="' + UI.esc(d.codigo) + '" placeholder="Código" style="max-width:120px">' +
         '<input class="inp rv-nombre" value="' + UI.esc(d.nombre) + '" placeholder="Nombre">' +
         '<select class="inp rv-tipo" style="max-width:125px">' + types.map(function (type) { return '<option' + (type === d.tipo ? ' selected' : '') + '>' + type + '</option>'; }).join('') + '</select>' +
+        '<select class="inp rv-role" style="max-width:165px">' + roles.map(function (role) { return '<option value="' + role.v + '"' + (role.v === (d.role || (d.tipo === 'Formato' ? 'plantilla' : 'controlado')) ? ' selected' : '') + '>' + role.l + '</option>'; }).join('') + '</select>' +
         '<input class="inp rv-area" value="' + UI.esc(d.area || 'Almacén') + '" placeholder="Área" style="max-width:130px">' +
         '<input class="inp rv-version mono" value="' + UI.esc(d.version) + '" placeholder="v" style="max-width:52px">' +
         '<input class="inp rv-rev" type="date" value="' + UI.esc(d.rev) + '" style="max-width:150px">' +
@@ -438,22 +521,27 @@
         });
         root.querySelector('#rv_save').onclick = function () {
           var rows = root.querySelectorAll('.drive-row');
+          var invalid = null;
           var results = Array.prototype.map.call(rows, function (r) {
             var i = +r.dataset.i, d = drafts[i];
             var vRaw = r.querySelector('.rv-version').value.trim();
             var vNum = parseInt(vRaw, 10);
+            var code = normalizeCode(r.querySelector('.rv-codigo').value);
+            if (!isStandardCode(code)) { invalid = invalid || r.querySelector('.rv-codigo'); return null; }
             return Object.assign({}, d, {
-              codigo: r.querySelector('.rv-codigo').value.trim() || '—',
+              codigo: code,
               nombre: r.querySelector('.rv-nombre').value.trim() || d.nombre,
               tipo: r.querySelector('.rv-tipo').value,
+              role: r.querySelector('.rv-role').value,
               area: r.querySelector('.rv-area').value.trim() || 'Almacén',
               version: isNaN(vNum) ? 1 : vNum,
               rev: r.querySelector('.rv-rev').value || D.isoDesdeHoy(365),
               existingId: r.dataset.existing || null
             });
           });
+          if (invalid) { invalid.focus(); UI.note('Corrige los códigos: usa por ejemplo POE-ALM-001 o FOR-ALM-011.'); return; }
           m.close();
-          if (onImport) onImport(results);
+          if (onImport) onImport(results.filter(Boolean));
         };
       }
     });
@@ -607,7 +695,9 @@
     isConnected: isConnected, getClientId: getClientId, setClientId: setClientId,
     connectPanel: connectPanel, importPanel: importPanel, cronogramaPanel: cronogramaPanel,
     analizarCronograma: analizarCronograma, analizarFilasCronograma: analizarFilasCronograma, analizarArchivo: analizarArchivo,
-    codigoFromName: codigoFromName, tipoFromName: tipoFromName, localFiles: localFiles,
+    codigoFromName: codigoFromName, normalizeCode: normalizeCode, isStandardCode: isStandardCode,
+    standardName: standardName, tipoFromName: tipoFromName, localFiles: localFiles,
+    storeFile: storeFile, downloadStored: downloadStored, filePanel: filePanel,
     linkPanel: linkPanel, extractIdFromUrl: extractIdFromUrl
   };
 })(window);

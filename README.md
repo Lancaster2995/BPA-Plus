@@ -40,7 +40,12 @@ la app sigue funcionando sin conexión después del primer acceso.
 - **Escaneo de carpeta BPA** — seleccioná una carpeta local con PDF editables,
   Word o Excel. BPA-Plus lee el texto, propone código, tipo, versión, área y
   fecha de revisión, fusiona duplicados y pide confirmación antes de guardar.
-  Los archivos originales locales no se suben.
+  Al confirmar, guarda los archivos en la biblioteca privada de Firebase.
+- **Control documental** — exige códigos estándar (`POE-ALM-001`,
+  `FOR-ALM-011`), renombra el archivo guardado, permite descargarlo o
+  reemplazarlo y conserva las versiones anteriores. Las plantillas vacías y
+  los formatos llenados se archivan por separado; un registro nunca reemplaza
+  la plantilla oficial.
 - **Cronogramas Excel** — interpreta encabezados y fechas aunque usen nombres
   como tema/curso, frecuencia/periodicidad o área/unidad; permite revisar cada
   capacitación y autoinspección antes de incorporarla.
@@ -139,6 +144,9 @@ cargan datos de ejemplo para explorar la app.
 - **Importar respaldo** — reemplaza los datos actuales por los del archivo.
 
 El respaldo JSON sigue disponible como copia adicional o exportación manual.
+Los PDF, DOCX y XLSX de hasta 25 MB se guardan en Firebase Storage bajo la
+cuenta y droguería correspondientes. El JSON contiene sus referencias, no una
+copia binaria de los archivos.
 
 ## Estructura
 
@@ -152,7 +160,7 @@ BPA-Plus/
 └─ js/
    ├─ domain.js           Lógica de negocio pura (estados, fechas, clasificación, puntaje)
    ├─ config.js           Configuración pública del proyecto Firebase
-   ├─ cloud.js            Firebase Auth, Firestore y caché offline
+   ├─ cloud.js            Firebase Auth, Firestore, Storage y caché offline
    ├─ auth.js             Pantalla de cuenta y recuperación de contraseña
    ├─ db.js               Datos, migración local y exportar/importar
    ├─ ui.js                Componentes (notas, diálogos, panel, hoja de acciones, buscador)
@@ -168,7 +176,7 @@ funciona igual abriendo el archivo local o servida como PWA.
 
 Los registros se almacenan en el proyecto Firebase `bpa-db`, aislados por el
 UID de la cuenta. La configuración web de Firebase es pública por diseño; la
-protección real está en Authentication y en `firestore.rules`.
+protección real está en Authentication, `firestore.rules` y `storage.rules`.
 
 Si activás **Google Drive**, la app habla directo con la API de Google
 desde tu navegador para leer los archivos que elijas, y carga dos librerías de

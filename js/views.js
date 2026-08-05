@@ -173,7 +173,7 @@
     var m = UI.dialog({
       title: existing ? 'Editar documento' : 'Nuevo documento',
       body:
-        '<div class="grid-2"><div class="field"><label>Código</label><input class="inp mono" id="f_cod" value="' + esc(d.codigo) + '" placeholder="POE-ALM-001"></div>' +
+        '<div class="grid-2"><div class="field" id="wrap_codigo"><label>Código estándar</label><input class="inp mono" id="f_cod" value="' + esc(d.codigo) + '" placeholder="POE-ALM-001"><div class="err">Usa un código como POE-ALM-001 o FOR-ALM-011.</div></div>' +
         '<div class="field"><label>Versión</label><input class="inp mono" id="f_ver" type="number" min="1" value="' + esc(d.version) + '"></div></div>' +
         '<div class="field" id="wrap_nombre"><label>Nombre del documento</label><input class="inp" id="f_nom" value="' + esc(d.nombre) + '" placeholder="Recepción de productos"><div class="err">Ingresá un nombre.</div></div>' +
         '<div class="grid-2"><div class="field"><label>Área</label><select class="inp" id="f_area">' + opts(AREAS, d.area) + '</select></div>' +
@@ -185,9 +185,11 @@
         root.querySelector('#f_save').onclick = function () {
           var nom = root.querySelector('#f_nom').value.trim();
           if (!nom) { root.querySelector('#wrap_nombre').classList.add('invalid'); root.querySelector('#f_nom').focus(); return; }
+          var code = global.BPAPLUS.drive.normalizeCode(root.querySelector('#f_cod').value);
+          if (!global.BPAPLUS.drive.isStandardCode(code)) { root.querySelector('#wrap_codigo').classList.add('invalid'); root.querySelector('#f_cod').focus(); return; }
           var obj = Object.assign({}, existing || {}, {
             id: existing ? existing.id : D.nextId(), e: store.dg().id,
-            codigo: root.querySelector('#f_cod').value.trim() || '—',
+            codigo: code,
             nombre: nom, area: root.querySelector('#f_area').value,
             tipo: root.querySelector('#f_tipo').value,
             version: +root.querySelector('#f_ver').value || 1,
@@ -201,6 +203,15 @@
 
   function docPanel(d) {
     var e = D.edoc(d), f = D.fDias(D.dias(d.rev));
+    var history = d.history || [], records = d.records || [];
+    var files = (d.templateMissing ? '<div class="file-warning">Falta cargar la plantilla vacía oficial.</div>' : '') +
+      (d.file ? '<button class="file-item" data-file-current>' + icon('download', 15) + '<span><b>Archivo vigente</b><small>' + esc(d.file.name) + '</small></span></button>' : '<div class="row-empty">Sin archivo vigente.</div>') +
+      (history.length ? '<div class="section-title">Versiones anteriores (' + history.length + ')</div>' + history.map(function (file, i) {
+        return '<button class="file-item" data-file-history="' + i + '">' + icon('download', 15) + '<span><b>Versión archivada</b><small>' + esc(file.name) + '</small></span></button>';
+      }).join('') : '') +
+      (records.length ? '<div class="section-title">Formatos llenados (' + records.length + ')</div>' + records.map(function (file, i) {
+        return '<button class="file-item" data-file-record="' + i + '">' + icon('download', 15) + '<span><b>Registro</b><small>' + esc(file.name) + '</small></span></button>';
+      }).join('') : '');
     UI.panel({
       title: 'Documento',
       body:
@@ -209,6 +220,8 @@
         detailRow('Área', d.area) + detailRow('Tipo', d.tipo) +
         detailRow('Próxima revisión', D.fLocal(d.rev) + ' · ' + f.txt) +
         detailRow('Clasificación', criterioDeDoc(d, store.dg().criterios || D.CRITERIOS_DEFAULT)) +
+        '<div class="section-title">Biblioteca documental</div><div class="file-list">' + files + '</div>' +
+        '<button class="btn btn-primary btn-sm" data-file-upload style="margin-top:12px">' + icon('upload', 14) + (d.file ? 'Reemplazar / archivar registro' : 'Cargar archivo') + '</button>' +
         (d.driveUrl
           ? '<div class="drive-linked"><span>' + icon('doc', 15) + 'Vinculado a Google Drive</span><a href="' + d.driveUrl + '" target="_blank" rel="noopener" class="link-btn">Abrir original</a></div>'
           : '<button class="btn btn-ghost btn-sm" data-drivelink style="margin-top:12px">' + icon('upload', 14) + 'Vincular a Google Drive</button>'),
@@ -221,6 +234,15 @@
         var dl = root.querySelector('[data-drivelink]');
         if (dl) dl.onclick = function () {
           global.BPAPLUS.drive.linkPanel(d, function (link) { store.save('documentos', Object.assign({}, d, link)); });
+        };
+        var current = root.querySelector('[data-file-current]');
+        function download(file) { global.BPAPLUS.drive.downloadStored(file).catch(function (error) { UI.note(error.message || error); }); }
+        if (current) current.onclick = function () { download(d.file); };
+        root.querySelectorAll('[data-file-history]').forEach(function (button) { button.onclick = function () { download(history[+button.dataset.fileHistory]); }; });
+        root.querySelectorAll('[data-file-record]').forEach(function (button) { button.onclick = function () { download(records[+button.dataset.fileRecord]); }; });
+        root.querySelector('[data-file-upload]').onclick = function () {
+          root.querySelector('[data-close]').click();
+          global.BPAPLUS.drive.filePanel(d, store.dg().id, function (saved) { return store.save('documentos', saved); });
         };
       }
     });

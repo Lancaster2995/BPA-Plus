@@ -177,11 +177,14 @@
         var nuevos = 0, actualizados = 0;
         Promise.all(drafts.map(function (d) {
           var existing = d.existingId ? store.find('documentos', d.existingId) : null;
-          var clean = Object.assign({}, d); delete clean.existingId; delete clean.modifiedTime; delete clean._mergedFrom;
+          var file = d._file;
+          var clean = Object.assign({}, d); delete clean.existingId; delete clean.modifiedTime; delete clean._mergedFrom; delete clean._file;
           var obj = existing ? Object.assign({}, existing, clean, { id: existing.id }) : Object.assign({ id: D.nextId(), e: store.dg().id, area: 'Almacén', version: 1 }, clean);
           if (existing) actualizados++; else nuevos++;
-          return store.save('documentos', obj);
-        })).then(function () { UI.note(nuevos + ' nuevo(s), ' + actualizados + ' actualizado(s) desde Drive'); });
+          var ready = file ? global.BPAPLUS.drive.storeFile(store.dg().id, obj, file, clean.role, clean.version) : Promise.resolve(obj);
+          return ready.then(function (saved) { return store.save('documentos', saved); });
+        })).then(function () { UI.note(nuevos + ' nuevo(s), ' + actualizados + ' actualizado(s) en la biblioteca'); })
+          .catch(function (err) { UI.note('No se pudieron subir los archivos: ' + (err && err.message || err)); });
       }, store.byDg('documentos'));
     };
     var ci = document.getElementById('cronImport');
