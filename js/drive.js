@@ -15,6 +15,7 @@
   var GIS_SRC = 'https://accounts.google.com/gsi/client';
   var MAMMOTH_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.7.2/mammoth.browser.min.js';
   var XLSX_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  var PDF_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs';
   var SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 
   var state = { token: null, tokenClient: null, expiresAt: 0 };
@@ -142,23 +143,53 @@
       return out;
     });
   }
+  function textFromPdf(buf) {
+    return import(PDF_SRC).then(function (pdfjs) {
+      return pdfjs.getDocument({ data: new Uint8Array(buf), disableWorker: true }).promise;
+    }).then(function (pdf) {
+      var pages = [];
+      for (var i = 1; i <= pdf.numPages; i++) pages.push(pdf.getPage(i).then(function (page) {
+        return page.getTextContent().then(function (content) { return content.items.map(function (item) { return item.str; }).join(' '); });
+      }));
+      return Promise.all(pages).then(function (text) { return text.join('\n'); });
+    });
+  }
+
+  function mimeFromFile(file) {
+    var ext = (file.name.split('.').pop() || '').toLowerCase();
+    return file.type || (ext === 'pdf' ? 'application/pdf' : ext === 'docx'
+      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : ext === 'xlsx'
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : '');
+  }
+  function localFiles(fileList) {
+    return Array.prototype.map.call(fileList || [], function (file) {
+      var path = file.webkitRelativePath || file.name, parts = path.split('/'); parts.pop();
+      return { id: 'local:' + path, name: file.name, mimeType: mimeFromFile(file), folderName: parts.join(' / '), localFile: file, modifiedTime: new Date(file.lastModified || Date.now()).toISOString() };
+    }).filter(function (file) { return LEAF_TYPES.test(file.mimeType); }).slice(0, 300);
+  }
+  function binary(file) { return file.localFile ? file.localFile.arrayBuffer() : downloadBinary(file.id); }
 
   var MESES_IDX = { ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6, jul: 7, ago: 8, set: 9, sep: 9, oct: 10, nov: 11, dic: 12 };
   function parseFechaTexto(s) {
     if (!s) return null;
     s = String(s).trim();
-    var m = s.match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})/);
+    var m = s.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
+    if (m) return m[1] + '-' + String(+m[2]).padStart(2, '0') + '-' + String(+m[3]).padStart(2, '0');
+    m = s.match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})/);
     if (m) {
       var d = +m[1], mo = +m[2], y = +m[3]; if (y < 100) y += 2000;
       if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0');
     }
     m = s.toLowerCase().match(/(\d{1,2})\s+de\s+([a-záéíóú]+)\s+de\s+(\d{4})/);
     if (m && MESES_IDX[m[2].slice(0, 3)]) return m[3] + '-' + String(MESES_IDX[m[2].slice(0, 3)]).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0');
+    m = D.normTxt(s).match(/(\d{1,2})\s+(ene|feb|mar|abr|may|jun|jul|ago|set|sep|oct|nov|dic)[a-z]*\s+(20\d{2})/);
+    if (m) return m[3] + '-' + String(MESES_IDX[m[2]]).padStart(2, '0') + '-' + String(+m[1]).padStart(2, '0');
     return null;
   }
 
   function analizarFilasCronograma(rows, file) {
-    var year = +(String(file.name || '').match(/\b(20\d{2})\b/) || [])[1] || new Date().getFullYear();
+    var allText = rows.slice(0, 20).map(function (row) { return (row || []).join(' '); }).join(' ');
+    var year = +(String(file.name || '').match(/\b(20\d{2})\b/) || allText.match(/\b(20\d{2})\b/) || [])[1] || new Date().getFullYear();
     var headers = [], months = {}, kind = /auto\s*inspe/i.test(file.name || '') ? 'inspecciones' : 'capacitaciones';
     var result = { capacitaciones: [], inspecciones: [] };
     var source = { driveFileId: file.id, driveUrl: file.webViewLink || ('https://drive.google.com/file/d/' + file.id + '/view') };
@@ -188,7 +219,7 @@
         var n = D.normTxt(value || '').slice(0, 3);
         if (MESES_IDX[n]) months[i] = MESES_IDX[n];
       });
-      var isHeader = /\b(tema|area|frecuencia|fecha|actividad|capacitacion|responsable|dirigido)\b/.test(line);
+      var isHeader = /\b(tema|curso|area|frecuencia|periodicidad|fecha|actividad|capacitacion|responsable|dirigido|personal|sector|proceso)\b/.test(line);
       if (isHeader) {
         row.forEach(function (value, i) { if (String(value || '').trim()) headers[i] = value; });
         return;
@@ -196,13 +227,13 @@
       if (!headers.length || !row.some(function (value) { return String(value || '').trim(); })) return;
       var fecha = dateFor(row); if (!fecha) return;
       if (kind === 'inspecciones') {
-        var area = String(cell(row, /\b(area|sector|proceso)\b/) || '').trim();
+        var area = String(cell(row, /\b(area|sector|proceso|unidad|zona)\b/) || '').trim();
         if (!area) area = String(row.filter(function (v) { return String(v || '').trim().length > 2; })[0] || '').trim();
         if (area) result.inspecciones.push(Object.assign({ area: area, prog: fecha }, source));
       } else {
-        var tema = String(cell(row, /\b(tema|actividad|capacitacion)\b/) || '').trim();
-        var capArea = String(cell(row, /\b(area|dirigido|personal)\b/) || 'Almacén').trim();
-        var frec = String(cell(row, /\bfrecuencia\b/) || 'Anual').trim();
+        var tema = String(cell(row, /\b(tema|curso|actividad|capacitacion|nombre)\b/) || '').trim();
+        var capArea = String(cell(row, /\b(area|dirigido|personal|publico|unidad)\b/) || 'Almacén').trim();
+        var frec = String(cell(row, /\b(frecuencia|periodicidad)\b/) || 'Anual').trim();
         if (tema) result.capacitaciones.push(Object.assign({ tema: tema, area: capArea || 'Almacén', frec: frec || 'Anual', fecha: fecha }, source));
       }
     });
@@ -211,26 +242,29 @@
 
   function analizarCronograma(file) {
     if (!/spreadsheetml/.test(file.mimeType || '')) return Promise.reject(new Error('El cronograma debe ser un archivo XLSX'));
-    return downloadBinary(file.id).then(rowsFromXlsx).then(function (rows) { return analizarFilasCronograma(rows, file); });
+    return binary(file).then(rowsFromXlsx).then(function (rows) { return analizarFilasCronograma(rows, file); });
   }
 
   function tipoFromName(name) {
     var n = D.normTxt(name);
     if (/\bpoe\b/.test(n)) return 'POE';
     if (/\bregistro\b/.test(n)) return 'Registro';
-    if (/\bformato\b/.test(n)) return 'Formato';
-    if (/\binstructivo\b/.test(n)) return 'Instructivo';
+    if (/\b(formato|for)\b/.test(n)) return 'Formato';
+    if (/\b(instructivo|ins)\b/.test(n)) return 'Instructivo';
     if (/\bmanual\b/.test(n)) return 'Manual';
     return 'Otro';
   }
   function codigoFromName(name) {
-    var m = name.match(/(POE|REGISTRO|FORMATO|MANUAL|INSTRUCTIVO)\W*(\d{1,4})/i);
+    var m = String(name || '').match(/\b(POE|REGISTRO|FORMATO|FOR|MANUAL|INSTRUCTIVO|INS)(?:[\s._-]+([A-Z]{2,8}))?[\s._-]+0*(\d{1,4})\b/i);
     if (!m) return '';
-    return m[1].toUpperCase() + '-' + m[2].padStart(3, '0');
+    return m[1].toUpperCase() + (m[2] ? '-' + m[2].toUpperCase() : '') + '-' + m[3].padStart(3, '0');
   }
   function nombreFromFile(name, codigo) {
     var base = name.replace(/\.[^.]+$/, '');
-    if (codigo) { var head = codigo.split('-')[0] + '\\W*' + codigo.split('-')[1].replace(/^0+/, ''); base = base.replace(new RegExp('^' + head, 'i'), '').trim(); }
+    if (codigo) {
+      var head = codigo.split('-').map(function (part) { return /^\d+$/.test(part) ? part.replace(/^0+/, '') : part; }).join('\\W*0*');
+      base = base.replace(new RegExp('^' + head, 'i'), '').trim();
+    }
     base = base.replace(/^[\s._-]+/, '');
     return base.charAt(0).toUpperCase() + base.slice(1);
   }
@@ -239,14 +273,15 @@
   function analizarArchivo(file) {
     var isDocx = /wordprocessingml/.test(file.mimeType);
     var isXlsx = /spreadsheetml/.test(file.mimeType);
+    var isPdf = /application\/pdf/.test(file.mimeType);
     var codigo = codigoFromName(file.name);
     var base = {
-      driveFileId: file.id, driveUrl: file.webViewLink || ('https://drive.google.com/file/d/' + file.id + '/view'),
+      driveFileId: file.localFile ? undefined : file.id, driveUrl: file.localFile ? undefined : (file.webViewLink || ('https://drive.google.com/file/d/' + file.id + '/view')),
       codigo: codigo, nombre: nombreFromFile(file.name, codigo), tipo: tipoFromName(file.name),
       version: 1, rev: '', area: 'Almacén', modifiedTime: file.modifiedTime || ''
     };
-    if (!isDocx && !isXlsx) return Promise.resolve(base);
-    var reader = isDocx ? downloadBinary(file.id).then(textFromDocx) : downloadBinary(file.id).then(rowsFromXlsx).then(function (rows) {
+    if (!isDocx && !isXlsx && !isPdf) return Promise.resolve(base);
+    var reader = isDocx ? binary(file).then(textFromDocx) : isPdf ? binary(file).then(textFromPdf) : binary(file).then(rowsFromXlsx).then(function (rows) {
       return rows.map(function (r) { return r.join(' | '); }).join('\n');
     });
     return reader.then(function (text) {
@@ -255,7 +290,12 @@
       var verM = text.match(/(?<!de\s)(?<!de)\bRevisi[oó]n\s*N?\.?°?\s*:?\s*0*([0-9]{1,3})\b(?!\s*[./]\s*\d)/i) ||
         text.match(/(?<!de\s)(?<!de)\bVersi[oó]n\s*:?\s*0*([0-9]{1,3})\b(?!\s*[./]\s*\d)/i);
       var revDate = parseFechaTexto(revF && revF[1]) || parseFechaTexto(vig && vig[1]);
+      if (!base.codigo) { base.codigo = codigoFromName(text); if (base.codigo) base.nombre = nombreFromFile(file.name, base.codigo); }
+      var fileType = tipoFromName(file.name);
+      base.tipo = fileType === 'Otro' ? tipoFromName(text.slice(0, 1500)) : fileType;
+      var area = text.match(/(?:Área|Proceso|Unidad)\s*:?[ \t]*([^\n|]{3,60})/i);
       if (revDate) base.rev = revDate;
+      if (area) base.area = area[1].trim();
       if (verM) { var vNum = parseInt(verM[1], 10); base.version = isNaN(vNum) ? 1 : vNum; }
       return base;
     }).catch(function () { return base; });
@@ -293,10 +333,11 @@
 
   /* ------------------------------ Importar carpeta / búsqueda ------------------------------ */
   function importPanel(onImport, existingDocs) {
-    withAuth(function () {
       var m = UI.dialog({
-        title: 'Importar desde Google Drive', wide: true,
+        title: 'Escanear documentos BPA', wide: true,
         body:
+          '<div class="field"><label>Carpeta o archivos del dispositivo</label><input class="inp" id="im_local" type="file" accept=".pdf,.docx,.xlsx" webkitdirectory multiple><div class="hint">Lee PDF con texto, Word y Excel. El archivo original no se sube.</div></div>' +
+          '<div class="section-title">O seleccionar desde Google Drive</div>' +
           '<div class="grid-2"><div class="field"><label>Carpeta de Drive (URL o ID)</label><input class="inp" id="im_folder" placeholder="https://drive.google.com/drive/folders/…"></div>' +
           '<div class="field"><label>… o buscar por nombre</label><input class="inp" id="im_q" placeholder="POE, Registro…"></div></div>' +
           '<button class="btn btn-ghost btn-sm" id="im_go" type="button">' + UI.icon('search', 14) + ' Buscar</button>' +
@@ -319,14 +360,19 @@
             var btn = root.querySelector('#im_add'); btn.disabled = !n; btn.textContent = 'Agregar seleccionados (' + n + ')';
           }
           root.querySelector('#im_results').addEventListener('change', updateCount);
+          root.querySelector('#im_local').onchange = function (event) {
+            found = localFiles(event.target.files); renderResults();
+          };
           root.querySelector('#im_go').onclick = function () {
-            var box = root.querySelector('#im_results'); box.innerHTML = '<div class="row-empty">Buscando…</div>';
-            var folderRaw = root.querySelector('#im_folder').value.trim();
-            var q = root.querySelector('#im_q').value.trim();
-            var folderId = folderRaw ? extractIdFromUrl(folderRaw) : null;
-            var task = folderId ? filesInFolder(folderId) : searchFiles(q);
-            task.then(function (files) { found = files; renderResults(); })
-              .catch(function (e) { box.innerHTML = '<div class="row-empty">Error: ' + UI.esc(e.message || e) + '</div>'; });
+            withAuth(function () {
+              var box = root.querySelector('#im_results'); box.innerHTML = '<div class="row-empty">Buscando…</div>';
+              var folderRaw = root.querySelector('#im_folder').value.trim();
+              var q = root.querySelector('#im_q').value.trim();
+              var folderId = folderRaw ? extractIdFromUrl(folderRaw) : null;
+              var task = folderId ? filesInFolder(folderId) : searchFiles(q);
+              task.then(function (files) { found = files; renderResults(); })
+                .catch(function (e) { box.innerHTML = '<div class="row-empty">Error: ' + UI.esc(e.message || e) + '</div>'; });
+            });
           };
           root.querySelector('#im_add').onclick = function () {
             var picked = Array.prototype.map.call(root.querySelectorAll('.im-chk:checked'), function (c) { return found[+c.dataset.i]; });
@@ -337,7 +383,6 @@
           };
         }
       });
-    });
   }
 
   /* ------------------------------ Revisión antes de guardar ------------------------------ */
@@ -350,12 +395,13 @@
      fecha de revisión, o si ninguno la tiene, con el más reciente. */
   function mergeBatch(drafts) {
     var byCode = {}, order = [];
+    function source(d) { return d.driveFileId || ((d.nombre || '') + '|' + (d.modifiedTime || '')); }
     drafts.forEach(function (d) {
-      var key = normCodigo(d.codigo) || ('__' + d.driveFileId);
+      var key = normCodigo(d.codigo) || ('__' + source(d));
       if (!byCode[key]) { byCode[key] = d; order.push(key); return; }
       var prev = byCode[key];
       var better = (d.rev && !prev.rev) ? d : (!d.rev && prev.rev) ? prev : ((d.modifiedTime || '') > (prev.modifiedTime || '') ? d : prev);
-      byCode[key] = Object.assign({}, better, { _mergedFrom: (prev._mergedFrom || [prev.driveFileId]).concat(d.driveFileId) });
+      byCode[key] = Object.assign({}, better, { _mergedFrom: (prev._mergedFrom || [source(prev)]).concat(source(d)) });
     });
     return order.map(function (k) { return byCode[k]; });
   }
@@ -364,23 +410,26 @@
     drafts = mergeBatch(drafts);
     existingDocs = existingDocs || [];
     var existingByCode = {};
-    existingDocs.forEach(function (d) { existingByCode[normCodigo(d.codigo)] = d; });
+    existingDocs.forEach(function (d) { var key = normCodigo(d.codigo); if (key) existingByCode[key] = d; });
 
     function rowHtml(d, i) {
-      var match = existingByCode[normCodigo(d.codigo)];
+      var codeKey = normCodigo(d.codigo), match = codeKey ? existingByCode[codeKey] : null;
+      var types = ['POE', 'Formato', 'Registro', 'Instructivo', 'Manual', 'Otro'];
       var tagHtml = d._mergedFrom && d._mergedFrom.length > 1
         ? '<span class="drive-pick-folder">· fusionado de ' + d._mergedFrom.length + ' archivos duplicados</span>'
         : match ? '<span class="drive-pick-folder">· ya existe, se actualizará</span>' : '<span class="drive-pick-folder">· nuevo</span>';
       return '<div class="mini-row drive-row" data-i="' + i + '" data-existing="' + (match ? match.id : '') + '">' +
         '<input class="inp rv-codigo" value="' + UI.esc(d.codigo) + '" placeholder="Código" style="max-width:120px">' +
         '<input class="inp rv-nombre" value="' + UI.esc(d.nombre) + '" placeholder="Nombre">' +
+        '<select class="inp rv-tipo" style="max-width:125px">' + types.map(function (type) { return '<option' + (type === d.tipo ? ' selected' : '') + '>' + type + '</option>'; }).join('') + '</select>' +
+        '<input class="inp rv-area" value="' + UI.esc(d.area || 'Almacén') + '" placeholder="Área" style="max-width:130px">' +
         '<input class="inp rv-version mono" value="' + UI.esc(d.version) + '" placeholder="v" style="max-width:52px">' +
         '<input class="inp rv-rev" type="date" value="' + UI.esc(d.rev) + '" style="max-width:150px">' +
         '<button class="icon-btn del" type="button" data-rm aria-label="Quitar">' + UI.icon('x', 16) + '</button>' + tagHtml + '</div>';
     }
     var m = UI.dialog({
       title: 'Revisar antes de guardar (' + drafts.length + ')', wide: true,
-      body: '<p class="dialog-note">Se completó lo que se pudo leer del archivo. Revisá y corregí antes de guardar — quedan vinculados a su archivo original en Drive. Los códigos duplicados en el lote se fusionaron en una sola fila.</p>' +
+      body: '<p class="dialog-note">Se completó lo que se pudo leer. Revisá antes de guardar: los archivos de Drive conservan su enlace y los locales solo se catalogan. Los códigos duplicados se fusionaron.</p>' +
         '<div id="rv_list">' + drafts.map(rowHtml).join('') + '</div>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="rv_save">Guardar en Documentos</button>',
       onMount: function (root) {
@@ -396,6 +445,8 @@
             return Object.assign({}, d, {
               codigo: r.querySelector('.rv-codigo').value.trim() || '—',
               nombre: r.querySelector('.rv-nombre').value.trim() || d.nombre,
+              tipo: r.querySelector('.rv-tipo').value,
+              area: r.querySelector('.rv-area').value.trim() || 'Almacén',
               version: isNaN(vNum) ? 1 : vNum,
               rev: r.querySelector('.rv-rev').value || D.isoDesdeHoy(365),
               existingId: r.dataset.existing || null
@@ -410,10 +461,11 @@
 
   /* ------------------------------ Importar cronograma ------------------------------ */
   function cronogramaPanel(onImport, existingCaps, existingInspecciones) {
-    withAuth(function () {
       var m = UI.dialog({
-        title: 'Importar cronograma desde Drive', wide: true,
+        title: 'Importar cronograma Excel', wide: true,
         body:
+          '<div class="field"><label>Archivo XLSX del dispositivo</label><input class="inp" id="cr_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div>' +
+          '<div class="section-title">O seleccionar desde Google Drive</div>' +
           '<div class="field"><label>Archivo XLSX (URL, ID o nombre)</label><input class="inp" id="cr_q" value="CRONOGRAMA" placeholder="REGISTRO 005 CRONOGRAMA..."></div>' +
           '<button class="btn btn-ghost btn-sm" id="cr_go" type="button">' + UI.icon('search', 14) + ' Buscar</button>' +
           '<div id="cr_results" style="margin-top:14px"></div>',
@@ -436,15 +488,24 @@
               };
             });
           }
+          root.querySelector('#cr_file').onchange = function (event) {
+            var file = localFiles(event.target.files)[0], box = root.querySelector('#cr_results');
+            if (!file) { box.innerHTML = '<div class="row-empty">Seleccioná un archivo XLSX.</div>'; return; }
+            box.innerHTML = '<div class="row-empty">Analizando ' + UI.esc(file.name) + '…</div>';
+            analizarCronograma(file).then(function (drafts) {
+              m.close(); reviewCronograma(drafts, onImport, existingCaps, existingInspecciones);
+            }).catch(function (error) { box.innerHTML = '<div class="row-empty">Error: ' + UI.esc(error.message || error) + '</div>'; });
+          };
           root.querySelector('#cr_go').onclick = function () {
-            var box = root.querySelector('#cr_results'); box.innerHTML = '<div class="row-empty">Buscando…</div>';
-            var query = root.querySelector('#cr_q').value.trim(), id = extractIdFromUrl(query);
-            (id ? fileMeta(id).then(function (file) { return [file]; }) : searchFiles(query, 30))
-              .then(render).catch(function (error) { box.innerHTML = '<div class="row-empty">Error: ' + UI.esc(error.message || error) + '</div>'; });
+            withAuth(function () {
+              var box = root.querySelector('#cr_results'); box.innerHTML = '<div class="row-empty">Buscando…</div>';
+              var query = root.querySelector('#cr_q').value.trim(), id = extractIdFromUrl(query);
+              (id ? fileMeta(id).then(function (file) { return [file]; }) : searchFiles(query, 30))
+                .then(render).catch(function (error) { box.innerHTML = '<div class="row-empty">Error: ' + UI.esc(error.message || error) + '</div>'; });
+            });
           };
         }
       });
-    });
   }
 
   function uniqueBy(items, keyOf) {
@@ -453,8 +514,8 @@
   }
 
   function reviewCronograma(drafts, onImport, existingCaps, existingInspecciones) {
-    function capKey(c) { return D.normTxt((c.tema || '') + '|' + (c.area || '')); }
-    function inspKey(i) { return D.normTxt(i.area || ''); }
+    function capKey(c) { return D.normTxt((c.tema || '') + '|' + (c.area || '') + '|' + (c.fecha || '')); }
+    function inspKey(i) { return D.normTxt((i.area || '') + '|' + (i.prog || '')); }
     var caps = uniqueBy(drafts.capacitaciones || [], capKey), inspecciones = uniqueBy(drafts.inspecciones || [], inspKey);
     var capsExisting = {}, inspExisting = {};
     (existingCaps || []).forEach(function (c) { capsExisting[capKey(c)] = c; });
@@ -545,6 +606,8 @@
   global.BPAPLUS.drive = {
     isConnected: isConnected, getClientId: getClientId, setClientId: setClientId,
     connectPanel: connectPanel, importPanel: importPanel, cronogramaPanel: cronogramaPanel,
-    analizarCronograma: analizarCronograma, linkPanel: linkPanel, extractIdFromUrl: extractIdFromUrl
+    analizarCronograma: analizarCronograma, analizarFilasCronograma: analizarFilasCronograma, analizarArchivo: analizarArchivo,
+    codigoFromName: codigoFromName, tipoFromName: tipoFromName, localFiles: localFiles,
+    linkPanel: linkPanel, extractIdFromUrl: extractIdFromUrl
   };
 })(window);

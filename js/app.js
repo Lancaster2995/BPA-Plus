@@ -125,8 +125,8 @@
       }).join('') + '</nav>' +
       '<div class="sidebar-foot">' +
         '<button class="side-mini" id="cmdOpen">' + UI.icon('search', 16) + '<span>Buscar</span><span class="kbd mono">Ctrl K</span></button>' +
-        '<button class="side-mini" id="driveImport">' + UI.icon('upload', 16) + '<span>Importar de Google Drive</span></button>' +
-        '<button class="side-mini" id="cronImport">' + UI.icon('cap', 16) + '<span>Importar cronograma</span></button>' +
+        '<button class="side-mini" id="driveImport">' + UI.icon('upload', 16) + '<span>Escanear carpeta BPA</span></button>' +
+        '<button class="side-mini" id="cronImport">' + UI.icon('cap', 16) + '<span>Importar cronograma Excel</span></button>' +
         '<button class="side-mini" id="importBtn">' + UI.icon('upload', 16) + '<span>Importar respaldo</span></button>' +
         '<button class="side-mini" id="exportBtn">' + UI.icon('download', 16) + '<span>Exportar respaldo</span></button>' +
         '<button class="side-mini" id="lockBtn">' + UI.icon('settings', 16) + '<span>Cambiar PIN</span></button>' +

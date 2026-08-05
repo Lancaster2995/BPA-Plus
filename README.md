@@ -37,6 +37,13 @@ la app sigue funcionando sin conexión después del primer acceso.
   puede, y fusiona automáticamente el mismo código si aparece repetido en
   carpetas distintas) o vinculá un documento existente a su archivo
   original para abrirlo con un clic. Ver la sección de abajo para conectarlo.
+- **Escaneo de carpeta BPA** — seleccioná una carpeta local con PDF editables,
+  Word o Excel. BPA-Plus lee el texto, propone código, tipo, versión, área y
+  fecha de revisión, fusiona duplicados y pide confirmación antes de guardar.
+  Los archivos originales locales no se suben.
+- **Cronogramas Excel** — interpreta encabezados y fechas aunque usen nombres
+  como tema/curso, frecuencia/periodicidad o área/unidad; permite revisar cada
+  capacitación y autoinspección antes de incorporarla.
 - **Cuenta + PIN local** — se inicia sesión con correo y contraseña; después,
   en la primera apertura de cada dispositivo se crea y confirma
   un PIN de 4 a 6 dígitos; luego se pide al abrir la app. El PIN (salteado y
@@ -165,5 +172,5 @@ protección real está en Authentication y en `firestore.rules`.
 
 Si activás **Google Drive**, la app habla directo con la API de Google
 desde tu navegador para leer los archivos que elijas, y carga dos librerías de
-lectura (mammoth.js y SheetJS) desde CDN la primera vez que las necesita.
+lectura (Mammoth, SheetJS y PDF.js) desde CDN la primera vez que las necesita.
 El token de acceso vive solo en la memoria de la pestaña.

@@ -530,7 +530,7 @@ textarea.inp { min-height: 88px; resize: vertical; }
 .drive-pick-name { flex: 1; }
 .drive-pick-folder { color: var(--ink-3); font-weight: 400; }
 .drive-pick-date { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
-.drive-row { align-items: center; }
+.drive-row { align-items: center; flex-wrap: wrap; }
 
 /* ------------------------------ Impresión de actas ------------------------------ */
 .print-only { display: none; }
