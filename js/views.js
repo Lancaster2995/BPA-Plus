@@ -713,7 +713,7 @@
       { label: 'Nueva droguería…', icon: 'plus', onClick: function () { dgForm(null); } },
       { label: 'Editar droguería actual…', icon: 'edit', onClick: function () { dgForm(store.dg()); } },
       { label: 'Editar criterios de clasificación…', icon: 'settings', onClick: function () { criteriosForm(); } },
-      { label: (global.BPAPLUS.lock && global.BPAPLUS.lock.isEnabled()) ? 'Cambiar PIN…' : 'Activar bloqueo con PIN…', icon: 'settings', onClick: function () { global.BPAPLUS.lock.openSettings(); } }
+      { label: 'Cambiar PIN…', icon: 'settings', onClick: function () { global.BPAPLUS.lock.openSettings(); } }
     ]));
   }
 

@@ -42,14 +42,14 @@
   }
 
   /* ------------------------------ Pantalla de bloqueo ------------------------------ */
-  function showLockScreen(onUnlock) {
+  function showLockScreen(onUnlock, creating) {
     var el = document.createElement('div'); el.className = 'lockscreen';
     el.innerHTML =
       '<div class="lock-mark"><img src="icons/icon-192.png" alt=""></div>' +
-      '<div class="lock-title">BPA-Plus bloqueada</div>' +
-      '<div class="lock-sub">Ingresá tu PIN para continuar</div>' +
+      '<div class="lock-title" id="lockTitle">' + (creating ? 'Crear acceso' : 'Iniciar sesión') + '</div>' +
+      '<div class="lock-sub" id="lockSub">' + (creating ? 'Creá un PIN de 4 a 6 dígitos para proteger tus datos' : 'Ingresá tu PIN para continuar') + '</div>' +
       '<div class="lock-dots" id="lockDots"></div>' +
-      '<div class="lock-err" id="lockErr">PIN incorrecto</div>' +
+      '<div class="lock-err" id="lockErr">' + (creating ? 'Los PIN no coinciden' : 'PIN incorrecto') + '</div>' +
       '<div class="lock-pad" id="lockPad">' +
         [1, 2, 3, 4, 5, 6, 7, 8, 9, '', 0, 'del'].map(function (k) {
           if (k === '') return '<span></span>';
@@ -57,11 +57,11 @@
           return '<button class="lock-key" data-k="' + k + '">' + k + '</button>';
         }).join('') +
       '</div>' +
-      '<button class="lock-reset" id="lockReset" type="button">¿Olvidaste el PIN?</button>';
+      (creating ? '' : '<button class="lock-reset" id="lockReset" type="button">¿Olvidaste el PIN?</button>');
     document.body.appendChild(el);
     document.body.style.overflow = 'hidden';
 
-    var buf = '', max = 6, dots = el.querySelector('#lockDots'), err = el.querySelector('#lockErr');
+    var buf = '', firstPin = '', max = 6, dots = el.querySelector('#lockDots'), err = el.querySelector('#lockErr');
     function draw() {
       dots.innerHTML = '';
       var n = Math.max(4, buf.length);
@@ -72,7 +72,22 @@
     function tryUnlock() {
       if (pending) { clearTimeout(pending); pending = null; }
       err.classList.remove('show');
-      verify(buf).then(function (ok) {
+      if (creating && !firstPin) {
+        firstPin = buf; buf = ''; draw();
+        el.querySelector('#lockTitle').textContent = 'Confirmar PIN';
+        el.querySelector('#lockSub').textContent = 'Ingresá el mismo PIN una vez más';
+        return;
+      }
+      if (creating && buf !== firstPin) {
+        err.classList.add('show'); el.classList.add('shake');
+        setTimeout(function () { el.classList.remove('shake'); }, 320);
+        firstPin = ''; buf = ''; draw();
+        el.querySelector('#lockTitle').textContent = 'Crear acceso';
+        el.querySelector('#lockSub').textContent = 'Los PIN no coincidieron. Intentá nuevamente';
+        return;
+      }
+      var check = creating ? setPin(buf).then(function () { return true; }) : verify(buf);
+      check.then(function (ok) {
         if (ok) {
           document.body.style.overflow = '';
           document.removeEventListener('keydown', onKey);
@@ -106,7 +121,8 @@
     };
     document.addEventListener('keydown', onKey);
 
-    el.querySelector('#lockReset').onclick = function () {
+    var reset = el.querySelector('#lockReset');
+    if (reset) reset.onclick = function () {
       if (!global.BPAPLUS.ui) return;
       global.BPAPLUS.ui.confirm({
         title: 'Olvidaste tu PIN',
@@ -123,40 +139,28 @@
 
   /* ------------------------------ Puerta de entrada ------------------------------ */
   function gate(onReady) {
-    if (!hasCrypto() || !isEnabled()) { onReady(); return; }
-    showLockScreen(onReady);
+    if (!hasCrypto()) { onReady(); return; }
+    showLockScreen(onReady, !isEnabled());
   }
 
   /* ------------------------------ Configuración (desde ajustes) ------------------------------ */
   function openSettings() {
     var UI = global.BPAPLUS.ui; if (!UI) return;
-    var enabled = isEnabled();
     var m = UI.dialog({
-      title: 'Bloqueo con PIN',
+      title: 'Cambiar PIN',
       body:
-        '<p class="dialog-note">El PIN se guarda solo en este dispositivo (no hay servidor ni cuenta). Si lo olvidás, la única forma de recuperarlo es borrar los datos locales.</p>' +
-        (enabled
-          ? '<div class="field"><label>Cambiar PIN (4 a 6 dígitos)</label><input class="inp mono" id="lp_new" type="password" inputmode="numeric" maxlength="6" placeholder="Nuevo PIN"></div>' +
-            '<div class="field"><label>Confirmar</label><input class="inp mono" id="lp_conf" type="password" inputmode="numeric" maxlength="6" placeholder="Repetí el PIN"></div>' +
-            '<div class="err" id="lp_err">Los PIN no coinciden o son muy cortos (mínimo 4 dígitos).</div>'
-          : '<div class="field"><label>Nuevo PIN (4 a 6 dígitos)</label><input class="inp mono" id="lp_new" type="password" inputmode="numeric" maxlength="6" placeholder="Ej. 4821"></div>' +
-            '<div class="field"><label>Confirmar</label><input class="inp mono" id="lp_conf" type="password" inputmode="numeric" maxlength="6" placeholder="Repetí el PIN"></div>' +
-            '<div class="err" id="lp_err">Los PIN no coinciden o son muy cortos (mínimo 4 dígitos).</div>'),
+        '<p class="dialog-note">El PIN se guarda solo en este dispositivo. Si lo olvidás, tendrás que borrar los datos locales para volver a entrar.</p>' +
+        '<div class="field"><label>Nuevo PIN (4 a 6 dígitos)</label><input class="inp mono" id="lp_new" type="password" inputmode="numeric" maxlength="6" placeholder="Nuevo PIN"></div>' +
+        '<div class="field"><label>Confirmar</label><input class="inp mono" id="lp_conf" type="password" inputmode="numeric" maxlength="6" placeholder="Repetí el PIN"></div>' +
+        '<div class="err" id="lp_err">Los PIN no coinciden o son muy cortos (mínimo 4 dígitos).</div>',
       footer:
-        (enabled ? '<button class="btn btn-danger" id="lp_remove" style="margin-right:auto">Quitar bloqueo</button>' : '') +
         '<button class="btn btn-ghost" data-close>Cancelar</button>' +
-        '<button class="btn btn-primary" id="lp_save">' + (enabled ? 'Actualizar PIN' : 'Activar bloqueo') + '</button>',
+        '<button class="btn btn-primary" id="lp_save">Actualizar PIN</button>',
       onMount: function (root) {
         root.querySelector('#lp_save').onclick = function () {
           var a = root.querySelector('#lp_new').value.trim(), b = root.querySelector('#lp_conf').value.trim();
           if (!/^\d{4,6}$/.test(a) || a !== b) { root.querySelector('#lp_err').style.display = 'block'; return; }
-          setPin(a).then(function () { m.close(); UI.note('PIN activado'); });
-        };
-        var rm = root.querySelector('#lp_remove');
-        if (rm) rm.onclick = function () {
-          m.close();
-          UI.confirm({ title: 'Quitar bloqueo', message: 'La app va a abrir directo, sin pedir PIN.', okLabel: 'Quitar', danger: true })
-            .then(function (ok) { if (ok) { clearPin(); UI.note('Bloqueo con PIN desactivado'); } });
+          setPin(a).then(function () { m.close(); UI.note('PIN actualizado'); });
         };
       }
     });

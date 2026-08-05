@@ -129,7 +129,8 @@
         '<button class="side-mini" id="cronImport">' + UI.icon('cap', 16) + '<span>Importar cronograma</span></button>' +
         '<button class="side-mini" id="importBtn">' + UI.icon('upload', 16) + '<span>Importar respaldo</span></button>' +
         '<button class="side-mini" id="exportBtn">' + UI.icon('download', 16) + '<span>Exportar respaldo</span></button>' +
-        '<button class="side-mini" id="lockBtn">' + UI.icon('settings', 16) + '<span>' + (global.BPAPLUS.lock && global.BPAPLUS.lock.isEnabled() ? 'Cambiar PIN' : 'Activar bloqueo con PIN') + '</span></button>' +
+        '<button class="side-mini" id="lockBtn">' + UI.icon('settings', 16) + '<span>Cambiar PIN</span></button>' +
+        '<button class="side-mini" id="logoutBtn">' + UI.icon('x', 16) + '<span>Cerrar sesión</span></button>' +
         '<button class="side-mini" id="themeBtn">' + UI.icon(isDark() ? 'sun' : 'moon', 16) + '<span>' + (isDark() ? 'Tema claro' : 'Tema oscuro') + '</span></button>' +
       '</div>';
 
@@ -160,6 +161,7 @@
     var im = document.getElementById('importBtn'); if (im) im.onclick = importData;
     var ex = document.getElementById('exportBtn'); if (ex) ex.onclick = exportData;
     var lk = document.getElementById('lockBtn'); if (lk) lk.onclick = function () { global.BPAPLUS.lock.openSettings(); };
+    var lo = document.getElementById('logoutBtn'); if (lo) lo.onclick = function () { location.reload(); };
     var th = document.getElementById('themeBtn'); if (th) th.onclick = toggleTheme;
     var thm = document.getElementById('themeBtnM'); if (thm) thm.onclick = toggleTheme;
     var co = document.getElementById('cmdOpen'); if (co) co.onclick = openCmd;

@@ -37,11 +37,10 @@ conexión una vez instalada.
   puede, y fusiona automáticamente el mismo código si aparece repetido en
   carpetas distintas) o vinculá un documento existente a su archivo
   original para abrirlo con un clic. Ver la sección de abajo para conectarlo.
-- **Bloqueo con PIN** (opcional) — un PIN de 4 a 6 dígitos que se pide al
-  abrir la app. El PIN (salteado y con hash SHA-256) vive solo en este
-  dispositivo; no hay forma de recuperarlo si lo olvidás, salvo borrar
-  los datos locales. Se activa/cambia desde "Activar bloqueo con PIN" en
-  la barra lateral (o en el menú de la droguería en el celular).
+- **Inicio de sesión con PIN** — en la primera apertura se crea y confirma
+  un PIN de 4 a 6 dígitos; luego se pide al abrir la app. El PIN (salteado y
+  con hash SHA-256) vive solo en este dispositivo. Se cambia desde la barra
+  lateral y “Cerrar sesión” vuelve a bloquear la app.
 - **Tema claro / oscuro**, atajos de teclado, deshacer al eliminar.
 
 ## Cómo usarla
@@ -89,9 +88,8 @@ problema porque por dentro sigue siendo Chrome real.
 
 Como no hay backend ni autenticación, cualquiera con el enlace podría
 abrirla — al ser una URL que solo vos conocés, alcanza para uso personal.
-Si más adelante querés protegerla con una contraseña, cualquiera de los
-tres hosts de arriba permite agregar protección de acceso gratis. También
-tenés el bloqueo con PIN local descrito más abajo.
+El acceso con PIN protege los datos en cada dispositivo. No es una cuenta
+en línea: los datos siguen siendo locales y no se sincronizan entre equipos.
 
 ## Conectar Google Drive
 

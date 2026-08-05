@@ -3,7 +3,7 @@
    Service worker cache-first: deja la app utilizable sin conexión una vez
    que se visitó al menos una vez servida por http(s).
    ========================================================================== */
-var CACHE = 'bpa-plus-v2';
+var CACHE = 'bpa-plus-v3';
 var ASSETS = [
   './', './index.html', './styles.css', './manifest.json',
   './js/domain.js', './js/db.js', './js/ui.js', './js/actas.js', './js/views.js', './js/lock.js', './js/drive.js', './js/alerts.js', './js/app.js',
