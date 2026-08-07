@@ -334,7 +334,7 @@
   /* ------------------------------ Arranque ------------------------------ */
   function boot() {
     var saved; try { saved = localStorage.getItem('bpa-plus-theme'); } catch (e) {}
-    applyTheme(saved || (matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+    applyTheme(saved || 'light');
 
     var Lock = global.BPAPLUS.lock, Auth = global.BPAPLUS.auth;
     function start() {
