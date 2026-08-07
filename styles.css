@@ -492,6 +492,7 @@ textarea.inp { min-height: 88px; resize: vertical; }
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 24px;
 }
 .lockscreen.shake { animation: lock-shake .32s; }
+.dialog-card.shake { animation: lock-shake .32s; }
 @keyframes lock-shake { 20% { transform: translateX(-10px); } 40% { transform: translateX(9px); } 60% { transform: translateX(-6px); } 80% { transform: translateX(4px); } 100% { transform: translateX(0); } }
 .lock-mark { width: 52px; height: 52px; border-radius: 16px; overflow: hidden; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
 .lock-title { font-family: var(--font-display); font-size: 20px; font-weight: 600; }

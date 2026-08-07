@@ -111,8 +111,14 @@
     }
     var api = { root: wrap, close: close, el: wrap.querySelector('.dialog-card') };
     openStack.push(api);
-    wrap.addEventListener('click', function (e) { if (e.target === wrap || e.target.closest('[data-close]')) close(); });
-    bd.addEventListener('click', function () { close(); });
+    wrap.addEventListener('click', function (e) {
+      if (e.target.closest('[data-close]')) { close(); return; }
+      if (e.target === wrap) {
+        var card = wrap.querySelector('.dialog-card');
+        card.classList.add('shake');
+        setTimeout(function () { card.classList.remove('shake'); }, 320);
+      }
+    });
     requestAnimationFrame(function () {
       bd.classList.add('show'); wrap.classList.add('show');
       var first = wrap.querySelector('input, select, textarea, button:not([data-close])');
