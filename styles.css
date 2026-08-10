@@ -6,26 +6,26 @@
    leen como banderines (pennants) izados sobre cada fila.
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 :root {
   /* ---- Paleta: papel frío + tinta institucional + faro ámbar ---- */
-  --bg: #F3F5F7;
+  --bg: #F5F7FA;
   --surface: #FFFFFF;
-  --surface-2: #EAEEF2;
-  --ink: #121826;
-  --ink-2: #4C5A6E;
-  --ink-3: #5C6B80;
-  --border: #DFE4EA;
-  --border-strong: #C9D1DA;
+  --surface-2: #EEF2F6;
+  --ink: #172033;
+  --ink-2: #526176;
+  --ink-3: #6B788B;
+  --border: #E2E7ED;
+  --border-strong: #CCD4DE;
 
-  --navy: #142542;
-  --navy-2: #1D3A63;
+  --navy: #12355B;
+  --navy-2: #1E5A91;
   --navy-ink: #F2F5FA;
 
-  --beacon: #DE9F26;
-  --beacon-ink: #7A5610;
-  --beacon-soft: #FBF0D8;
+  --beacon: #D99618;
+  --beacon-ink: #7A5208;
+  --beacon-soft: #FFF4DA;
 
   --ok: #2C7A57;
   --ok-soft: #E1F1E8;
@@ -35,13 +35,13 @@
   --bad: #B03A34;
   --bad-soft: #FBE4E2;
 
-  --radius-sm: 8px;
-  --radius: 12px;
-  --radius-lg: 18px;
-  --shadow-1: 0 1px 2px rgba(18,24,38,.06), 0 1px 1px rgba(18,24,38,.04);
-  --shadow-2: 0 12px 32px -12px rgba(18,24,38,.28);
+  --radius-sm: 9px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --shadow-1: 0 1px 2px rgba(18,35,55,.05), 0 6px 18px rgba(18,35,55,.04);
+  --shadow-2: 0 18px 48px -18px rgba(18,35,55,.30);
 
-  --font-display: 'Fraunces', 'Iowan Old Style', serif;
+  --font-display: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', 'SFMono-Regular', ui-monospace, monospace;
 
@@ -84,6 +84,7 @@ body {
   margin: 0; background: var(--bg); color: var(--ink);
   font-family: var(--font-sans); font-size: 15px; line-height: 1.5;
   -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  transition: background-color .28s ease, color .28s ease;
 }
 button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
 button { cursor: pointer; touch-action: manipulation; }
@@ -96,20 +97,22 @@ a { color: inherit; }
 /* ------------------------------ Layout raíz ------------------------------ */
 .app { display: flex; min-height: 100vh; }
 .sidebar {
-  width: 264px; flex: none; background: var(--navy); color: var(--navy-ink);
-  display: flex; flex-direction: column; padding: 20px 14px; gap: 4px;
+  width: 272px; flex: none; background: linear-gradient(180deg, #12355B 0%, #0E2B4B 100%); color: var(--navy-ink);
+  display: flex; flex-direction: column; padding: 22px 16px; gap: 4px;
   position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  box-shadow: 8px 0 28px rgba(18,53,91,.08); z-index: 2;
 }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .topbar { display: none; }
-.content { flex: 1; padding: 28px 32px 64px; max-width: 1080px; width: 100%; margin: 0 auto; }
+.content { flex: 1; padding: 34px 38px 72px; max-width: 1180px; width: 100%; margin: 0 auto; }
 .bottom-nav { display: none; }
 
 @media (max-width: 920px) {
   .sidebar { display: none; }
   .topbar {
     display: flex; align-items: center; gap: 10px; padding: 12px 14px;
-    position: sticky; top: 0; z-index: 20; background: var(--navy); color: var(--navy-ink);
+    position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.92); color: var(--ink);
+    border-bottom: 1px solid var(--border); box-shadow: 0 8px 24px rgba(18,35,55,.05); backdrop-filter: blur(14px);
   }
   .content { padding: 18px 16px 96px; }
   .bottom-nav {
@@ -127,7 +130,7 @@ a { color: inherit; }
 }
 .brand-mark.sm { width: 32px; height: 32px; }
 .brand-mark img, .lock-mark img { width: 100%; height: 100%; object-fit: cover; }
-.brand-name { font-family: var(--font-display); font-weight: 600; font-size: 17px; letter-spacing: .01em; }
+.brand-name { font-family: var(--font-display); font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
 .brand-sub { font-size: 11px; color: rgba(242,245,250,.6); letter-spacing: .03em; text-transform: uppercase; }
 
 /* ------------------------------ Selector de droguería ------------------------------ */
@@ -136,7 +139,7 @@ a { color: inherit; }
   background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: var(--radius);
   color: inherit; text-align: left; margin-bottom: 14px; transition: background .15s;
 }
-.dg-switch:hover { background: rgba(255,255,255,.09); }
+.dg-switch:hover { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.14); transform: translateY(-1px); }
 .dg-avatar {
   width: 30px; height: 30px; border-radius: 8px; background: var(--navy-2); flex: none;
   display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; letter-spacing: .02em;
@@ -155,6 +158,7 @@ a { color: inherit; }
 }
 .nav-item:hover { background: rgba(255,255,255,.06); color: var(--navy-ink); }
 .nav-item.active { background: rgba(222,159,38,.16); color: var(--beacon); font-weight: 600; }
+.nav-item.active::before { content: ''; position: absolute; left: 0; width: 3px; height: 20px; border-radius: 0 3px 3px 0; background: var(--beacon); }
 .ni-ico { flex: none; }
 .ni-badge {
   margin-left: auto; background: var(--bad); color: #fff; font-size: 10.5px; font-weight: 700;
@@ -171,13 +175,13 @@ a { color: inherit; }
 /* ------------------------------ Barra superior móvil ------------------------------ */
 .top-mid { flex: 1; min-width: 0; }
 .top-title { font-size: 14.5px; font-weight: 700; font-family: var(--font-display); }
-.top-dg { font-size: 11.5px; color: rgba(242,245,250,.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top-dg { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .icon-btn {
   width: 38px; height: 38px; border-radius: 10px; background: transparent; border: none; color: inherit;
   display: flex; align-items: center; justify-content: center; flex: none;
 }
 .topbar .icon-btn:hover, .icon-btn:hover { background: var(--surface-2); }
-.topbar .icon-btn:hover { background: rgba(255,255,255,.08); }
+.topbar .icon-btn:hover { background: var(--surface-2); }
 
 /* ------------------------------ Barra inferior móvil ------------------------------ */
 .bn-inner { display: flex; }
@@ -201,7 +205,7 @@ a { color: inherit; }
 
 /* ------------------------------ Encabezado de vista ------------------------------ */
 .view-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-.view-title { font-family: var(--font-display); font-size: 26px; font-weight: 600; letter-spacing: -.01em; }
+.view-title { font-family: var(--font-display); font-size: 28px; font-weight: 700; letter-spacing: -.025em; }
 .view-sub { font-size: 13px; color: var(--ink-3); margin-top: 3px; }
 .header-actions { display: flex; gap: 8px; }
 
@@ -212,9 +216,9 @@ a { color: inherit; }
   min-height: 40px;
 }
 .btn:active { transform: scale(.98); }
-.btn-primary { background: var(--navy); color: #fff; }
+.btn-primary { background: var(--navy-2); color: #fff; box-shadow: 0 5px 14px rgba(30,90,145,.18); }
 :root.dark .btn-primary { background: var(--beacon); color: var(--navy); }
-.btn-primary:hover { background: var(--navy-2); }
+.btn-primary:hover { background: #174B7B; transform: translateY(-1px); box-shadow: 0 8px 18px rgba(30,90,145,.22); }
 :root.dark .btn-primary:hover { filter: brightness(1.08); }
 .btn-ghost { background: var(--surface); color: var(--ink); border-color: var(--border-strong); }
 .btn-ghost:hover { background: var(--surface-2); }
@@ -539,6 +543,45 @@ textarea.inp { min-height: 88px; resize: vertical; }
 .file-item b { font-size: 12.5px; }
 .file-item small { overflow: hidden; text-overflow: ellipsis; color: var(--ink-3); }
 .file-warning { padding: 10px 12px; margin-bottom: 8px; border-radius: 9px; background: var(--warn-soft); color: var(--warn-ink); font-size: 12.5px; font-weight: 600; }
+
+/* ------------------------------ Pulido profesional ------------------------------ */
+.content > * { animation: view-in .32s cubic-bezier(.2,.7,.3,1) both; }
+@keyframes view-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+
+.dg-switch, .nav-item, .side-mini, .icon-btn, .bn-item, .pill, .file-item, .finder-item,
+.picker-opt, .chk-opt, .auth-primary, .auth-secondary {
+  transition: color .18s ease, background-color .18s ease, border-color .18s ease,
+    box-shadow .18s ease, transform .18s ease;
+}
+
+.beacon-card, .stat, .row, .timeline, .progress, .dialog-card, .finder-box, .auth-card {
+  box-shadow: var(--shadow-1);
+}
+.beacon-card { border-color: transparent; }
+.stat:hover, .row:hover { border-color: #C8D5E2; box-shadow: 0 10px 28px rgba(18,53,91,.08); transform: translateY(-2px); }
+.row-top:focus-visible { outline: 2px solid var(--navy-2); outline-offset: -3px; }
+.pill:hover { border-color: #AFC0D1; background: #F9FBFD; }
+.pill.active { box-shadow: 0 5px 14px rgba(18,53,91,.16); }
+.search-input { box-shadow: 0 1px 2px rgba(18,35,55,.03); transition: border-color .18s ease, box-shadow .18s ease; }
+.search-input:focus-within { border-color: var(--navy-2); box-shadow: 0 0 0 3px rgba(30,90,145,.12); }
+.inp { background: #FAFBFC; }
+.inp:hover { border-color: #AFC0D1; }
+.inp:focus { background: var(--surface); }
+.dialog-card { border: 1px solid rgba(204,212,222,.75); }
+.panel { border-left: 1px solid var(--border); }
+.authscreen { background: radial-gradient(circle at 50% 10%, #FFFFFF 0%, #EEF3F8 55%, #E3EBF3 100%); color: var(--ink); }
+.auth-card { border: 1px solid rgba(204,212,222,.8); }
+
+@media (max-width: 920px) {
+  .content > * { animation-duration: .24s; }
+  .bottom-nav { box-shadow: 0 -8px 24px rgba(18,35,55,.07); }
+  :root.dark .topbar { background: rgba(10,18,32,.94); color: var(--navy-ink); }
+  :root.dark .top-dg { color: var(--ink-2); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content > * { animation: none; }
+}
 
 /* ------------------------------ Impresión de actas ------------------------------ */
 .print-only { display: none; }

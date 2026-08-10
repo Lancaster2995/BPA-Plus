@@ -212,6 +212,8 @@
   function isDark() { return document.documentElement.classList.contains('dark'); }
   function applyTheme(t) {
     document.documentElement.classList.toggle('dark', t === 'dark');
+    var meta = document.getElementById('themeColor');
+    if (meta) meta.content = t === 'dark' ? '#0A1220' : '#F5F7FA';
     try { localStorage.setItem('bpa-plus-theme', t); } catch (e) {}
   }
   function toggleTheme() { applyTheme(isDark() ? 'light' : 'dark'); renderChrome(); }
