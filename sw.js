@@ -3,11 +3,11 @@
    Service worker cache-first: deja la app utilizable sin conexión una vez
    que se visitó al menos una vez servida por http(s).
    ========================================================================== */
-var CACHE = 'bpa-plus-v10';
+var CACHE = 'bpa-plus-v11';
 var ASSETS = [
   './', './index.html', './styles.css', './manifest.json',
   './js/config.js', './js/cloud.js', './js/auth.js', './js/domain.js', './js/db.js', './js/ui.js', './js/actas.js', './js/views.js', './js/lock.js', './js/drive.js', './js/alerts.js', './js/app.js',
-  './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'
+  './icons/icon-44.png?v=2', './icons/icon-192.png?v=2', './icons/icon-512.png?v=2', './icons/apple-touch-icon.png?v=2'
 ];
 
 self.addEventListener('install', function (e) {
