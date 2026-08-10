@@ -214,7 +214,7 @@
   function applyTheme(t) {
     document.documentElement.classList.toggle('dark', t === 'dark');
     var meta = document.getElementById('themeColor');
-    if (meta) meta.content = t === 'dark' ? '#0A1220' : '#F5F7FA';
+    if (meta) meta.content = t === 'dark' ? '#071724' : '#F6F3E9';
     try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
   }
   function toggleTheme() { applyTheme(isDark() ? 'light' : 'dark'); renderChrome(); }
