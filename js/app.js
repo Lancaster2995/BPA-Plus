@@ -209,12 +209,13 @@
   }
 
   /* ------------------------------ Tema ------------------------------ */
+  var THEME_KEY = 'bpa-plus-theme-v2';
   function isDark() { return document.documentElement.classList.contains('dark'); }
   function applyTheme(t) {
     document.documentElement.classList.toggle('dark', t === 'dark');
     var meta = document.getElementById('themeColor');
     if (meta) meta.content = t === 'dark' ? '#0A1220' : '#F5F7FA';
-    try { localStorage.setItem('bpa-plus-theme', t); } catch (e) {}
+    try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
   }
   function toggleTheme() { applyTheme(isDark() ? 'light' : 'dark'); renderChrome(); }
 
@@ -335,7 +336,7 @@
 
   /* ------------------------------ Arranque ------------------------------ */
   function boot() {
-    var saved; try { saved = localStorage.getItem('bpa-plus-theme'); } catch (e) {}
+    var saved; try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
     applyTheme(saved || 'light');
 
     var Lock = global.BPAPLUS.lock, Auth = global.BPAPLUS.auth;
