@@ -45,18 +45,34 @@
   function rowId(store, row) { return String(store === 'meta' ? row.k : row.id); }
   function col(store) { needUser(); return api.collection(db, 'users', uid, store); }
 
+  /* Una escritura de Firestore se resuelve cuando el SERVIDOR la confirma. Sin red la
+     promesa queda pendiente para siempre, aunque la caché persistente ya aplicó el cambio
+     y lo reenviará sola al reconectar. La app espera esa promesa antes de tocar su estado,
+     así que guardar o eliminar sin red no movía nada en pantalla: es el "hago clic y no
+     pasa nada" que se reportó. Se resuelve con la escritura ya encolada —que es lo que la
+     interfaz necesita saber— y el rechazo real (permisos, reglas) se avisa cuando llega.
+     ponytail: no distingue "guardado" de "sincronizado"; si algún día hace falta ese
+     indicador, se construye aquí. */
+  function enCola(escritura) {
+    escritura.catch(function (err) {
+      var ui = global.BPAPLUS && global.BPAPLUS.ui;
+      if (ui) ui.note('No se pudo sincronizar con la nube: ' + (err && err.message || err));
+    });
+    return Promise.resolve();
+  }
+
   function all(store) {
     return api.getDocs(col(store)).then(function (snap) { return snap.docs.map(function (d) { return d.data(); }); });
   }
   function put(store, row) {
     needUser();
-    return api.setDoc(api.doc(db, 'users', uid, store, rowId(store, row)), clean(row));
+    return enCola(api.setDoc(api.doc(db, 'users', uid, store, rowId(store, row)), clean(row)));
   }
   function putMany(store, rows) { return Promise.all(rows.map(function (row) { return put(store, row); })); }
-  function del(store, id) { needUser(); return api.deleteDoc(api.doc(db, 'users', uid, store, String(id))); }
+  function del(store, id) { needUser(); return enCola(api.deleteDoc(api.doc(db, 'users', uid, store, String(id)))); }
   function clear(store) {
     return api.getDocs(col(store)).then(function (snap) {
-      return Promise.all(snap.docs.map(function (d) { return api.deleteDoc(d.ref); }));
+      return enCola(Promise.all(snap.docs.map(function (d) { return api.deleteDoc(d.ref); })));
     });
   }
 

@@ -80,6 +80,9 @@
         kinds.forEach(function (k) { store.data[k] = store.data[k].filter(function (x) { return x.e !== id; }); });
         store.setDg(store.data.droguerias[0] ? store.data.droguerias[0].id : '');
         UI.note('Droguería eliminada');
+      }).catch(function (err) {
+        // Igual que save/remove: un borrado que falla tiene que decirlo, no quedarse callado.
+        UI.note('No se pudo eliminar: ' + (err && err.message || err));
       });
     },
 
