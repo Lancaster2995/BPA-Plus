@@ -73,8 +73,6 @@ iniciada**: eso exige las credenciales de Firebase del usuario.
 
 - **Verificación en Chrome real** del borrado y el guardado sin conexión (modo avión con
   sesión iniciada). Es lo único que cierra del todo el reporte del 04/08.
-- `icons/options/*.png` (7 archivos) siguen sin trackear: son las variantes que se
-  descartaron al elegir el icono. Commitearlas o borrarlas, pero no dejarlas ahí.
 - El proyecto lleva sin tocarse desde el 2026-08-10; es el más frío del portafolio.
 
 ## Reglas que no conviene romper
