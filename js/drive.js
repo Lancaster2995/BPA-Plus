@@ -16,7 +16,10 @@
   var MAMMOTH_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.7.2/mammoth.browser.min.js';
   var XLSX_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
   var PDF_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs';
-  var SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+  /* `drive.readonly` para escanear las carpetas que la droguería ya tiene; `drive.file`
+     para guardar las nuestras. `drive.file` es el scope angosto: solo ve los archivos que
+     esta app creó, nunca el resto del Drive. */
+  var SCOPE = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file';
 
   var state = { token: null, tokenClient: null, expiresAt: 0 };
 
@@ -424,15 +427,81 @@
     }).catch(function () { return base; });
   }
 
-  /* Único punto de subida. Sin sesión, `cloud.uploadFile` lanza de forma síncrona y el
-     `.catch` de quien llama no se entera: acá se convierte siempre en un rechazo. */
-  function subirArchivo(relative, file, name) {
-    return Promise.resolve().then(function () {
-      var Cloud = global.BPAPLUS.cloud;
-      if (!Cloud) throw new Error('Iniciá sesión para subir archivos.');
-      return Cloud.uploadFile(relative, file, name);
+  /* ---------------- Guardado de archivos en el Drive del usuario ----------------
+     Firebase Storage quedó fuera de alcance: desde el 01/10/2025 un proyecto en el plan
+     Spark no accede a ningún bucket, ni siquiera a los que ya existían. Los archivos van
+     al Drive de la droguería, que es de donde salieron y donde el usuario ya los sabe
+     buscar. El scope de escritura es `drive.file`: solo vemos lo que esta app creó. */
+
+  /* Sin caché en localStorage a propósito: un id guardado sobrevive a que el usuario borre
+     la carpeta y ahí toda subida falla con 404. Se resuelve una vez por pestaña. */
+  var folderId = null;
+  var APP_FOLDER = 'BPA-Plus';
+  function appFolder() {
+    if (folderId) return Promise.resolve(folderId);
+    var q = "name = '" + APP_FOLDER + "' and mimeType = '" + FOLDER_TYPE + "' and trashed = false";
+    return api('files', 'q=' + encodeURIComponent(q) + '&fields=' + encodeURIComponent('files(id)'))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var hit = (data.files || [])[0];
+        if (hit) return hit.id;
+        return ensureAuth().then(function (token) {
+          return fetch('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json; charset=UTF-8' },
+            body: JSON.stringify({ name: APP_FOLDER, mimeType: FOLDER_TYPE })
+          }).then(function (res) {
+            if (!res.ok) throw new Error('No se pudo crear la carpeta ' + APP_FOLDER + ' en Drive');
+            return res.json();
+          }).then(function (f) { return f.id; });
+        });
+      }).then(function (id) { folderId = id; return id; });
+  }
+
+  /* Resumable en un solo PUT. `uploadType=multipart` corta en 5 MB y acá se admiten 25. */
+  function driveUpload(file, name, relative) {
+    var contentType = mimeFromFile(file) || 'application/octet-stream';
+    return appFolder().then(function (parent) {
+      return ensureAuth().then(function (token) {
+        return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json; charset=UTF-8' },
+          body: JSON.stringify({
+            name: name, parents: [parent],
+            appProperties: { bpaPath: String(relative || '').slice(0, 120) }
+          })
+        });
+      });
+    }).then(function (res) {
+      if (!res.ok) throw new Error('No se pudo iniciar la subida a Drive');
+      var session = res.headers.get('Location');
+      if (!session) throw new Error('Drive no devolvió la sesión de subida');
+      return fetch(session, { method: 'PUT', headers: { 'Content-Type': contentType }, body: file });
+    }).then(function (res) {
+      if (!res.ok) throw new Error('No se pudo subir el archivo a Drive');
+      return res.json();
+    }).then(function (f) {
+      return {
+        driveId: f.id, name: name || file.name, originalName: file.name,
+        size: file.size, contentType: contentType, uploadedAt: Date.now(),
+        driveUrl: 'https://drive.google.com/file/d/' + f.id + '/view'
+      };
     });
   }
+
+  /* Único punto de subida. `relative` ya no es una ruta —Drive guarda plano dentro de la
+     carpeta de la app— pero viaja como `appProperties` para saber de dónde salió cada
+     archivo. Se convierte siempre en un rechazo: sin Client ID no hay a dónde subir. */
+  function subirArchivo(relative, file, name) {
+    return Promise.resolve().then(function () {
+      if (!getClientId()) throw new Error('Conectá Google Drive para guardar archivos.');
+      return driveUpload(file, name || file.name, relative);
+    });
+  }
+  /* Todo el mundo sube por el export, incluidos storeFile y storeMaterial acá abajo:
+     así hay un solo punto que sustituir —lo hace formatos.js y lo hace el harness— en
+     vez de una copia interna que se escapa. */
+  function subir(relative, file, name) { return global.BPAPLUS.drive.subirArchivo(relative, file, name); }
 
   function storeFile(dgId, doc, file, role, version) {
     role = role || (doc.tipo === 'Formato' ? 'plantilla' : 'controlado');
@@ -440,7 +509,7 @@
     var name = standardName(doc, file, role, version);
     var folder = role === 'registro' ? 'registros' : 'versiones';
     var relative = 'droguerias/' + dgId + '/documentos/' + doc.id + '/' + folder + '/' + Date.now() + '_' + name;
-    return subirArchivo(relative, file, name).then(function (meta) {
+    return subir(relative, file, name).then(function (meta) {
       if (role === 'registro') {
         return Object.assign({}, doc, {
           role: doc.file ? (doc.role || 'plantilla') : 'plantilla',
@@ -459,17 +528,15 @@
   function storeMaterial(dgId, capId, file) {
     var relative = 'droguerias/' + dgId + '/capacitaciones/' + capId + '/' + Date.now() + '_' + safePart(file.name) + '.' +
       ((file.name.split('.').pop() || 'pdf').toLowerCase());
-    return subirArchivo(relative, file, file.name);
+    return subir(relative, file, file.name);
   }
   /* Texto de un archivo ya guardado en la nube. Reusa los lectores del escaneo
      de documentos. El .pptx no tiene lector: devuelve '' y la evaluación se
      genera solo con el tema. */
   function textoDeArchivo(meta) {
-    if (!meta || !meta.path) return Promise.resolve('');
+    if (!meta || !meta.driveId) return Promise.resolve('');
     var n = (meta.name || meta.originalName || '').toLowerCase();
-    return global.BPAPLUS.cloud.fileBlob(meta.path).then(function (blob) {
-      return blob.arrayBuffer();
-    }).then(function (buf) {
+    return downloadBinary(meta.driveId).then(function (buf) {
       if (/\.docx$/.test(n)) return textFromDocx(buf);
       if (/\.pdf$/.test(n)) return textFromPdf(buf);
       if (/\.xlsx$/.test(n)) return rowsFromXlsx(buf).then(function (rows) {
@@ -479,8 +546,9 @@
     }).catch(function () { return ''; });
   }
   function downloadStored(meta) {
-    if (!meta || !meta.path) return Promise.reject(new Error('El archivo no está disponible.'));
-    return global.BPAPLUS.cloud.fileBlob(meta.path).then(function (blob) {
+    if (!meta || !meta.driveId) return Promise.reject(new Error('El archivo no está disponible.'));
+    return downloadBinary(meta.driveId).then(function (buf) {
+      var blob = new Blob([buf], { type: meta.contentType || 'application/octet-stream' });
       var url = URL.createObjectURL(blob), a = document.createElement('a');
       a.href = url; a.download = meta.name || 'documento'; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
@@ -913,7 +981,8 @@
     analizarCronograma: analizarCronograma, analizarFilasCronograma: analizarFilasCronograma, analizarArchivo: analizarArchivo,
     codigoFromName: codigoFromName, normalizeCode: normalizeCode, isStandardCode: isStandardCode,
     standardName: standardName, tipoFromName: tipoFromName, localFiles: localFiles, leerFormato: leerFormato,
-    storeFile: storeFile, storeMaterial: storeMaterial, textoDeArchivo: textoDeArchivo, downloadStored: downloadStored, filePanel: filePanel,
+    subirArchivo: subirArchivo, storeFile: storeFile, storeMaterial: storeMaterial,
+    textoDeArchivo: textoDeArchivo, downloadStored: downloadStored, filePanel: filePanel,
     linkPanel: linkPanel, extractIdFromUrl: extractIdFromUrl
   };
 })(window);

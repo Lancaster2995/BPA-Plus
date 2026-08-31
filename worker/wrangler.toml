@@ -1,0 +1,10 @@
+name = "bpa-plus"
+main = "index.js"
+compatibility_date = "2026-08-31"
+
+# Contador de evaluaciones por usuario y día. Crearlo una vez con
+#   npx wrangler kv namespace create CUPO
+# y pegar acá el id que imprime.
+[[kv_namespaces]]
+binding = "CUPO"
+id = "PEGAR_ID_DE_KV"

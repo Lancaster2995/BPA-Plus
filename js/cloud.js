@@ -4,30 +4,28 @@
 
   var VERSION = '10.12.0';
   var config = global.BPAPLUS_CONFIG && global.BPAPLUS_CONFIG.firebase;
-  var api, auth, db, storage, funcs, uid = '', loading;
-  var REGION = 'us-central1';
+  var api, auth, db, uid = '', loading;
 
+  /* Sin Storage ni Functions: los dos exigen el plan Blaze y este proyecto está en Spark.
+     Los archivos viven en el Drive del usuario (js/drive.js) y la generación de
+     evaluaciones en un worker de Cloudflare (ver `callFn`). Queda Auth + Firestore. */
   function init() {
     if (loading) return loading;
     if (!config) return Promise.reject(new Error('Falta la configuración de Firebase.'));
     loading = Promise.all([
       import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-app.js'),
       import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-auth.js'),
-      import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-firestore.js'),
-      import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-storage.js'),
-      import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-functions.js')
+      import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-firestore.js')
     ]).then(function (mods) {
-      var appMod = mods[0], authMod = mods[1], fireMod = mods[2], storageMod = mods[3], fnMod = mods[4];
+      var appMod = mods[0], authMod = mods[1], fireMod = mods[2];
       var app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(config);
       auth = authMod.getAuth(app);
-      storage = storageMod.getStorage(app);
-      funcs = fnMod.getFunctions(app, REGION);
       try {
         db = fireMod.initializeFirestore(app, {
           localCache: fireMod.persistentLocalCache({ tabManager: fireMod.persistentMultipleTabManager() })
         });
       } catch (e) { db = fireMod.getFirestore(app); }
-      api = Object.assign({}, authMod, fireMod, storageMod, fnMod);
+      api = Object.assign({}, authMod, fireMod);
       return true;
     });
     return loading;
@@ -79,29 +77,33 @@
     });
   }
 
-  function uploadFile(relativePath, file, name) {
-    needUser();
-    var path = 'users/' + uid + '/' + relativePath.replace(/^\/+/, '');
-    var ext = (file.name.split('.').pop() || '').toLowerCase();
-    var contentType = file.type || (ext === 'pdf' ? 'application/pdf' : ext === 'docx'
-      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : ext === 'xlsx'
-      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/octet-stream');
-    return api.uploadBytes(api.ref(storage, path), file, { contentType: contentType }).then(function (snap) {
-      return {
-        path: snap.ref.fullPath, name: name || file.name, originalName: file.name,
-        size: file.size, contentType: contentType, uploadedAt: Date.now()
-      };
-    });
-  }
-  function fileBlob(path) { needUser(); return api.getBlob(api.ref(storage, path)); }
-
-  /* Llama a una Cloud Function. El token de sesión viaja solo — por eso la
-     clave de la API de Anthropic puede quedarse del lado del servidor. */
+  /* Llama al worker. El ID token de la sesión viaja en `Authorization` y el worker lo
+     verifica contra las claves públicas de Google — por eso la clave de la API de
+     Anthropic puede quedarse del lado del servidor. Es lo mismo que daba gratis un
+     callable de Firebase; sin Blaze hay que pedirlo a mano. */
   function callFn(name, data) {
     return init().then(function () {
       needUser();
-      return api.httpsCallable(funcs, name)(data || {});
-    }).then(function (r) { return r.data; });
+      var base = global.BPAPLUS_CONFIG && global.BPAPLUS_CONFIG.workerUrl;
+      if (!base) throw new Error('Falta configurar workerUrl en js/config.js.');
+      var user = auth.currentUser;
+      if (!user) throw new Error('La sesión no está iniciada.');
+      return user.getIdToken().then(function (token) {
+        return fetch(base.replace(/\/+$/, '') + '/' + name, {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify(data || {})
+        });
+      });
+    }).then(function (res) {
+      return res.text().then(function (raw) {
+        var body;
+        try { body = JSON.parse(raw); } catch (e) { body = null; }
+        if (!res.ok) throw new Error((body && body.error) || ('El servidor respondió ' + res.status + '.'));
+        if (!body) throw new Error('El servidor respondió algo que no es JSON.');
+        return body;
+      });
+    });
   }
 
   global.BPAPLUS = global.BPAPLUS || {};
@@ -111,6 +113,6 @@
     getAuth: function () { return auth; },
     api: function () { return api; },
     all: all, put: put, putMany: putMany, del: del, clear: clear,
-    uploadFile: uploadFile, fileBlob: fileBlob, callFn: callFn
+    callFn: callFn
   };
 })(window);

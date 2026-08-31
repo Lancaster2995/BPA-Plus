@@ -151,6 +151,14 @@ cerrarla y no se guarda en ningún lado; solo el Client ID (que no es
 secreto) queda guardado en este dispositivo para no tener que pegarlo
 cada vez.
 
+Drive no es solo de lectura: los archivos que cargues (documentos, formatos,
+material de capacitación) también se guardan ahí, en una carpeta `BPA-Plus`
+que la app crea sola. Por eso pide dos permisos y no uno:
+
+- `drive.readonly` — para escanear las carpetas que ya tenés y leer lo que elijas.
+- `drive.file` — para guardar lo suyo. Es el permiso angosto: con él la app
+  **solo ve los archivos que ella misma creó**, nunca el resto de tu Drive.
+
 ## Datos y respaldo
 
 Los datos viven en Firestore y se sincronizan automáticamente. La primera vez
@@ -161,9 +169,9 @@ cargan datos de ejemplo para explorar la app.
 - **Importar respaldo** — reemplaza los datos actuales por los del archivo.
 
 El respaldo JSON sigue disponible como copia adicional o exportación manual.
-Los PDF, DOCX y XLSX de hasta 25 MB se guardan en Firebase Storage bajo la
-cuenta y droguería correspondientes. El JSON contiene sus referencias, no una
-copia binaria de los archivos.
+Los PDF, DOCX y XLSX de hasta 25 MB se guardan en **tu propio Google Drive**,
+en una carpeta `BPA-Plus` que la app crea sola. El JSON contiene sus
+referencias (el id de Drive de cada archivo), no una copia binaria.
 
 ## Estructura
 
@@ -175,15 +183,17 @@ BPA-Plus/
 ├─ sw.js                  Service worker (cache-first, offline)
 ├─ icons/                 Iconos de la app
 ├─ autoinspecciones/       Sub-programa independiente para llenar el acta fuera de la app
+├─ worker/                Worker de Cloudflare: genera las evaluaciones (guarda la clave de Anthropic)
 └─ js/
    ├─ domain.js           Lógica de negocio pura (estados, fechas, clasificación, puntaje)
-   ├─ config.js           Configuración pública del proyecto Firebase
-   ├─ cloud.js            Firebase Auth, Firestore, Storage y caché offline
+   ├─ config.js           Configuración pública de Firebase y URL del worker
+   ├─ cloud.js            Firebase Auth, Firestore y caché offline
    ├─ auth.js             Pantalla de cuenta y recuperación de contraseña
    ├─ db.js               Datos, migración local y exportar/importar
    ├─ ui.js                Componentes (notas, diálogos, panel, hoja de acciones, buscador)
    ├─ formatos.js         Formatos propios de cada droguería (lectura, configuración, llenado)
    ├─ actas.js             Generación de actas imprimibles
+   ├─ drive.js            Google Drive: escaneo, importación y guardado de archivos
    ├─ views.js             Vistas y formularios
    └─ app.js               Estado, enrutado, chrome, arranque
 ```
@@ -195,7 +205,8 @@ funciona igual abriendo el archivo local o servida como PWA.
 
 Los registros se almacenan en el proyecto Firebase `bpa-db`, aislados por el
 UID de la cuenta. La configuración web de Firebase es pública por diseño; la
-protección real está en Authentication, `firestore.rules` y `storage.rules`.
+protección real está en Authentication y `firestore.rules`. Los archivos no
+pasan por ningún servidor nuestro: van de tu navegador a tu Drive.
 
 Si activás **Google Drive**, la app habla directo con la API de Google
 desde tu navegador para leer los archivos que elijas, y carga dos librerías de

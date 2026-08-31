@@ -317,12 +317,12 @@
           UI.note('Leyendo el formato…');
           global.BPAPLUS.drive.leerFormato(file).then(function (read) {
             form(parse(read, file.name, modulo), function (upd) {
-              var Cloud = global.BPAPLUS.cloud;
-              var subida = Cloud
-                ? Cloud.uploadFile('droguerias/' + dg.id + '/formatos/' + upd.id + '/' + Date.now() + '_' + file.name, file, file.name)
-                    .then(function (meta) { upd.archivo = meta; })
-                    .catch(function () { UI.note('La configuración se guardó; el archivo original no se pudo subir.'); })
-                : Promise.resolve();
+              /* Por el mismo punto de subida que los documentos: sin eso, el archivo no
+                 quedaría en Drive y `downloadStored` de acá arriba no lo encontraría. */
+              var subida = global.BPAPLUS.drive
+                .subirArchivo('droguerias/' + dg.id + '/formatos/' + upd.id + '/' + Date.now() + '_' + file.name, file, file.name)
+                .then(function (meta) { upd.archivo = meta; })
+                .catch(function () { UI.note('La configuración se guardó; el archivo original no se pudo subir.'); });
               return subida.then(function () { return persist(alFrente(upd, (dg.formatos || []).slice())); });
             });
           }).catch(function (err) { UI.note('No se pudo leer el formato: ' + (err && err.message || err)); });

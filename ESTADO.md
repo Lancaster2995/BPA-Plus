@@ -3,7 +3,11 @@
 Qué hace y cómo se usa: [README.md](README.md). Este archivo es el estado para quien
 continúe el trabajo (Claude Code, Codex o quien sea).
 
-Repo privado: https://github.com/Lancaster2995/BPA-Plus (rama `main`).
+Repo privado: https://github.com/Lancaster2995/BPA-Plus (rama `main`), publicado con
+GitHub Pages en https://lancaster2995.github.io/BPA-Plus/ — push a `main` es el despliegue.
+
+El proyecto de Firebase (`bpa-db`) está en el plan **Spark** y así se queda: eso descarta
+Cloud Functions y Cloud Storage, y es la razón de la forma que tiene el backend.
 El harness de regresión vive **fuera** del repo, en `../bpa-plus-test/`.
 
 ---
@@ -69,36 +73,69 @@ iniciada**: eso exige las credenciales de Firebase del usuario.
 
 ---
 
-## Backend (2026-08-30) — `functions/`
+## Backend (2026-08-31) — `worker/`, no `functions/`
 
 Hasta acá la app no tenía servidor propio. Ahora tiene **uno solo**, y existe por una sola
 razón: la clave de la API de Anthropic no puede vivir en el navegador. Todo lo demás
-—Firestore, Storage, Drive, escaneo de documentos, reconocimiento on-device— sigue siendo
-cliente puro.
+—Firestore, Drive, escaneo de documentos, reconocimiento on-device— sigue siendo cliente
+puro.
 
-[functions/index.js](functions/index.js) expone una única Cloud Function *callable*,
-`generarEvaluacion`: recibe tema, área y (opcional) el texto del material, y devuelve 5
-preguntas de alternativa múltiple. Se eligió *callable* y no `onRequest` porque trae gratis
-la verificación del token de Firebase Auth y el CORS.
+Empezó siendo una Cloud Function *callable* y **no llegó a desplegarse nunca**: Cloud
+Functions exige el plan Blaze de Firebase. Se mudó a **Cloudflare Workers**, cuyo plan
+gratuito no pide tarjeta (100k pedidos por día, uso comercial permitido).
 
-Tres cosas que no conviene aflojar:
+[worker/index.js](worker/index.js) expone `POST /generarEvaluacion`: recibe tema, área y
+(opcional) el texto del material, y devuelve 5 preguntas de alternativa múltiple.
 
-- **La clave va en Secret Manager**, nunca en el repo ni en `config.js`:
-  `firebase functions:secrets:set ANTHROPIC_API_KEY`.
-- **Cupo diario por usuario** (`LIMITE_DIARIO = 20`) en `uso_ia/{uid}`, escrito por el
-  Admin SDK dentro de una transacción. Las reglas de Firestore solo abren `users/{uid}`,
-  así que el cliente no puede tocar su propio contador. A ~$0.08 por evaluación, el peor
-  día posible de una sesión robada cuesta menos de dos dólares.
+Lo que costó la mudanza, y es lo único delicado del archivo: **un callable verificaba el
+token de sesión gratis; el worker lo verifica a mano**. `verificarToken` baja las claves
+públicas de Google (JWKS, cacheadas según su propio `max-age`), valida la firma RS256 con
+WebCrypto y exige `aud`, `iss` y `exp`. Eso es todo lo que separa la clave de Anthropic de
+cualquiera que tenga la URL, así que ahí no se afloja nada.
+
+Tres cosas más que no conviene aflojar:
+
+- **La clave va en los secretos de Cloudflare**, nunca en el repo:
+  `npx wrangler secret put ANTHROPIC_API_KEY`.
+- **Cupo diario por usuario** (`LIMITE_DIARIO = 20`) en KV. A ~$0.08 por evaluación, el
+  peor día posible de una sesión robada cuesta menos de dos dólares. Si falta el namespace
+  KV el worker **falla**: un tope de gasto que se desactiva solo no es un tope.
 - **La salida está forzada por esquema** (`strict: true` + `tool_choice`), y además se
   valida en el servidor: si no llegan 5 preguntas con 4 opciones cada una, se rechaza en
   vez de guardar una evaluación a medias.
 
-Modelo: `claude-opus-5` con `output_config.effort: 'low'`. La evaluación queda guardada en
-la capacitación (`cap.evaluacion`), así que solo se paga cuando se pide *Regenerar*.
+Modelo: `claude-opus-5` con `output_config.effort: 'low'`. Se llama con `fetch` y no con el
+SDK: una sola llamada no justifica empaquetar una dependencia en el worker. La evaluación
+queda guardada en la capacitación (`cap.evaluacion`), así que solo se paga al *Regenerar*.
 
 El harness cubre el contrato del cliente (qué se manda, qué se guarda, que la clave de
-respuestas se marque) sustituyendo `cloud.callFn`. **Lo que no cubre**: la función en sí,
-que necesita el secreto y despliegue real.
+respuestas se marque) sustituyendo `cloud.callFn`, y lee el fuente del worker para las
+cuatro cosas que no puede ejecutar (firma, `aud`/`iss`/`exp`, cupo sin KV, clave desde el
+entorno). **Lo que no cubre**: el worker corriendo de verdad.
+
+## Archivos: del bucket al Drive del usuario (2026-08-31)
+
+Firebase Storage quedó fuera de alcance por lo mismo: desde el **01/10/2025** un proyecto
+en Spark no accede a **ningún** bucket, ni siquiera a los que ya existían. En `bpa-db` el
+bucket nunca llegó a crearse, así que la biblioteca de documentos no funcionó nunca en
+producción y **no hay nada que migrar** — es la única razón por la que este cambio sale
+gratis.
+
+Los archivos ahora van al Drive de la droguería, que es de donde salieron. `drive.js` ya
+tenía el OAuth y la lectura; se le agregó `drive.file` al scope (el angosto: solo ve lo que
+la app creó), una carpeta `BPA-Plus` y una subida *resumable* en un solo PUT —
+`uploadType=multipart` corta en 5 MB y acá se admiten 25.
+
+`cloud.uploadFile` y `cloud.fileBlob` desaparecieron, y con ellos `storage.rules`. El
+límite de 25 MB y los tipos permitidos que vivían en esas reglas ya estaban validados en
+el cliente en los tres puntos de carga; ahora el destino es el Drive del propio usuario,
+así que dejaron de ser un límite de confianza y pasaron a ser lo que siempre aparentaron
+ser en pantalla: un aviso.
+
+`drive.subirArchivo` es el **único punto de subida**, y se llega a él por el export
+(`BPAPLUS.drive`) incluso desde adentro de `drive.js`. No es ceremonia: `formatos.js`
+llamaba a `cloud.uploadFile` por su cuenta y se habría quedado subiendo a un bucket
+inexistente mientras `downloadStored` buscaba en Drive.
 
 ## Escaneo de documentos (2026-08-30)
 
@@ -144,10 +181,17 @@ y se carga a mano. El borrador a medio llenar vive en `localStorage` de ese disp
   CDN. Falta cargar un formato real de una droguería y ver qué tan bien salen el título,
   los campos y las columnas. Lo que salga mal se corrige en el diálogo de configuración,
   así que el peor caso es tipear, no romperse.
-- **Desplegar el backend**: `firebase deploy --only functions` tras cargar el secreto. Sin
-  eso, el botón *Evaluación* falla con `internal`.
+- **Desplegar el worker**, que es lo único que queda para que ande *Evaluación*:
+  `npx wrangler kv namespace create CUPO` → pegar el id en `worker/wrangler.toml` →
+  `npx wrangler secret put ANTHROPIC_API_KEY` → `npx wrangler deploy` → pegar la URL en
+  `workerUrl` de [js/config.js](js/config.js). Con `workerUrl` vacío el botón avisa y no
+  hace nada.
+- **Probar la subida a Drive de verdad.** El harness sustituye `subirArchivo`: la subida
+  resumable, la creación de la carpeta y el permiso `drive.file` nunca se ejercitaron
+  contra Google. Ojo con un detalle: el Client ID de OAuth existente pide consentimiento
+  otra vez, porque el scope cambió.
 - **Verificar en Chrome real** el reconocimiento on-device (pide Chrome 138+ con el modelo
-  ya descargado) y la evaluación contra la función desplegada.
+  ya descargado).
 
 ## Reglas que no conviene romper
 
