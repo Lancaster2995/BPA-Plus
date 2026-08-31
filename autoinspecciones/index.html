@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#F6F3E9">
+  <meta name="description" content="Sub-programa de autoinspecciones de BPA-Plus: llena el acta de inspección al almacén sin cuenta ni conexión.">
+  <title>Autoinspecciones · BPA-Plus</title>
+  <link rel="icon" type="image/png" sizes="192x192" href="../icons/icon-192.png?v=2">
+  <link rel="stylesheet" href="../styles.css">
+  <style>
+    /* Sólo lo que este sub-programa agrega: el resto sale de styles.css */
+    .sec-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; }
+    .sec-card > summary { display: flex; align-items: center; gap: 10px; justify-content: space-between; cursor: pointer; padding: 13px 16px; font-size: 13.5px; font-weight: 600; list-style: none; }
+    .sec-card > summary::-webkit-details-marker { display: none; }
+    .sec-card[open] > summary { border-bottom: 1px solid var(--border); }
+    .sec-name { flex: 1; min-width: 0; }
+    .sec-count { flex: none; font-family: var(--font-mono); font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: var(--surface-2); color: var(--ink-3); }
+    .sec-count.partial { background: var(--warn-soft); color: var(--warn-ink); }
+    .sec-count.done { background: var(--ok-soft); color: var(--ok); }
+    .sec-items { padding: 2px 16px 12px; }
+    .sticky-acta { position: sticky; bottom: 12px; margin-top: 22px; box-shadow: var(--shadow-2); }
+  </style>
+</head>
+<body>
+  <div class="app"><div class="main">
+    <main class="content" id="content" role="main"><div class="skel"></div><div class="skel"></div></main>
+  </div></div>
+
+  <!-- Área de impresión del acta -->
+  <div id="printArea" class="print-only" aria-hidden="true"></div>
+
+  <!-- Independiente de la app: dominio, kit de UI, formato propio de la droguería y generación del acta.
+       Sin nube, sin cuenta, sin PIN y sin base de datos. -->
+  <script src="../js/domain.js"></script>
+  <script src="../js/ui.js"></script>
+  <script src="../js/formatos.js"></script>
+  <script src="../js/actas.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

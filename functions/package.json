@@ -1,0 +1,14 @@
+{
+  "name": "bpa-plus-functions",
+  "description": "Backend mínimo de BPA-Plus: genera evaluaciones de capacitación con Claude.",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "22"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.122.0",
+    "firebase-admin": "^14.3.0",
+    "firebase-functions": "^7.3.2"
+  }
+}

@@ -97,7 +97,8 @@
       if (wasSearch) { var s = document.getElementById('qDoc'); if (s) { s.focus(); try { s.setSelectionRange(caret, caret); } catch (e) {} } }
     },
     renderChrome: renderChrome,
-    exportData: exportData
+    exportData: exportData,
+    importCronograma: importCronograma
   };
 
   /* ------------------------------ Chrome ------------------------------ */
@@ -181,7 +182,9 @@
         Promise.all(drafts.map(function (d) {
           var existing = d.existingId ? store.find('documentos', d.existingId) : null;
           var file = d._file;
-          var clean = Object.assign({}, d); delete clean.existingId; delete clean.modifiedTime; delete clean._mergedFrom; delete clean._file;
+          var clean = Object.assign({}, d); delete clean.existingId; delete clean.modifiedTime;
+          /* Todo lo que el escaneo usó para sí mismo va con guion bajo y no se guarda. */
+          Object.keys(clean).forEach(function (k) { if (k.charAt(0) === '_') delete clean[k]; });
           var obj = existing ? Object.assign({}, existing, clean, { id: existing.id }) : Object.assign({ id: D.nextId(), e: store.dg().id, area: 'Almacén', version: 1 }, clean);
           if (existing) actualizados++; else nuevos++;
           var ready = file ? global.BPAPLUS.drive.storeFile(store.dg().id, obj, file, clean.role, clean.version) : Promise.resolve(obj);
@@ -191,24 +194,29 @@
       }, store.byDg('documentos'));
     };
     var ci = document.getElementById('cronImport');
-    if (ci) ci.onclick = function () {
-      global.BPAPLUS.drive.cronogramaPanel(function (drafts) {
-        var caps = drafts.capacitaciones || [], inspecciones = drafts.inspecciones || [];
-        Promise.all(caps.map(function (c) {
-          var existing = c.existingId ? store.find('capacitaciones', c.existingId) : null;
-          var clean = Object.assign({}, c); delete clean.existingId;
-          return store.save('capacitaciones', existing
-            ? Object.assign({}, existing, clean, { id: existing.id })
-            : Object.assign({ id: D.nextId(), e: store.dg().id, est: 'pendiente', capacitados: [] }, clean));
-        }).concat(inspecciones.map(function (i) {
-          var existing = i.existingId ? store.find('inspecciones', i.existingId) : null;
-          var clean = Object.assign({}, i); delete clean.existingId;
-          return store.save('inspecciones', existing
-            ? Object.assign({}, existing, clean, { id: existing.id })
-            : Object.assign({ id: D.nextId(), e: store.dg().id, real: null, result: '', hall: 0 }, clean));
-        }))).then(function () { UI.note(caps.length + ' capacitación(es), ' + inspecciones.length + ' autoinspección(es) importadas'); });
-      }, store.byDg('capacitaciones'), store.byDg('inspecciones'));
-    };
+    if (ci) ci.onclick = function () { importCronograma(); };
+  }
+
+  /* Un solo camino para importar el cronograma; lo llaman la barra lateral y los
+     botones de Capacitaciones y Autoinspecciones. kindHint dice qué es la hoja
+     cuando ni su nombre ni su contenido lo aclaran. */
+  function importCronograma(kindHint) {
+    global.BPAPLUS.drive.cronogramaPanel(function (drafts) {
+      var caps = drafts.capacitaciones || [], inspecciones = drafts.inspecciones || [];
+      Promise.all(caps.map(function (c) {
+        var existing = c.existingId ? store.find('capacitaciones', c.existingId) : null;
+        var clean = Object.assign({}, c); delete clean.existingId;
+        return store.save('capacitaciones', existing
+          ? Object.assign({}, existing, clean, { id: existing.id })
+          : Object.assign({ id: D.nextId(), e: store.dg().id, est: 'pendiente', capacitados: [] }, clean));
+      }).concat(inspecciones.map(function (i) {
+        var existing = i.existingId ? store.find('inspecciones', i.existingId) : null;
+        var clean = Object.assign({}, i); delete clean.existingId;
+        return store.save('inspecciones', existing
+          ? Object.assign({}, existing, clean, { id: existing.id })
+          : Object.assign({ id: D.nextId(), e: store.dg().id, real: null, result: '', hall: 0 }, clean));
+      }))).then(function () { UI.note(caps.length + ' capacitación(es), ' + inspecciones.length + ' autoinspección(es) importadas'); });
+    }, store.byDg('capacitaciones'), store.byDg('inspecciones'), kindHint);
   }
 
   /* ------------------------------ Tema ------------------------------ */
@@ -225,12 +233,7 @@
   /* ------------------------------ Respaldo ------------------------------ */
   function exportData() {
     DB.exportAll().then(function (data) {
-      var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'bpa-plus-respaldo-' + D.isoHoy() + '.json';
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+      UI.download('bpa-plus-respaldo-' + D.isoHoy() + '.json', data);
       UI.note('Respaldo exportado');
     });
   }
@@ -265,6 +268,8 @@
     idx.push({ type: 'Acción', name: 'Nueva capacitación', run: function () { V.open.capForm(null); } });
     idx.push({ type: 'Acción', name: 'Programar autoinspección', run: function () { V.open.inspForm(null); } });
     idx.push({ type: 'Acción', name: 'Nueva acta de inspección', run: function () { V.open.actaForm(null); } });
+    idx.push({ type: 'Acción', name: 'Descargar formato de acta', run: function () { V.open.formatoActa(); } });
+    idx.push({ type: 'Acción', name: 'Cargar acta llenada', run: function () { V.open.cargarActa(); } });
     idx.push({ type: 'Acción', name: 'Exportar respaldo', run: exportData });
     store.byDg('documentos').forEach(function (d) { idx.push({ type: 'Documento', name: d.codigo + ' · ' + d.nombre, run: function () { V.panels.docPanel(d); } }); });
     store.byDg('capacitaciones').forEach(function (c) { idx.push({ type: 'Capacitación', name: c.tema, run: function () { V.panels.capPanel(c); } }); });

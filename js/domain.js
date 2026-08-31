@@ -495,6 +495,85 @@
     ];
   }
 
+  /* ----- Acta de inspección: objeto en blanco, hallazgos y formato de intercambio -----
+     El sub-programa `autoinspecciones/` no comparte estado con la app: lo único
+     que viaja entre los dos es este sobre. Sale vacío (formato predeterminado de
+     la droguería) y vuelve lleno, con la misma forma en ambos sentidos. */
+  var FORMATO_APP = 'bpa-plus', FORMATO_TIPO = 'acta-inspeccion', FORMATO_V = 1;
+
+  var ACTA_CAMPOS = ['numActa', 'fecha', 'auditor', 'almacen', 'ruc', 'rdAutorizacion', 'planos',
+    'clientesProveedores', 'productos', 'poeVerificados', 'resultadosPrevios', 'area',
+    'checklist', 'respuestas', 'observAdicionales', 'conclusiones', 'medidas', 'completada', 'paso',
+    'hall', 'hallCritico', 'hallMayor', 'hallMenor'];
+
+  function actaNueva(dg) {
+    dg = dg || {};
+    return {
+      id: nextId(), e: dg.id || '', numActa: '', fecha: isoHoy(), auditor: dg.dt || '',
+      almacen: dg.nombre || '', ruc: dg.ruc || '', rdAutorizacion: '', planos: '',
+      clientesProveedores: '', productos: '', poeVerificados: '', resultadosPrevios: '',
+      area: 'Almacén general', checklist: checklistOficial(), respuestas: {},
+      observAdicionales: '', conclusiones: '', medidas: '', completada: false, paso: 0
+    };
+  }
+
+  function hallazgos(acta) {
+    var checklist = acta.checklist || checklistOficial(), resp = acta.respuestas || {};
+    var total = checklist.reduce(function (n, s) { return n + s.items.length; }, 0);
+    function sevOf(key) {
+      var p = String(key).split('::'), sec = checklist.filter(function (s) { return s.seccion === p[0]; })[0];
+      var it = sec && sec.items[+p[1]];
+      return it ? it.severidad : '';
+    }
+    var keys = Object.keys(resp);
+    var no = keys.filter(function (k) { return resp[k].v === 'no'; });
+    var si = keys.filter(function (k) { return resp[k].v === 'si'; }).length;
+    function cuenta(sev) { return no.filter(function (k) { return sevOf(k) === sev; }).length; }
+    var critico = cuenta('critico'), mayor = cuenta('mayor'), evaluados = si + no.length;
+    return {
+      critico: critico, mayor: mayor, menor: cuenta('menor'), abiertos: critico + mayor,
+      si: si, no: no.length, evaluados: evaluados, total: total,
+      pct: evaluados ? Math.round(si / evaluados * 100) : 0,
+      completada: total > 0 && evaluados >= total
+    };
+  }
+
+  /* Escribe el recuento en el acta: es lo que la lista, el tablero y el acta impresa leen. */
+  function aplicarHallazgos(acta) {
+    var h = hallazgos(acta);
+    acta.hallCritico = h.critico; acta.hallMayor = h.mayor; acta.hallMenor = h.menor;
+    acta.hall = h.abiertos; acta.completada = h.completada;
+    return h;
+  }
+
+  function formatoActa(dg, acta) {
+    dg = dg || {};
+    var a = acta || actaNueva(dg), out = {};
+    ACTA_CAMPOS.forEach(function (k) { if (a[k] !== undefined) out[k] = a[k]; });
+    return {
+      app: FORMATO_APP, tipo: FORMATO_TIPO, v: FORMATO_V, generado: isoHoy(),
+      drogueria: { id: dg.id || '', nombre: dg.nombre || '', ruc: dg.ruc || '', direccion: dg.direccion || '', dt: dg.dt || '', formatos: dg.formatos || [] },
+      acta: out
+    };
+  }
+
+  /* Viene de un archivo: se valida y se limpia antes de tocar nada. Tira Error con
+     el motivo para que quien llame lo muestre tal cual. */
+  function leerActa(obj) {
+    if (!obj || obj.app !== FORMATO_APP || obj.tipo !== FORMATO_TIPO) throw new Error('No es un formato de acta de BPA-Plus.');
+    if (!obj.acta || !Array.isArray(obj.acta.checklist) || !obj.acta.checklist.length) throw new Error('El archivo no trae el checklist del acta.');
+    var dg = obj.drogueria || {};
+    var acta = Object.assign(actaNueva(dg), obj.acta, { id: nextId(), e: dg.id || '' });
+    var limpio = {};
+    Object.keys(acta.respuestas || {}).forEach(function (k) {
+      var r = acta.respuestas[k];
+      if (r && (r.v === 'si' || r.v === 'no')) limpio[k] = { v: r.v, obs: String(r.obs || '') };
+    });
+    acta.respuestas = limpio;
+    aplicarHallazgos(acta);
+    return { drogueria: dg, acta: acta };
+  }
+
   global.BPAPLUS = global.BPAPLUS || {};
   global.BPAPLUS.domain = {
     EST: EST, EST_LABEL: EST_LABEL, VENTANA_POR_VENCER: VENTANA_POR_VENCER,
@@ -504,6 +583,8 @@
     edoc: edoc, ecap: ecap,
     normTxt: normTxt, stemTxt: stemTxt,
     clasificarPorCriterio: clasificarPorCriterio, numeroEnNombre: numeroEnNombre,
-    scoreCumplimiento: scoreCumplimiento, nextId: nextId, checklistOficial: checklistOficial, SEV_LABEL: SEV_LABEL
+    scoreCumplimiento: scoreCumplimiento, nextId: nextId, checklistOficial: checklistOficial, SEV_LABEL: SEV_LABEL,
+    actaNueva: actaNueva, hallazgos: hallazgos, aplicarHallazgos: aplicarHallazgos,
+    formatoActa: formatoActa, leerActa: leerActa
   };
 })(window);

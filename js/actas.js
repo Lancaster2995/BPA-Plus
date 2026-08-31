@@ -22,9 +22,42 @@
     requestAnimationFrame(function () { setTimeout(function () { global.print(); }, 40); });
   }
 
+  /* ------------------------------ Ítems del checklist (pantalla) ------------------------------
+     Un solo renderizador para el asistente de la app y para el sub-programa
+     `autoinspecciones/`: si la clave `seccion::índice` se generara en dos sitios,
+     un acta llenada afuera no encajaría al cargarla acá. */
+  function itemsHtml(sec, respuestas) {
+    respuestas = respuestas || {};
+    return sec.items.map(function (it, idx) {
+      var key = sec.seccion + '::' + idx, r = respuestas[key] || {}, cur = r.v, obs = r.obs || '';
+      var sevBadge = it.severidad ? '<span class="chk-sev ' + it.severidad + '">' + esc(D.SEV_LABEL[it.severidad] || it.severidad) + '</span>' : '';
+      return '<div class="chk-item"><div class="chk-text">' + (it.ref ? '<b>' + esc(it.ref) + ')</b> ' : '') + esc(it.texto) + sevBadge + '</div>' +
+        '<div class="chk-row"><div class="chk-opts" data-key="' + esc(key) + '">' +
+        ['si', 'no'].map(function (v) { return '<button type="button" class="chk-opt ' + (cur === v ? 'sel ' + v : '') + '" data-v="' + v + '">' + (v === 'si' ? 'Sí' : 'No') + '</button>'; }).join('') +
+        '</div>' + (cur === 'no' ? '<input class="inp chk-obs" data-obskey="' + esc(key) + '" placeholder="Observación…" aria-label="Observación del ítem" value="' + esc(obs) + '">' : '') + '</div></div>';
+    }).join('');
+  }
+
+  /* Si la droguería cargó su propio formato para el módulo, ese manda; el acta
+     genérica de abajo queda como respaldo para quien no cargó ninguno. */
+  function conFormato(dg, modulo, valores, filas) {
+    var F = global.BPAPLUS.formatos, fmt = F && F.para(dg, modulo);
+    if (!fmt) return false;
+    print('<div class="acta">' + membrete(dg) + F.render(fmt, valores, filas) + '</div>');
+    return true;
+  }
+
   /* ------------------------------ Acta de asistencia ------------------------------ */
   function actaAsistencia(dg, cap) {
     var caps = cap.capacitados || [];
+    var propio = conFormato(dg, 'capacitaciones', {
+      tema: cap.tema || '', fecha: D.fLarga(cap.fecha), area: cap.area || '', frec: cap.frec || '',
+      expositor: dg.dt || '', empresa: dg.nombre || '', ruc: dg.ruc || '', direccion: dg.direccion || ''
+    }, caps.map(function (p) {
+      return { nombre: p.nombre || '', cargo: p.cargo || '', dni: p.dni || '', areaP: p.area || cap.area || '' };
+    }));
+    if (propio) return;
+
     var filas = caps.length
       ? caps.map(function (p, i) { return '<tr><td>' + (i + 1) + '</td><td>' + esc(p.nombre || '') + '</td><td>' + esc(p.cargo || '') + '</td><td></td></tr>'; }).join('')
       : '<tr><td colspan="4" style="text-align:center;color:#888;padding:16px">Sin participantes registrados</td></tr>';
@@ -44,6 +77,53 @@
         '<div class="firma-line">Director técnico — ' + esc(dg.dt || '') + '</div>' +
       '</div></div>';
     print(html);
+  }
+
+  /* ------------------------------ Evaluación de capacitación ------------------------------ */
+  /* Sale en blanco a propósito: es la hoja que llena el participante. La clave
+     de respuestas queda en la app, no en el papel que se reparte. */
+  function actaEvaluacion(dg, cap) {
+    var ev = cap.evaluacion || { preguntas: [] };
+    var LETRAS = ['A', 'B', 'C', 'D'];
+    var cuerpo = ev.preguntas.map(function (p, i) {
+      return '<div class="eval-q"><div class="eval-enun">' + (i + 1) + '. ' + esc(p.enunciado) + '</div>' +
+        '<div class="eval-ops">' + (p.opciones || []).map(function (o, j) {
+          return '<div class="eval-op"><span class="eval-box"></span><b>' + LETRAS[j] + ')</b> ' + esc(o) + '</div>';
+        }).join('') + '</div></div>';
+    }).join('');
+
+    var html = '<div class="acta">' + membrete(dg) +
+      '<h1>Evaluación de capacitación</h1>' +
+      '<div class="acta-meta">' +
+        '<div><b>Tema:</b> ' + esc(cap.tema || '') + '</div>' +
+        '<div><b>Fecha:</b> ' + esc(D.fLarga(cap.fecha)) + '</div>' +
+        '<div><b>Área:</b> ' + esc(cap.area || '') + '</div>' +
+        '<div><b>Nota mínima aprobatoria:</b> 4 de 5</div>' +
+      '</div>' +
+      '<table class="eval-head"><tbody><tr><td><b>Participante:</b></td><td></td><td><b>Cargo:</b></td><td></td></tr></tbody></table>' +
+      (cuerpo || '<p style="color:#888">Esta capacitación todavía no tiene evaluación generada.</p>') +
+      '<div class="acta-firmas">' +
+        '<div class="firma-line">Firma del participante</div>' +
+        '<div class="firma-line">Evaluado por — ' + esc(dg.dt || '') + '</div>' +
+      '</div></div>';
+    print(html);
+  }
+
+  /* Una fila por ítem respondido, para el formato propio de la droguería. */
+  function filasInspeccion(secciones, resp, SEV) {
+    var out = [];
+    secciones.forEach(function (sec) {
+      sec.items.forEach(function (it, idx) {
+        var r = resp[sec.seccion + '::' + idx];
+        if (!r || !r.v) return;
+        out.push({
+          seccion: sec.seccion, texto: (it.ref ? it.ref + ') ' : '') + it.texto,
+          si: r.v === 'si' ? 'X' : '', no: r.v === 'no' ? 'X' : '',
+          severidad: SEV[it.severidad] || '', obs: r.obs || ''
+        });
+      });
+    });
+    return out;
   }
 
   /* ------------------------------ Acta de autoinspección (REGISTRO_004) ------------------------------ */
@@ -67,17 +147,16 @@
       return '<tr><th colspan="5" class="acta-sec">' + esc(sec.seccion) + '</th></tr>' + filas;
     }).join('');
 
-    var noKeys = Object.keys(resp).filter(function (k) { return resp[k].v === 'no'; });
-    function sevOf(key) {
-      var parts = key.split('::'), sec = secciones.filter(function (s) { return s.seccion === parts[0]; })[0];
-      var it = sec && sec.items[+parts[1]]; return it ? it.severidad : '';
-    }
-    var hCrit = noKeys.filter(function (k) { return sevOf(k) === 'critico'; }).length;
-    var hMay = noKeys.filter(function (k) { return sevOf(k) === 'mayor'; }).length;
-    var hMen = noKeys.filter(function (k) { return sevOf(k) === 'menor'; }).length;
-    var siCount = Object.keys(resp).filter(function (k) { return resp[k].v === 'si'; }).length;
-    var evaluados = siCount + noKeys.length;
-    var pct = evaluados ? Math.round((siCount / evaluados) * 100) : 0;
+    var h = D.hallazgos({ checklist: secciones, respuestas: resp });
+    var hCrit = h.critico, hMay = h.mayor, hMen = h.menor, pct = h.pct;
+
+    var propio = conFormato(dg, 'inspecciones', {
+      tema: 'Autoinspección al almacén', fecha: D.fLarga(acta.fecha),
+      area: acta.almacen || dg.nombre || '', empresa: dg.nombre || '', ruc: acta.ruc || dg.ruc || '',
+      direccion: dg.direccion || '', auditor: acta.auditor || '', numActa: acta.numActa || '',
+      expositor: dg.dt || '', cumplimiento: pct + '%', hallazgos: hCrit + ' / ' + hMay + ' / ' + hMen
+    }, filasInspeccion(secciones, resp, SEV));
+    if (propio) return;
 
     var datos = [
       ['N.° de acta', acta.numActa], ['Fecha', D.fLarga(acta.fecha)],
@@ -109,5 +188,5 @@
   }
 
   global.BPAPLUS = global.BPAPLUS || {};
-  global.BPAPLUS.actas = { actaAsistencia: actaAsistencia, actaInspeccion: actaInspeccion };
+  global.BPAPLUS.actas = { actaAsistencia: actaAsistencia, actaEvaluacion: actaEvaluacion, actaInspeccion: actaInspeccion, itemsHtml: itemsHtml };
 })(window);

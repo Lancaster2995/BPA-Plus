@@ -272,7 +272,10 @@
     return '' +
       '<div class="view-header"><div><div class="view-title">Capacitaciones</div>' +
         '<div class="view-sub">' + real + ' de ' + all.length + ' realizadas · ' + esc(store.dg().nombre) + '</div></div>' +
-        '<button class="btn btn-primary" data-action="nueva-cap">' + icon('plus', 16) + 'Nueva</button></div>' +
+        '<div class="header-actions">' +
+          '<button class="btn btn-ghost" data-action="fmt-cap">' + icon('settings', 16) + 'Formato propio</button>' +
+          '<button class="btn btn-ghost" data-action="cron-cap">' + icon('upload', 16) + 'Importar cronograma</button>' +
+          '<button class="btn btn-primary" data-action="nueva-cap">' + icon('plus', 16) + 'Nueva</button></div></div>' +
       '<div class="progress" style="margin-bottom:14px"><div class="progress-top"><span>Avance del programa anual</span><strong>' + pct + '%</strong></div>' +
         '<div class="progress-track"><div class="progress-fill" style="width:' + pct + '%"></div></div></div>' +
       filterPills(S.filtCap, [
@@ -281,7 +284,8 @@
       ], 'data-fcap') +
       (caps.length ? '<div class="list">' + caps.map(capRow).join('') + '</div>'
         : emptyState('cap', 'Sin capacitaciones', all.length ? 'Ninguna capacitación coincide con el filtro.' : 'Programá tu primera capacitación del año.',
-          all.length ? '' : '<button class="btn btn-primary" data-action="nueva-cap">' + icon('plus', 16) + 'Nueva capacitación</button>'));
+          all.length ? '' : '<button class="btn btn-primary" data-action="nueva-cap">' + icon('plus', 16) + 'Nueva capacitación</button>' +
+            '<button class="btn btn-ghost" data-action="cron-cap">' + icon('upload', 16) + 'Importar cronograma</button>'));
   }
 
   function capRow(c) {
@@ -312,6 +316,10 @@
         '<div class="grid-2"><div class="field"><label>Área</label><select class="inp" id="c_area">' + opts(AREAS, c.area) + '</select></div>' +
         '<div class="field"><label>Frecuencia</label><select class="inp" id="c_frec">' + opts(FRECS, c.frec) + '</select></div></div>' +
         '<div class="field"><label>Fecha programada</label><input class="inp" id="c_fecha" type="date" value="' + esc(c.fecha) + '"></div>' +
+        '<div class="field"><label>Material de la capacitación</label>' +
+          '<input class="inp" id="c_material" type="file" accept=".pdf,.docx,.xlsx,.pptx">' +
+          '<div class="hint">' + ((c.materiales || []).length ? (c.materiales.length + ' archivo(s) ya cargado(s). ') : '') +
+            'PDF, Word, Excel o PowerPoint de menos de 25 MB.</div></div>' +
         '<div class="field"><label>Participantes</label><div id="attList">' + attHtml + '</div>' +
         '<button class="btn btn-ghost btn-sm" id="c_add" type="button" style="margin-top:6px">' + icon('plus', 14) + 'Agregar participante</button></div>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="c_save">Guardar</button>',
@@ -329,9 +337,19 @@
             id: existing ? existing.id : D.nextId(), e: store.dg().id,
             tema: tema, area: root.querySelector('#c_area').value, frec: root.querySelector('#c_frec').value,
             fecha: root.querySelector('#c_fecha').value || D.isoHoy(),
-            est: existing ? existing.est : 'pendiente', capacitados: att
+            est: existing ? existing.est : 'pendiente', capacitados: att,
+            materiales: (existing && existing.materiales) || []
           });
-          store.save('capacitaciones', obj).then(function () { m.close(); UI.note(existing ? 'Capacitación actualizada' : 'Capacitación agregada'); });
+          var mat = root.querySelector('#c_material').files[0];
+          if (mat && mat.size >= 25 * 1024 * 1024) { UI.note('El material debe pesar menos de 25 MB.'); return; }
+          var btn = root.querySelector('#c_save'); btn.disabled = true;
+          var subida = mat
+            ? global.BPAPLUS.drive.storeMaterial(store.dg().id, obj.id, mat)
+                .then(function (meta) { obj.materiales = obj.materiales.concat(meta); })
+            : Promise.resolve();
+          subida.then(function () { return store.save('capacitaciones', obj); })
+            .then(function () { m.close(); UI.note(existing ? 'Capacitación actualizada' : 'Capacitación agregada'); })
+            .catch(function (err) { btn.disabled = false; UI.note('No se pudo subir el material: ' + (err && err.message || err)); });
         };
       }
     });
@@ -344,23 +362,85 @@
 
   function capPanel(c) {
     var e = D.ecap(c);
-    var att = (c.capacitados || []);
+    var att = (c.capacitados || []), mats = (c.materiales || []);
     UI.panel({
       title: 'Capacitación',
       body:
         '<div class="panel-lead"><div class="panel-lead-title">' + esc(c.tema) + '</div>' + tag(e) + '</div>' +
         detailRow('Área', c.area) + detailRow('Frecuencia', c.frec) + detailRow('Fecha programada', D.fLocal(c.fecha)) +
+        '<div class="section-title">Material (' + mats.length + ')</div>' +
+        (mats.length ? '<div class="file-list">' + mats.map(function (f, i) {
+          return '<button class="file-item" data-mat="' + i + '">' + icon('doc', 16) +
+            '<span><b>' + esc(f.name || 'archivo') + '</b><small>Descargar</small></span></button>';
+        }).join('') + '</div>' : '<div class="row-empty">Sin material cargado. Editá la capacitación para subirlo.</div>') +
         '<div class="section-title">Participantes (' + att.length + ')</div>' +
         (att.length ? att.map(function (p) { return '<div class="att-item"><div class="att-nombre">' + esc(p.nombre) + '</div><div class="att-cargo">' + esc(p.cargo || '—') + '</div></div>'; }).join('')
           : '<div class="row-empty">Sin participantes registrados.</div>'),
       footer:
         '<button class="btn btn-ghost" data-acta>' + icon('print', 16) + 'Acta</button>' +
+        '<button class="btn btn-ghost" data-eval>' + icon('check', 16) + 'Evaluación</button>' +
         '<button class="btn btn-ghost" data-edit>' + icon('edit', 16) + 'Editar</button>' +
         '<button class="btn btn-danger" data-del>' + icon('trash', 16) + 'Eliminar</button>',
       onMount: function (root) {
         root.querySelector('[data-acta]').onclick = function () { actas.actaAsistencia(store.dg(), c); };
+        root.querySelectorAll('[data-mat]').forEach(function (b) {
+          b.onclick = function () {
+            global.BPAPLUS.drive.downloadStored(mats[+b.dataset.mat]).catch(function (e) { UI.note(e.message || e); });
+          };
+        });
+        root.querySelector('[data-eval]').onclick = function () { root.querySelector('[data-close]').click(); evalPanel(c); };
         root.querySelector('[data-edit]').onclick = function () { root.querySelector('[data-close]').click(); capForm(c); };
         root.querySelector('[data-del]').onclick = function () { root.querySelector('[data-close]').click(); store.removeWithUndo('capacitaciones', c, 'Capacitación eliminada'); };
+      }
+    });
+  }
+
+  /* Evaluación de la capacitación: 5 preguntas de alternativa múltiple que
+     genera el backend a partir del tema y del material cargado. Se guarda en
+     la capacitación, así que se regenera solo cuando lo pedís. */
+  function evalPanel(c) {
+    var LETRAS = ['A', 'B', 'C', 'D'];
+    function preguntasHtml(ev) {
+      return ev.preguntas.map(function (p, i) {
+        return '<div class="ev-item"><div class="ev-q"><b>' + (i + 1) + '.</b> ' + esc(p.enunciado) + '</div>' +
+          '<div class="ev-ops">' + p.opciones.map(function (o, j) {
+            return '<div class="ev-op' + (j === p.correcta ? ' ok' : '') + '"><span>' + LETRAS[j] + '</span>' + esc(o) + '</div>';
+          }).join('') + '</div>' +
+          '<div class="ev-just">' + esc(p.justificacion) + '</div></div>';
+      }).join('');
+    }
+    var m = UI.panel({
+      title: 'Evaluación de la capacitación',
+      body: '<div class="panel-lead"><div class="panel-lead-title">' + esc(c.tema) + '</div></div>' +
+        '<div id="ev_body">' + (c.evaluacion
+          ? '<p class="dialog-note">Generada el ' + esc(D.fLocal(new Date(c.evaluacion.generadoEl).toISOString().slice(0, 10))) +
+              (c.evaluacion.conMaterial ? ' a partir del material cargado.' : ' a partir del tema (sin material adjunto).') +
+              ' La respuesta correcta va marcada; al imprimir sale en blanco.</p>' + preguntasHtml(c.evaluacion)
+          : '<div class="row-empty">Todavía no hay evaluación. Se generan 5 preguntas de alternativa múltiple con el tema y, si cargaste material, con su contenido.</div>') + '</div>',
+      footer:
+        '<button class="btn btn-primary" data-gen>' + icon('cap', 16) + (c.evaluacion ? 'Regenerar' : 'Generar evaluación') + '</button>' +
+        (c.evaluacion ? '<button class="btn btn-ghost" data-print>' + icon('print', 16) + 'Imprimir</button>' : ''),
+      onMount: function (root) {
+        var pr = root.querySelector('[data-print]');
+        if (pr) pr.onclick = function () { actas.actaEvaluacion(store.dg(), c); };
+        root.querySelector('[data-gen]').onclick = function () {
+          var btn = root.querySelector('[data-gen]'), box = root.querySelector('#ev_body');
+          btn.disabled = true; btn.textContent = 'Leyendo el material…';
+          var mats = c.materiales || [];
+          var texto = mats.length ? global.BPAPLUS.drive.textoDeArchivo(mats[mats.length - 1]) : Promise.resolve('');
+          texto.then(function (material) {
+            btn.textContent = 'Redactando las preguntas…';
+            return global.BPAPLUS.cloud.callFn('generarEvaluacion', { tema: c.tema, area: c.area, material: material });
+          }).then(function (ev) {
+            box.innerHTML = preguntasHtml(ev);
+            return store.save('capacitaciones', Object.assign({}, c, { evaluacion: ev }));
+          }).then(function () {
+            m.close(); UI.note('Evaluación lista'); evalPanel(store.find('capacitaciones', c.id));
+          }).catch(function (err) {
+            btn.disabled = false; btn.textContent = c.evaluacion ? 'Regenerar' : 'Generar evaluación';
+            UI.note(err && err.message || 'No se pudo generar la evaluación.');
+          });
+        };
       }
     });
   }
@@ -383,16 +463,25 @@
       '<div class="view-header"><div><div class="view-title">Autoinspecciones</div>' +
         '<div class="view-sub">Cronograma, hallazgos y actas · ' + esc(store.dg().nombre) + '</div></div>' +
         '<div class="header-actions">' +
+          '<button class="btn btn-ghost" data-action="fmt-insp">' + icon('settings', 16) + 'Formato propio</button>' +
+          '<button class="btn btn-ghost" data-action="cron-insp">' + icon('upload', 16) + 'Importar cronograma</button>' +
           '<button class="btn btn-ghost" data-action="nueva-acta">' + icon('insp', 16) + 'Nueva acta</button>' +
           '<button class="btn btn-primary" data-action="programar-insp">' + icon('plus', 16) + 'Programar</button></div></div>' +
       (actasList.length ? '<div class="section-title">Actas de inspección</div><div class="list">' + actasList.map(actaRow).join('') + '</div>' : '') +
+      '<div class="section-title">Sub-programa</div>' +
+      '<div class="subprog"><div class="subprog-txt">Llená el acta fuera de la app: descargá el formato de <b>' + esc(store.dg().nombre) +
+        '</b>, completalo en el sub-programa y volvé a cargar acá el archivo llenado.</div>' +
+        '<button class="btn btn-ghost" data-action="abrir-subprog">' + icon('insp', 16) + 'Abrir</button>' +
+        '<button class="btn btn-ghost" data-action="formato-acta">' + icon('download', 16) + 'Formato</button>' +
+        '<button class="btn btn-ghost" data-action="cargar-acta">' + icon('upload', 16) + 'Cargar acta llenada</button></div>' +
       '<div class="section-title">Cronograma</div>' +
       filterPills(S.filtInsp, [
         { v: 'todos', l: 'Todas', c: counts.todos }, { v: 'pendientes', l: 'Pendientes', c: counts.pendientes }, { v: 'realizadas', l: 'Realizadas', c: counts.realizadas }
       ], 'data-finsp') +
       (insp.length ? '<div class="list">' + insp.map(inspRow).join('') + '</div>'
         : emptyState('insp', 'Sin autoinspecciones', all.length ? 'Ninguna coincide con el filtro.' : 'Programá tu primera autoinspección.',
-          all.length ? '' : '<button class="btn btn-primary" data-action="programar-insp">' + icon('plus', 16) + 'Programar</button>'));
+          all.length ? '' : '<button class="btn btn-primary" data-action="programar-insp">' + icon('plus', 16) + 'Programar</button>' +
+            '<button class="btn btn-ghost" data-action="cron-insp">' + icon('upload', 16) + 'Importar cronograma</button>'));
   }
 
   function inspRow(i) {
@@ -483,17 +572,42 @@
     });
   }
 
+  /* ----- Sub-programa `autoinspecciones/`: sale el formato, vuelve el acta llenada -----
+     El sub-programa no ve esta base de datos; el archivo es todo el puente. */
+  function formatoActaDescarga() {
+    var dg = store.dg();
+    UI.download('formato-acta-' + (dg.ruc || dg.init || 'drogueria') + '.json', D.formatoActa(dg, null));
+    UI.note('Formato descargado — abrilo en el sub-programa');
+  }
+
+  function cargarActaLlenada() {
+    UI.pickJSON(function (data) {
+      var pack;
+      try { pack = D.leerActa(data); } catch (err) { UI.note(err.message || 'Archivo inválido'); return; }
+      var dg = store.dg();
+      var otra = pack.drogueria.id && pack.drogueria.id !== dg.id;
+      var previa = pack.acta.numActa
+        ? store.byDg('actas').filter(function (x) { return x.numActa === pack.acta.numActa; })[0] : null;
+      var h = D.hallazgos(pack.acta);
+      UI.confirm({
+        title: previa ? 'Reemplazar acta N.° ' + pack.acta.numActa : 'Cargar acta llenada',
+        message: (otra ? 'Ojo: el archivo se llenó para «' + (pack.drogueria.nombre || '—') + '» y lo vas a cargar en «' + dg.nombre + '». ' : '') +
+          h.evaluados + ' de ' + h.total + ' ítems evaluados, ' + h.abiertos + ' hallazgo(s) abierto(s). ' +
+          (previa ? 'Ya hay un acta con ese número: se reemplaza por la del archivo.' : 'Se agrega a ' + dg.nombre + '.'),
+        okLabel: previa ? 'Reemplazar' : 'Cargar', danger: otra || !!previa
+      }).then(function (ok) {
+        if (!ok) return;
+        var obj = Object.assign({}, previa || {}, pack.acta, { id: previa ? previa.id : pack.acta.id, e: dg.id });
+        store.save('actas', obj).then(function () { UI.note('Acta cargada'); });
+      });
+    });
+  }
+
   /* ----- Editor de acta oficial de inspección al almacén (REGISTRO_004) ----- */
   function actaForm(existing) {
     var dg = store.dg();
     var isNew = !existing;
-    var a = existing || {
-      id: D.nextId(), e: dg.id, numActa: '', fecha: D.isoHoy(), auditor: dg.dt || '',
-      almacen: dg.nombre || '', ruc: dg.ruc || '', rdAutorizacion: '', planos: '',
-      clientesProveedores: '', productos: '', poeVerificados: '', resultadosPrevios: '',
-      area: 'Almacén general', checklist: D.checklistOficial(), respuestas: {},
-      observAdicionales: '', conclusiones: '', medidas: '', completada: false, paso: 0
-    };
+    var a = existing || D.actaNueva(dg);
     a.checklist = a.checklist || D.checklistOficial();
     a.respuestas = a.respuestas || {};
     if (typeof a.paso !== 'number') a.paso = 0;
@@ -508,18 +622,7 @@
       return store.save('actas', a);
     }
 
-    function computeHallazgos() {
-      var noKeys = Object.keys(a.respuestas).filter(function (k) { return a.respuestas[k].v === 'no'; });
-      function sevOf(key) {
-        var parts = key.split('::'), sec = a.checklist.filter(function (s) { return s.seccion === parts[0]; })[0];
-        var it = sec && sec.items[+parts[1]]; return it ? it.severidad : '';
-      }
-      a.hallCritico = noKeys.filter(function (k) { return sevOf(k) === 'critico'; }).length;
-      a.hallMayor = noKeys.filter(function (k) { return sevOf(k) === 'mayor'; }).length;
-      a.hallMenor = noKeys.filter(function (k) { return sevOf(k) === 'menor'; }).length;
-      a.hall = a.hallCritico + a.hallMayor;
-      a.completada = totalDone() >= total && total > 0;
-    }
+    function computeHallazgos() { D.aplicarHallazgos(a); }
 
     /* ---- barra de progreso general (secciones completas / total) ---- */
     function wizardProgressHtml() {
@@ -570,14 +673,7 @@
       var d = secDoneCount(sec);
       return '<div class="section-step-head"><div class="section-step-title">' + esc(sec.seccion) + '</div>' +
         '<span class="section-step-count">' + d + ' / ' + sec.items.length + '</span></div>' +
-        sec.items.map(function (it, idx) {
-          var key = sec.seccion + '::' + idx; var cur = (a.respuestas[key] || {}).v; var obs = (a.respuestas[key] || {}).obs || '';
-          var sevBadge = it.severidad ? '<span class="chk-sev ' + it.severidad + '">' + esc(D.SEV_LABEL[it.severidad] || it.severidad) + '</span>' : '';
-          return '<div class="chk-item"><div class="chk-text">' + (it.ref ? '<b>' + esc(it.ref) + ')</b> ' : '') + esc(it.texto) + sevBadge + '</div>' +
-            '<div class="chk-row"><div class="chk-opts" data-key="' + esc(key) + '">' +
-            ['si', 'no'].map(function (v) { return '<button type="button" class="chk-opt ' + (cur === v ? 'sel ' + v : '') + '" data-v="' + v + '">' + (v === 'si' ? 'Sí' : 'No') + '</button>'; }).join('') +
-            '</div>' + (cur === 'no' ? '<input class="inp chk-obs" data-obskey="' + esc(key) + '" placeholder="Observación…" aria-label="Observación del ítem" value="' + esc(obs) + '">' : '') + '</div></div>';
-        }).join('');
+        actas.itemsHtml(sec, a.respuestas);
     }
 
     /* ---- paso final: resumen ---- */
@@ -769,6 +865,14 @@
   var RENDERERS = { dashboard: vDashboard, documentos: vDocumentos, capacitaciones: vCapacitaciones, autoinspecciones: vAutoinspecciones };
   function render(view) { return (RENDERERS[view] || vDashboard)(); }
 
+  /* Formatos propios de la droguería: viven en la droguería, así que guardarlos
+     es guardar la droguería. Mismo panel desde Capacitaciones y Autoinspecciones. */
+  function formatosPanel(modulo) {
+    global.BPAPLUS.formatos.manage(store.dg(), modulo, function (dgNext) {
+      return store.save('droguerias', dgNext);
+    });
+  }
+
   function bind(container) {
     container.addEventListener('click', function (e) {
       var t = e.target;
@@ -780,6 +884,13 @@
         if (a === 'nueva-cap') return capForm(null);
         if (a === 'programar-insp') return inspForm(null);
         if (a === 'nueva-acta') return actaForm(null);
+        if (a === 'cron-cap') return store.importCronograma('capacitaciones');
+        if (a === 'cron-insp') return store.importCronograma('inspecciones');
+        if (a === 'fmt-cap') return formatosPanel('capacitaciones');
+        if (a === 'fmt-insp') return formatosPanel('inspecciones');
+        if (a === 'abrir-subprog') return global.open('autoinspecciones/index.html', '_blank');
+        if (a === 'formato-acta') return formatoActaDescarga();
+        if (a === 'cargar-acta') return cargarActaLlenada();
         if (a === 'export') return store.exportData();
         return;
       }
@@ -808,7 +919,8 @@
   global.BPAPLUS = global.BPAPLUS || {};
   global.BPAPLUS.views = {
     setStore: function (s) { store = s; }, render: render, bind: bind,
-    open: { docForm: docForm, capForm: capForm, inspForm: inspForm, actaForm: actaForm, dgSwitcher: dgSwitcher, dgForm: dgForm, criteriosForm: criteriosForm },
+    open: { docForm: docForm, capForm: capForm, inspForm: inspForm, actaForm: actaForm, dgSwitcher: dgSwitcher, dgForm: dgForm, criteriosForm: criteriosForm,
+      formatoActa: formatoActaDescarga, cargarActa: cargarActaLlenada },
     panels: { docPanel: docPanel, capPanel: capPanel, inspPanel: inspPanel }
   };
 })(window);

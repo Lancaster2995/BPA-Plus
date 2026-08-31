@@ -69,11 +69,85 @@ iniciada**: eso exige las credenciales de Firebase del usuario.
 
 ---
 
+## Backend (2026-08-30) — `functions/`
+
+Hasta acá la app no tenía servidor propio. Ahora tiene **uno solo**, y existe por una sola
+razón: la clave de la API de Anthropic no puede vivir en el navegador. Todo lo demás
+—Firestore, Storage, Drive, escaneo de documentos, reconocimiento on-device— sigue siendo
+cliente puro.
+
+[functions/index.js](functions/index.js) expone una única Cloud Function *callable*,
+`generarEvaluacion`: recibe tema, área y (opcional) el texto del material, y devuelve 5
+preguntas de alternativa múltiple. Se eligió *callable* y no `onRequest` porque trae gratis
+la verificación del token de Firebase Auth y el CORS.
+
+Tres cosas que no conviene aflojar:
+
+- **La clave va en Secret Manager**, nunca en el repo ni en `config.js`:
+  `firebase functions:secrets:set ANTHROPIC_API_KEY`.
+- **Cupo diario por usuario** (`LIMITE_DIARIO = 20`) en `uso_ia/{uid}`, escrito por el
+  Admin SDK dentro de una transacción. Las reglas de Firestore solo abren `users/{uid}`,
+  así que el cliente no puede tocar su propio contador. A ~$0.08 por evaluación, el peor
+  día posible de una sesión robada cuesta menos de dos dólares.
+- **La salida está forzada por esquema** (`strict: true` + `tool_choice`), y además se
+  valida en el servidor: si no llegan 5 preguntas con 4 opciones cada una, se rechaza en
+  vez de guardar una evaluación a medias.
+
+Modelo: `claude-opus-5` con `output_config.effort: 'low'`. La evaluación queda guardada en
+la capacitación (`cap.evaluacion`), así que solo se paga cuando se pide *Regenerar*.
+
+El harness cubre el contrato del cliente (qué se manda, qué se guarda, que la clave de
+respuestas se marque) sustituyendo `cloud.callFn`. **Lo que no cubre**: la función en sí,
+que necesita el secreto y despliegue real.
+
+## Escaneo de documentos (2026-08-30)
+
+El panel de revisión era una planilla de 8 inputs por fila dentro de un modal de 620 px —
+con 46 documentos no se leía nada. Ahora es triage: fichas por documento, las dudosas
+abiertas con el motivo escrito, las reconocidas plegadas bajo un `<details>`, y una línea
+de procedencia por ficha ("código del nombre del archivo", "sugerido por el modelo local").
+
+`analizarArchivo` sigue resolviendo con regex; donde falla entra la **Prompt API del
+navegador** (Gemini Nano) con salida por esquema. Solo si el modelo ya está descargado —
+nunca dispara la descarga. Sin Chrome compatible, todo funciona igual que antes.
+
+---
+
+## Sub-programa Autoinspecciones (2026-08-30) — `autoinspecciones/`
+
+Página aparte (`autoinspecciones/index.html` + `main.js`) para llenar el acta de
+inspección **fuera** de la app: sin cuenta, sin Firestore, sin PIN y sin IndexedDB.
+Carga `js/domain.js`, `js/ui.js`, `js/formatos.js` y `js/actas.js`, nada más.
+
+El único puente entre los dos es un archivo. `domain.formatoActa(dg, acta)` arma el
+sobre `{app, tipo, v, drogueria, acta}` — sale vacío como *formato predeterminado* de
+la droguería (con su checklist y su formato propio, si cargó uno) y vuelve con la misma
+forma, ya llenado. `domain.leerActa(obj)` lo valida al entrar: es un límite de
+confianza, así que descarta toda respuesta que no sea `si`/`no` antes de tocar nada.
+En la app: Autoinspecciones → *Sub-programa* → Abrir / Formato / Cargar acta llenada.
+
+Lo que se compartió en vez de duplicarse, porque duplicarlo rompía el puente:
+`actas.itemsHtml` (la clave `seccion::índice` se genera en un solo lugar; si no, un
+acta llenada afuera no encajaría al volver) y `domain.hallazgos` / `aplicarHallazgos`
+(el recuento vivía copiado en `views.js` y en `actas.js`).
+
+Lo que **no** hace: el sub-programa no sincroniza ni ve la base; el archivo se descarga
+y se carga a mano. El borrador a medio llenar vive en `localStorage` de ese dispositivo.
+
 ## Pendiente
 
 - **Verificación en Chrome real** del borrado y el guardado sin conexión (modo avión con
   sesión iniciada). Es lo único que cierra del todo el reporte del 04/08.
-- El proyecto lleva sin tocarse desde el 2026-08-10; es el más frío del portafolio.
+- **Formatos propios por droguería** ([js/formatos.js](js/formatos.js)): la lectura del
+  archivo en blanco está probada contra filas armadas a mano, no contra un XLSX ni un DOCX
+  real — el harness es jsdom sin red y las librerías (SheetJS, Mammoth, PDF.js) vienen de
+  CDN. Falta cargar un formato real de una droguería y ver qué tan bien salen el título,
+  los campos y las columnas. Lo que salga mal se corrige en el diálogo de configuración,
+  así que el peor caso es tipear, no romperse.
+- **Desplegar el backend**: `firebase deploy --only functions` tras cargar el secreto. Sin
+  eso, el botón *Evaluación* falla con `internal`.
+- **Verificar en Chrome real** el reconocimiento on-device (pide Chrome 138+ con el modelo
+  ya descargado) y la evaluación contra la función desplegada.
 
 ## Reglas que no conviene romper
 

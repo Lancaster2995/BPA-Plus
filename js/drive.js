@@ -161,6 +161,32 @@
     });
   }
 
+  /* Lee un formato en blanco para configurarlo: filas de tabla cuando el archivo
+     las tiene (XLSX y DOCX) y texto plano siempre. El PDF sólo da texto, así que
+     de él salen los campos pero no las columnas: se revisan a mano. */
+  function leerFormato(file) {
+    var firma = (file.type || mimeFromFile(file)) + ' ' + file.name;
+    return file.arrayBuffer().then(function (buf) {
+      if (/spreadsheetml|excel|\.xlsx$/i.test(firma)) {
+        return rowsFromXlsx(buf).then(function (rows) {
+          return { rows: rows, text: rows.map(function (r) { return (r || []).join(' '); }).join('\n') };
+        });
+      }
+      if (/wordprocessingml|\.docx$/i.test(firma)) {
+        return loadScript(MAMMOTH_SRC)
+          .then(function () { return mammoth.convertToHtml({ arrayBuffer: buf }); })
+          .then(function (r) {
+            var doc = new DOMParser().parseFromString(r.value || '', 'text/html');
+            var rows = Array.prototype.map.call(doc.querySelectorAll('tr'), function (tr) {
+              return Array.prototype.map.call(tr.cells, function (td) { return (td.textContent || '').trim(); });
+            });
+            return { rows: rows, text: (doc.body.textContent || '').trim() };
+          });
+      }
+      return textFromPdf(buf).then(function (t) { return { rows: [], text: t.replace('__BPA_FILLED__', '') }; });
+    });
+  }
+
   function mimeFromFile(file) {
     var ext = (file.name.split('.').pop() || '').toLowerCase();
     return file.type || (ext === 'pdf' ? 'application/pdf' : ext === 'docx'
@@ -193,10 +219,12 @@
     return null;
   }
 
-  function analizarFilasCronograma(rows, file) {
+  /* kindHint: qué es el cronograma cuando ni el nombre ni el contenido lo dicen.
+     Lo manda la vista desde la que se importa (Autoinspecciones → 'inspecciones'). */
+  function analizarFilasCronograma(rows, file, kindHint) {
     var allText = rows.slice(0, 20).map(function (row) { return (row || []).join(' '); }).join(' ');
     var year = +(String(file.name || '').match(/\b(20\d{2})\b/) || allText.match(/\b(20\d{2})\b/) || [])[1] || new Date().getFullYear();
-    var headers = [], months = {}, kind = /auto\s*inspe/i.test(file.name || '') ? 'inspecciones' : 'capacitaciones';
+    var headers = [], months = {}, kind = /auto\s*inspe/i.test(file.name || '') ? 'inspecciones' : (kindHint || 'capacitaciones');
     var result = { capacitaciones: [], inspecciones: [] };
     var source = { driveFileId: file.id, driveUrl: file.webViewLink || ('https://drive.google.com/file/d/' + file.id + '/view') };
 
@@ -246,9 +274,9 @@
     return result;
   }
 
-  function analizarCronograma(file) {
+  function analizarCronograma(file, kindHint) {
     if (!/spreadsheetml/.test(file.mimeType || '')) return Promise.reject(new Error('El cronograma debe ser un archivo XLSX'));
-    return binary(file).then(rowsFromXlsx).then(function (rows) { return analizarFilasCronograma(rows, file); });
+    return binary(file).then(rowsFromXlsx).then(function (rows) { return analizarFilasCronograma(rows, file, kindHint); });
   }
 
   function tipoFromName(name) {
@@ -290,6 +318,70 @@
     return base.charAt(0).toUpperCase() + base.slice(1);
   }
 
+  /* ---------------- Reconocimiento asistido por el modelo local del navegador ----------------
+     Prompt API (Gemini Nano, Chrome 138+): corre en el dispositivo, sin clave, sin
+     servidor y sin que el texto del documento salga de la máquina. Solo se usa cuando
+     el modelo ya está descargado y cuando el regex se quedó corto; si no está, el
+     reconocimiento se queda con lo que sacó el regex y nadie se entera. */
+  var AI_SCHEMA = {
+    type: 'object',
+    properties: {
+      codigo: { type: 'string' }, nombre: { type: 'string' },
+      tipo: { type: 'string', enum: ['POE', 'Formato', 'Registro', 'Instructivo', 'Manual', 'Otro'] },
+      area: { type: 'string' }, version: { type: 'integer' }
+    },
+    required: ['codigo', 'nombre', 'tipo', 'area', 'version']
+  };
+  var AI_SYSTEM = 'Sos un asistente documental de Buenas Prácticas de Almacenamiento (Perú). ' +
+    'Del texto de un documento devolvés su código (formato TIPO-AREA-NNN, ej. POE-ALM-001; ' +
+    'cadena vacía si no aparece), su título, su tipo, el área responsable y el número de versión. ' +
+    'Nunca inventes un código que no esté en el texto.';
+
+  var aiSession = null, aiQueue = Promise.resolve();
+  function aiEngine() { return global.LanguageModel || (global.ai && global.ai.languageModel) || null; }
+  function aiReady() {
+    var LM = aiEngine();
+    if (!LM || typeof LM.availability !== 'function') return Promise.resolve(null);
+    return Promise.resolve(LM.availability()).then(function (state) {
+      /* 'downloadable' se ignora a propósito: bajar el modelo son cientos de MB y eso
+         no se dispara por escanear una carpeta. */
+      if (state !== 'available') return null;
+      if (!aiSession) aiSession = LM.create({ initialPrompts: [{ role: 'system', content: AI_SYSTEM }] });
+      return aiSession;
+    }).catch(function () { return null; });
+  }
+  /* ponytail: cola serial — una sesión no acepta dos prompts a la vez, y un lote son
+     decenas de archivos. Si algún día son miles, varias sesiones en paralelo. */
+  function aiAsk(prompt) {
+    var run = aiQueue.then(function () {
+      return aiReady().then(function (session) {
+        if (!session) return null;
+        return session.prompt(prompt, { responseConstraint: AI_SCHEMA, omitResponseConstraintInput: true })
+          .then(function (out) { return JSON.parse(out); });
+      });
+    }).catch(function () { return null; });
+    aiQueue = run.catch(function () {});
+    return run;
+  }
+  function aiComplete(base, text) {
+    if (!text) return Promise.resolve(base);
+    var prompt = 'Archivo: ' + (base._fileName || '') + '\nCarpeta: ' + (base._folderName || '') +
+      '\n\n' + String(text).slice(0, 3000);
+    return aiAsk(prompt).then(function (out) {
+      if (!out) return base;
+      if (!base.codigo && out.codigo && isStandardCode(out.codigo)) { base.codigo = normalizeCode(out.codigo); base._origen = 'ia'; }
+      if (out.nombre && (!base.nombre || base._origen === 'ia')) base.nombre = String(out.nombre).slice(0, 120);
+      if (base.tipo === 'Otro' && out.tipo) {
+        base.tipo = out.tipo;
+        base.role = base.tipo === 'Formato' ? (/__BPA_FILLED__/.test(text) ? 'registro' : 'plantilla') : 'controlado';
+      }
+      if (out.area && base.area === 'Almacén') base.area = String(out.area).trim().slice(0, 60);
+      if (out.version > 0 && base.version === 1) base.version = out.version;
+      base._ia = true;
+      return base;
+    });
+  }
+
   /* Analiza un archivo de Drive y devuelve los campos sugeridos para un documento */
   function analizarArchivo(file) {
     var isDocx = /wordprocessingml/.test(file.mimeType);
@@ -299,7 +391,8 @@
     var base = {
       driveFileId: file.localFile ? undefined : file.id, driveUrl: file.localFile ? undefined : (file.webViewLink || ('https://drive.google.com/file/d/' + file.id + '/view')),
       codigo: codigo, nombre: nombreFromFile(file.name, codigo), tipo: tipoFromName(file.name),
-      version: 1, rev: '', area: 'Almacén', modifiedTime: file.modifiedTime || '', _file: file.localFile || null
+      version: 1, rev: '', area: 'Almacén', modifiedTime: file.modifiedTime || '', _file: file.localFile || null,
+      _fileName: file.name, _folderName: file.folderName || '', _origen: codigo ? 'nombre' : ''
     };
     if (!isDocx && !isXlsx && !isPdf) return Promise.resolve(base);
     var reader = binary(file).then(function (buf) {
@@ -314,7 +407,10 @@
       var verM = text.match(/(?<!de\s)(?<!de)\bRevisi[oó]n\s*N?\.?°?\s*:?\s*0*([0-9]{1,3})\b(?!\s*[./]\s*\d)/i) ||
         text.match(/(?<!de\s)(?<!de)\bVersi[oó]n\s*:?\s*0*([0-9]{1,3})\b(?!\s*[./]\s*\d)/i);
       var revDate = parseFechaTexto(revF && revF[1]) || parseFechaTexto(vig && vig[1]);
-      if (!base.codigo) { base.codigo = codigoFromName(text); if (base.codigo) base.nombre = nombreFromFile(file.name, base.codigo); }
+      if (!base.codigo) {
+        base.codigo = codigoFromName(text);
+        if (base.codigo) { base.nombre = nombreFromFile(file.name, base.codigo); base._origen = 'texto'; }
+      }
       var fileType = tipoFromName(file.name);
       base.tipo = fileType === 'Otro' ? tipoFromName(text.slice(0, 1500)) : fileType;
       base.role = base.tipo === 'Formato' ? (/__BPA_FILLED__/.test(text) ? 'registro' : 'plantilla') : 'controlado';
@@ -322,18 +418,29 @@
       if (revDate) base.rev = revDate;
       if (area) base.area = area[1].trim();
       if (verM) { var vNum = parseInt(verM[1], 10); base.version = isNaN(vNum) ? 1 : vNum; }
-      return base;
+      /* El regex resuelve la mayoría; el modelo local solo entra donde falló. */
+      if (isStandardCode(base.codigo) && base.tipo !== 'Otro') return base;
+      return aiComplete(base, text);
     }).catch(function () { return base; });
   }
 
+  /* Único punto de subida. Sin sesión, `cloud.uploadFile` lanza de forma síncrona y el
+     `.catch` de quien llama no se entera: acá se convierte siempre en un rechazo. */
+  function subirArchivo(relative, file, name) {
+    return Promise.resolve().then(function () {
+      var Cloud = global.BPAPLUS.cloud;
+      if (!Cloud) throw new Error('Iniciá sesión para subir archivos.');
+      return Cloud.uploadFile(relative, file, name);
+    });
+  }
+
   function storeFile(dgId, doc, file, role, version) {
-    var Cloud = global.BPAPLUS.cloud;
     role = role || (doc.tipo === 'Formato' ? 'plantilla' : 'controlado');
     version = +version || +doc.version || 1;
     var name = standardName(doc, file, role, version);
     var folder = role === 'registro' ? 'registros' : 'versiones';
     var relative = 'droguerias/' + dgId + '/documentos/' + doc.id + '/' + folder + '/' + Date.now() + '_' + name;
-    return Cloud.uploadFile(relative, file, name).then(function (meta) {
+    return subirArchivo(relative, file, name).then(function (meta) {
       if (role === 'registro') {
         return Object.assign({}, doc, {
           role: doc.file ? (doc.role || 'plantilla') : 'plantilla',
@@ -346,6 +453,30 @@
         history: doc.file ? (doc.history || []).concat(doc.file) : (doc.history || [])
       });
     });
+  }
+  /* Material de una capacitación (presentación, manual, lo que se usó para dictarla).
+     Misma convención de rutas privadas que los documentos. */
+  function storeMaterial(dgId, capId, file) {
+    var relative = 'droguerias/' + dgId + '/capacitaciones/' + capId + '/' + Date.now() + '_' + safePart(file.name) + '.' +
+      ((file.name.split('.').pop() || 'pdf').toLowerCase());
+    return subirArchivo(relative, file, file.name);
+  }
+  /* Texto de un archivo ya guardado en la nube. Reusa los lectores del escaneo
+     de documentos. El .pptx no tiene lector: devuelve '' y la evaluación se
+     genera solo con el tema. */
+  function textoDeArchivo(meta) {
+    if (!meta || !meta.path) return Promise.resolve('');
+    var n = (meta.name || meta.originalName || '').toLowerCase();
+    return global.BPAPLUS.cloud.fileBlob(meta.path).then(function (blob) {
+      return blob.arrayBuffer();
+    }).then(function (buf) {
+      if (/\.docx$/.test(n)) return textFromDocx(buf);
+      if (/\.pdf$/.test(n)) return textFromPdf(buf);
+      if (/\.xlsx$/.test(n)) return rowsFromXlsx(buf).then(function (rows) {
+        return rows.map(function (r) { return r.join(' | '); }).join('\n');
+      });
+      return '';
+    }).catch(function () { return ''; });
   }
   function downloadStored(meta) {
     if (!meta || !meta.path) return Promise.reject(new Error('El archivo no está disponible.'));
@@ -457,8 +588,12 @@
           };
           root.querySelector('#im_add').onclick = function () {
             var picked = Array.prototype.map.call(root.querySelectorAll('.im-chk:checked'), function (c) { return found[+c.dataset.i]; });
-            var btn = root.querySelector('#im_add'); btn.disabled = true; btn.textContent = 'Analizando ' + picked.length + '…';
-            Promise.all(picked.map(analizarArchivo)).then(function (drafts) {
+            var btn = root.querySelector('#im_add'); btn.disabled = true;
+            var hechos = 0;
+            btn.textContent = 'Analizando 0/' + picked.length + '…';
+            Promise.all(picked.map(function (f) {
+              return analizarArchivo(f).then(function (d) { btn.textContent = 'Analizando ' + (++hechos) + '/' + picked.length + '…'; return d; });
+            })).then(function (drafts) {
               m.close(); reviewPanel(drafts, onImport, existingDocs);
             });
           };
@@ -487,47 +622,117 @@
     return order.map(function (k) { return byCode[k]; });
   }
 
+  /* Por qué una ficha necesita ojo humano. Cadena vacía = lista para guardar. */
+  function revisionPendiente(d) {
+    if (!isStandardCode(d.codigo)) return 'Sin código estándar — escribilo (ej. POE-ALM-001).';
+    if (!String(d.nombre || '').trim()) return 'Sin nombre — escribilo.';
+    if (d._ia) return 'Completado por el modelo local del navegador — confirmá los datos.';
+    return '';
+  }
+  /* De dónde salió cada dato: quien revisa 46 fichas necesita saber en cuál confiar. */
+  function procedencia(d) {
+    var bits = [d._origen === 'nombre' ? 'código del nombre del archivo'
+      : d._origen === 'texto' ? 'código leído dentro del documento'
+      : d._origen === 'ia' ? 'código sugerido por el modelo local'
+      : 'sin código detectado'];
+    if (d.rev) bits.push('fecha de revisión leída');
+    if (d.version > 1) bits.push('versión ' + d.version + ' leída');
+    if (d._mergedFrom && d._mergedFrom.length > 1) bits.push('fusionado de ' + d._mergedFrom.length + ' duplicados');
+    return bits.join(' · ');
+  }
+
   function reviewPanel(drafts, onImport, existingDocs) {
     drafts = mergeBatch(drafts);
     existingDocs = existingDocs || [];
     var existingByCode = {};
     existingDocs.forEach(function (d) { var key = normCodigo(d.codigo); if (key) existingByCode[key] = d; });
 
-    function rowHtml(d, i) {
+    var TYPES = ['POE', 'Formato', 'Registro', 'Instructivo', 'Manual', 'Otro'];
+    var ROLES = [{ v: 'controlado', l: 'Documento controlado' }, { v: 'plantilla', l: 'Plantilla vacía' }, { v: 'registro', l: 'Formato llenado' }];
+
+    /* Una ficha por documento: el resumen se lee de un vistazo y los campos solo
+       se despliegan si hacen falta (<details> nativo, sin JS de acordeón). */
+    function cardHtml(d, i) {
       var codeKey = normCodigo(d.codigo), match = codeKey ? existingByCode[codeKey] : null;
-      var types = ['POE', 'Formato', 'Registro', 'Instructivo', 'Manual', 'Otro'];
-      var roles = [{ v: 'controlado', l: 'Documento controlado' }, { v: 'plantilla', l: 'Plantilla vacía' }, { v: 'registro', l: 'Formato llenado' }];
-      var tagHtml = d._mergedFrom && d._mergedFrom.length > 1
-        ? '<span class="drive-pick-folder">· fusionado de ' + d._mergedFrom.length + ' archivos duplicados</span>'
-        : match ? '<span class="drive-pick-folder">· ya existe, se actualizará</span>' : '<span class="drive-pick-folder">· nuevo</span>';
-      return '<div class="mini-row drive-row" data-i="' + i + '" data-existing="' + (match ? match.id : '') + '">' +
-        '<input class="inp rv-codigo" value="' + UI.esc(d.codigo) + '" placeholder="Código" style="max-width:120px">' +
-        '<input class="inp rv-nombre" value="' + UI.esc(d.nombre) + '" placeholder="Nombre">' +
-        '<select class="inp rv-tipo" style="max-width:125px">' + types.map(function (type) { return '<option' + (type === d.tipo ? ' selected' : '') + '>' + type + '</option>'; }).join('') + '</select>' +
-        '<select class="inp rv-role" style="max-width:165px">' + roles.map(function (role) { return '<option value="' + role.v + '"' + (role.v === (d.role || (d.tipo === 'Formato' ? 'plantilla' : 'controlado')) ? ' selected' : '') + '>' + role.l + '</option>'; }).join('') + '</select>' +
-        '<input class="inp rv-area" value="' + UI.esc(d.area || 'Almacén') + '" placeholder="Área" style="max-width:130px">' +
-        '<input class="inp rv-version mono" value="' + UI.esc(d.version) + '" placeholder="v" style="max-width:52px">' +
-        '<input class="inp rv-rev" type="date" value="' + UI.esc(d.rev) + '" style="max-width:150px">' +
-        '<button class="icon-btn del" type="button" data-rm aria-label="Quitar">' + UI.icon('x', 16) + '</button>' + tagHtml + '</div>';
+      var aviso = revisionPendiente(d);
+      var estado = aviso ? 'revisar' : match ? 'actualiza' : 'nuevo';
+      var etiqueta = aviso ? 'Revisar' : match ? 'Actualiza el existente' : 'Nuevo';
+      var role = d.role || (d.tipo === 'Formato' ? 'plantilla' : 'controlado');
+      return '<details class="rv-card ' + estado + '"' + (aviso ? ' open' : '') +
+          ' data-i="' + i + '" data-existing="' + (match ? match.id : '') + '">' +
+        '<summary class="rv-sum">' +
+          '<span class="rv-dot ' + estado + '"></span>' +
+          '<span class="rv-sum-txt">' +
+            '<span class="rv-sum-top"><b class="mono">' + UI.esc(d.codigo || 'sin código') + '</b>' +
+              '<span class="rv-sum-name">' + UI.esc(d.nombre || d._fileName || '') + '</span></span>' +
+            '<small class="rv-sum-meta">' + UI.esc(d.tipo + ' · ' + (d.area || 'Almacén') + ' · v' + d.version) +
+              (d._folderName ? UI.esc(' · ' + d._folderName) : '') + '</small>' +
+          '</span>' +
+          '<span class="rv-badge ' + estado + '">' + etiqueta + '</span>' +
+          '<span class="rv-chev">' + UI.icon('chevron', 15) + '</span>' +
+        '</summary>' +
+        '<div class="rv-fields">' +
+          (aviso ? '<div class="rv-aviso">' + UI.esc(aviso) + '</div>' : '') +
+          '<div class="rv-origen">' + UI.esc(d._fileName || '') + ' — ' + UI.esc(procedencia(d)) + '</div>' +
+          '<div class="grid-2">' +
+            '<div class="field"><label>Código</label><input class="inp mono rv-codigo" value="' + UI.esc(d.codigo) + '" placeholder="POE-ALM-001"></div>' +
+            '<div class="field"><label>Tipo</label><select class="inp rv-tipo">' +
+              TYPES.map(function (t) { return '<option' + (t === d.tipo ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select></div>' +
+          '</div>' +
+          '<div class="field"><label>Nombre</label><input class="inp rv-nombre" value="' + UI.esc(d.nombre) + '" placeholder="Nombre del documento"></div>' +
+          '<div class="grid-2">' +
+            '<div class="field"><label>Uso del archivo</label><select class="inp rv-role">' +
+              ROLES.map(function (r) { return '<option value="' + r.v + '"' + (r.v === role ? ' selected' : '') + '>' + r.l + '</option>'; }).join('') + '</select></div>' +
+            '<div class="field"><label>Área</label><input class="inp rv-area" value="' + UI.esc(d.area || 'Almacén') + '" placeholder="Área"></div>' +
+          '</div>' +
+          '<div class="grid-2">' +
+            '<div class="field"><label>Versión</label><input class="inp mono rv-version" type="number" min="1" value="' + UI.esc(d.version) + '"></div>' +
+            '<div class="field"><label>Fecha de revisión</label><input class="inp rv-rev" type="date" value="' + UI.esc(d.rev) + '"></div>' +
+          '</div>' +
+          '<button class="link-btn rv-rm" type="button" data-rm>' + UI.icon('trash', 14) + ' Quitar del lote</button>' +
+        '</div>' +
+      '</details>';
     }
+
+    var pendientes = [], listos = [];
+    drafts.forEach(function (d, i) { (revisionPendiente(d) ? pendientes : listos).push(cardHtml(d, i)); });
+
     var m = UI.dialog({
-      title: 'Revisar antes de guardar (' + drafts.length + ')', wide: true,
-      body: '<p class="dialog-note">Se completó lo que se pudo leer. Revisá antes de guardar: los archivos de Drive conservan su enlace y los locales solo se catalogan. Los códigos duplicados se fusionaron.</p>' +
-        '<div id="rv_list">' + drafts.map(rowHtml).join('') + '</div>',
-      footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="rv_save">Guardar en Documentos</button>',
+      title: 'Revisar ' + drafts.length + ' documento(s)', wide: true,
+      body:
+        '<div class="rv-resumen">' +
+          '<span class="rv-resumen-n">' + listos.length + '</span> listos para guardar' +
+          (pendientes.length ? ' · <span class="rv-resumen-n warn">' + pendientes.length + '</span> necesitan un dato' : '') +
+        '</div>' +
+        '<p class="dialog-note">Los archivos de Drive conservan su enlace y los locales solo se catalogan. Los códigos duplicados ya se fusionaron.</p>' +
+        (pendientes.length
+          ? '<div class="section-title">Necesitan tu revisión <span class="section-count">' + pendientes.length + '</span></div>' +
+            '<div class="rv-list">' + pendientes.join('') + '</div>'
+          : '') +
+        (listos.length
+          ? '<details class="rv-group"' + (pendientes.length ? '' : ' open') + '>' +
+              '<summary class="rv-group-sum">Listos para guardar <span class="section-count">' + listos.length + '</span> — abrir solo si querés corregir algo</summary>' +
+              '<div class="rv-list">' + listos.join('') + '</div>' +
+            '</details>'
+          : ''),
+      footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="rv_save">Guardar ' + drafts.length + ' en Documentos</button>',
       onMount: function (root) {
-        root.querySelector('#rv_list').addEventListener('click', function (e) {
-          var b = e.target.closest('[data-rm]'); if (b) b.closest('.drive-row').remove();
+        var save = root.querySelector('#rv_save');
+        function recount() {
+          var n = root.querySelectorAll('.rv-card').length;
+          save.disabled = !n; save.textContent = 'Guardar ' + n + ' en Documentos';
+        }
+        root.querySelector('.dialog-body').addEventListener('click', function (e) {
+          var b = e.target.closest('[data-rm]');
+          if (b) { e.preventDefault(); b.closest('.rv-card').remove(); recount(); }
         });
-        root.querySelector('#rv_save').onclick = function () {
-          var rows = root.querySelectorAll('.drive-row');
+        save.onclick = function () {
           var invalid = null;
-          var results = Array.prototype.map.call(rows, function (r) {
-            var i = +r.dataset.i, d = drafts[i];
-            var vRaw = r.querySelector('.rv-version').value.trim();
-            var vNum = parseInt(vRaw, 10);
+          var results = Array.prototype.map.call(root.querySelectorAll('.rv-card'), function (r) {
+            var d = drafts[+r.dataset.i];
+            var vNum = parseInt(r.querySelector('.rv-version').value.trim(), 10);
             var code = normalizeCode(r.querySelector('.rv-codigo').value);
-            if (!isStandardCode(code)) { invalid = invalid || r.querySelector('.rv-codigo'); return null; }
+            if (!isStandardCode(code)) { invalid = invalid || r; return null; }
             return Object.assign({}, d, {
               codigo: code,
               nombre: r.querySelector('.rv-nombre').value.trim() || d.nombre,
@@ -539,7 +744,14 @@
               existingId: r.dataset.existing || null
             });
           });
-          if (invalid) { invalid.focus(); UI.note('Corrige los códigos: usa por ejemplo POE-ALM-001 o FOR-ALM-011.'); return; }
+          if (invalid) {
+            var group = invalid.closest('.rv-group'); if (group) group.open = true;
+            invalid.open = true;
+            if (invalid.scrollIntoView) invalid.scrollIntoView({ block: 'center' });
+            invalid.querySelector('.rv-codigo').focus();
+            UI.note('Corrige el código: usa por ejemplo POE-ALM-001 o FOR-ALM-011.');
+            return;
+          }
           m.close();
           if (onImport) onImport(results.filter(Boolean));
         };
@@ -548,10 +760,14 @@
   }
 
   /* ------------------------------ Importar cronograma ------------------------------ */
-  function cronogramaPanel(onImport, existingCaps, existingInspecciones) {
+  function cronogramaPanel(onImport, existingCaps, existingInspecciones, kindHint) {
+      var esInsp = kindHint === 'inspecciones';
       var m = UI.dialog({
-        title: 'Importar cronograma Excel', wide: true,
+        title: esInsp ? 'Importar cronograma de autoinspecciones' : 'Importar cronograma Excel', wide: true,
         body:
+          '<p class="dialog-note">' + (esInsp
+            ? 'Se leen las áreas y sus fechas programadas. Si la hoja mezcla capacitaciones y autoinspecciones, se importan ambas.'
+            : 'Se leen temas, áreas y fechas. Si la hoja mezcla capacitaciones y autoinspecciones, se importan ambas.') + '</p>' +
           '<div class="field"><label>Archivo XLSX del dispositivo</label><input class="inp" id="cr_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div>' +
           '<div class="section-title">O seleccionar desde Google Drive</div>' +
           '<div class="field"><label>Archivo XLSX (URL, ID o nombre)</label><input class="inp" id="cr_q" value="CRONOGRAMA" placeholder="REGISTRO 005 CRONOGRAMA..."></div>' +
@@ -570,7 +786,7 @@
               button.onclick = function () {
                 var file = files[+button.dataset.crPick];
                 box.innerHTML = '<div class="row-empty">Analizando ' + UI.esc(file.name) + '…</div>';
-                analizarCronograma(file).then(function (drafts) {
+                analizarCronograma(file, kindHint).then(function (drafts) {
                   m.close(); reviewCronograma(drafts, onImport, existingCaps, existingInspecciones);
                 }).catch(function (error) { box.innerHTML = '<div class="row-empty">Error: ' + UI.esc(error.message || error) + '</div>'; });
               };
@@ -580,7 +796,7 @@
             var file = localFiles(event.target.files)[0], box = root.querySelector('#cr_results');
             if (!file) { box.innerHTML = '<div class="row-empty">Seleccioná un archivo XLSX.</div>'; return; }
             box.innerHTML = '<div class="row-empty">Analizando ' + UI.esc(file.name) + '…</div>';
-            analizarCronograma(file).then(function (drafts) {
+            analizarCronograma(file, kindHint).then(function (drafts) {
               m.close(); reviewCronograma(drafts, onImport, existingCaps, existingInspecciones);
             }).catch(function (error) { box.innerHTML = '<div class="row-empty">Error: ' + UI.esc(error.message || error) + '</div>'; });
           };
@@ -693,11 +909,11 @@
   global.BPAPLUS = global.BPAPLUS || {};
   global.BPAPLUS.drive = {
     isConnected: isConnected, getClientId: getClientId, setClientId: setClientId,
-    connectPanel: connectPanel, importPanel: importPanel, cronogramaPanel: cronogramaPanel,
+    connectPanel: connectPanel, importPanel: importPanel, reviewPanel: reviewPanel, cronogramaPanel: cronogramaPanel,
     analizarCronograma: analizarCronograma, analizarFilasCronograma: analizarFilasCronograma, analizarArchivo: analizarArchivo,
     codigoFromName: codigoFromName, normalizeCode: normalizeCode, isStandardCode: isStandardCode,
-    standardName: standardName, tipoFromName: tipoFromName, localFiles: localFiles,
-    storeFile: storeFile, downloadStored: downloadStored, filePanel: filePanel,
+    standardName: standardName, tipoFromName: tipoFromName, localFiles: localFiles, leerFormato: leerFormato,
+    storeFile: storeFile, storeMaterial: storeMaterial, textoDeArchivo: textoDeArchivo, downloadStored: downloadStored, filePanel: filePanel,
     linkPanel: linkPanel, extractIdFromUrl: extractIdFromUrl
   };
 })(window);

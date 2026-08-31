@@ -345,6 +345,10 @@ a { color: inherit; }
 .progress-track { height: 7px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
 .progress-fill { height: 100%; border-radius: 999px; background: var(--beacon); transition: width .4s ease; }
 
+/* Sub-programa Autoinspecciones */
+.subprog { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+.subprog-txt { flex: 1; min-width: 220px; font-size: 12.5px; color: var(--ink-2); line-height: 1.5; }
+
 /* ------------------------------ Estados vacíos ------------------------------ */
 .empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 60px 20px; color: var(--ink-3); }
 .es-ico { color: var(--border-strong); margin-bottom: 6px; }
@@ -541,6 +545,41 @@ textarea.inp { min-height: 88px; resize: vertical; }
 .drive-pick-folder { color: var(--ink-3); font-weight: 400; }
 .drive-pick-date { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
 .drive-row { align-items: center; flex-wrap: wrap; }
+
+/* Revisión del escaneo: una ficha por documento, plegada salvo que necesite algo */
+.rv-resumen { font-size: 13.5px; color: var(--ink-2); margin-bottom: 10px; }
+.rv-resumen-n { font-family: var(--font-display); font-size: 19px; font-weight: 700; color: var(--ink); }
+.rv-resumen-n.warn { color: var(--warn-ink); }
+.rv-list { display: flex; flex-direction: column; gap: 7px; }
+.rv-card { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
+.rv-card.revisar { border-color: var(--warn); background: var(--warn-soft); }
+.rv-sum { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; list-style: none; }
+.rv-sum::-webkit-details-marker { display: none; }
+.rv-sum:hover { background: var(--surface-2); }
+.rv-card.revisar .rv-sum:hover { background: transparent; }
+.rv-dot { width: 7px; height: 7px; border-radius: 2px; transform: rotate(45deg); flex: none; background: var(--ok); }
+.rv-dot.revisar { background: var(--warn); } .rv-dot.actualiza { background: var(--navy-2); }
+.rv-sum-txt { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.rv-sum-top { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.rv-sum-top b { font-size: 11.5px; color: var(--ink-3); flex: none; }
+.rv-sum-name { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-sum-meta { font-size: 11.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-badge { flex: none; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink-3); }
+.rv-badge.nuevo { background: var(--ok-soft); color: var(--ok); }
+.rv-badge.actualiza { background: var(--surface-2); color: var(--navy-2); }
+.rv-badge.revisar { background: var(--warn); color: #fff; }
+.rv-chev { flex: none; color: var(--ink-3); display: flex; transition: transform .18s; }
+.rv-card[open] .rv-chev { transform: rotate(180deg); }
+.rv-fields { padding: 4px 12px 12px; border-top: 1px solid var(--border); background: var(--surface); }
+.rv-aviso { margin: 12px 0 10px; font-size: 12.5px; font-weight: 600; color: var(--warn-ink); }
+.rv-origen { margin: 12px 0 12px; font-size: 11.5px; color: var(--ink-3); }
+.rv-rm { color: var(--bad); }
+.rv-group { margin-top: 14px; border: 1px solid var(--border); border-radius: 10px; }
+.rv-group-sum { cursor: pointer; list-style: none; padding: 11px 13px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.rv-group-sum::-webkit-details-marker { display: none; }
+.rv-group[open] .rv-group-sum { border-bottom: 1px solid var(--border); }
+.rv-group > .rv-list { padding: 10px; }
+:root.dark .rv-badge.revisar { color: var(--navy); }
 .file-list { display: grid; gap: 7px; }
 .file-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); text-align: left; color: var(--ink); }
 .file-item:hover { background: var(--surface-2); }
@@ -608,5 +647,22 @@ textarea.inp { min-height: 88px; resize: vertical; }
   .acta td.no-conforme { color: #a3221c; font-weight: 700; }
   .acta-firmas { display: flex; gap: 60px; margin-top: 60px; }
   .firma-line { flex: 1; border-top: 1px solid #333; padding-top: 6px; font-size: 11.5px; text-align: center; }
+  /* Hoja de evaluación: se reparte en blanco, sin la clave de respuestas. */
+  .eval-head td { border: none; padding: 3px 0; font-size: 12px; }
+  .eval-head td:nth-child(2), .eval-head td:nth-child(4) { border-bottom: 1px solid #999; width: 32%; }
+  .eval-q { margin: 0 0 14px; break-inside: avoid; }
+  .eval-enun { font-size: 12.5px; font-weight: 700; margin-bottom: 5px; }
+  .eval-op { font-size: 12px; margin: 3px 0 3px 14px; }
+  .eval-box { display: inline-block; width: 11px; height: 11px; border: 1px solid #555; margin-right: 7px; vertical-align: -1px; }
   @page { margin: 14mm; }
 }
+
+/* Evaluación en pantalla (la clave sí se ve acá) */
+.ev-item { border: 1px solid var(--border); border-radius: 10px; padding: 12px 13px; margin-bottom: 10px; background: var(--surface); }
+.ev-q { font-size: 13.5px; font-weight: 600; margin-bottom: 9px; }
+.ev-ops { display: grid; gap: 5px; }
+.ev-op { display: flex; gap: 9px; font-size: 12.5px; color: var(--ink-2); padding: 5px 8px; border-radius: 7px; }
+.ev-op span { font-family: var(--font-mono); font-weight: 600; color: var(--ink-3); flex: none; }
+.ev-op.ok { background: var(--ok-soft); color: var(--ok); font-weight: 600; }
+.ev-op.ok span { color: var(--ok); }
+.ev-just { margin-top: 9px; font-size: 11.5px; color: var(--ink-3); border-top: 1px solid var(--border); padding-top: 8px; }

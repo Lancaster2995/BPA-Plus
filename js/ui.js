@@ -194,8 +194,35 @@
   });
 
   global.BPAPLUS = global.BPAPLUS || {};
+  /* ------------------------------ Descarga de un JSON ------------------------------ */
+  function download(nombre, obj) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' }));
+    a.download = nombre;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  /* Lee un .json elegido por el usuario. `onOk` recibe el objeto ya parseado. */
+  function pickJSON(onOk, onErr) {
+    var inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'application/json,.json';
+    inp.onchange = function () {
+      var f = inp.files[0]; if (!f) return;
+      var rd = new FileReader();
+      rd.onload = function () {
+        var data; try { data = JSON.parse(rd.result); } catch (e) { return (onErr || note)('El archivo no es un JSON válido.'); }
+        onOk(data, f);
+      };
+      rd.onerror = function () { (onErr || note)('No se pudo leer el archivo.'); };
+      rd.readAsText(f);
+    };
+    inp.click();
+  }
+
   global.BPAPLUS.ui = {
     icon: icon, esc: esc, tag: tag, haptic: haptic,
-    note: note, dialog: dialog, panel: panel, actionsheet: actionsheet, confirm: confirm
+    note: note, dialog: dialog, panel: panel, actionsheet: actionsheet, confirm: confirm,
+    download: download, pickJSON: pickJSON
   };
 })(window);

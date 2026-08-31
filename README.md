@@ -24,6 +24,23 @@ la app sigue funcionando sin conexión después del primer acceso.
   menor / informativo) tal como en el formato original, respuesta Sí/No
   con observación, y acta imprimible o exportable a PDF desde el diálogo
   de impresión del navegador.
+- **Sub-programa Autoinspecciones** (`autoinspecciones/`) — una página aparte,
+  sin cuenta, sin nube y sin PIN, para llenar el acta donde la app completa no
+  entra (una tablet prestada, el almacén del cliente, alguien que no es vos).
+  Desde Autoinspecciones → *Sub-programa* se descarga el **formato** de la
+  droguería (sus datos, su checklist y su formato propio si cargó uno); el
+  sub-programa lo abre, lo deja llenar y devuelve **el mismo formato ya
+  llenado**, que se carga de vuelta con "Cargar acta llenada" y aparece como
+  un acta más de esa droguería. El archivo es el único puente: el sub-programa
+  no ve la base de datos.
+- **Formatos propios por droguería** — cargá el formato de asistencia (o el
+  de autoinspección) en blanco que ya usa la droguería, en Excel, Word o PDF.
+  BPA-Plus lee su título, sus campos de encabezado y las columnas de su tabla,
+  te deja elegir qué dato de la app llena cada uno, y desde entonces las actas
+  se imprimen **con ese formato ya llenado** en vez del genérico. La
+  configuración queda guardada en la droguería, así que viaja con ella. Se
+  administra desde el botón "Formato propio" de Capacitaciones y de
+  Autoinspecciones.
 - **Varias droguerías** — cambiá entre ellas desde la barra lateral; cada
   una tiene sus propios documentos, capacitaciones e inspecciones.
 - **Buscador de comandos** — `Ctrl K` (o `⌘K`) para saltar a cualquier
@@ -157,6 +174,7 @@ BPA-Plus/
 ├─ manifest.json          Manifiesto PWA
 ├─ sw.js                  Service worker (cache-first, offline)
 ├─ icons/                 Iconos de la app
+├─ autoinspecciones/       Sub-programa independiente para llenar el acta fuera de la app
 └─ js/
    ├─ domain.js           Lógica de negocio pura (estados, fechas, clasificación, puntaje)
    ├─ config.js           Configuración pública del proyecto Firebase
@@ -164,6 +182,7 @@ BPA-Plus/
    ├─ auth.js             Pantalla de cuenta y recuperación de contraseña
    ├─ db.js               Datos, migración local y exportar/importar
    ├─ ui.js                Componentes (notas, diálogos, panel, hoja de acciones, buscador)
+   ├─ formatos.js         Formatos propios de cada droguería (lectura, configuración, llenado)
    ├─ actas.js             Generación de actas imprimibles
    ├─ views.js             Vistas y formularios
    └─ app.js               Estado, enrutado, chrome, arranque

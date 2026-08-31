@@ -4,7 +4,8 @@
 
   var VERSION = '10.12.0';
   var config = global.BPAPLUS_CONFIG && global.BPAPLUS_CONFIG.firebase;
-  var api, auth, db, storage, uid = '', loading;
+  var api, auth, db, storage, funcs, uid = '', loading;
+  var REGION = 'us-central1';
 
   function init() {
     if (loading) return loading;
@@ -13,18 +14,20 @@
       import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-app.js'),
       import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-auth.js'),
       import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-firestore.js'),
-      import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-storage.js')
+      import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-storage.js'),
+      import('https://www.gstatic.com/firebasejs/' + VERSION + '/firebase-functions.js')
     ]).then(function (mods) {
-      var appMod = mods[0], authMod = mods[1], fireMod = mods[2], storageMod = mods[3];
+      var appMod = mods[0], authMod = mods[1], fireMod = mods[2], storageMod = mods[3], fnMod = mods[4];
       var app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(config);
       auth = authMod.getAuth(app);
       storage = storageMod.getStorage(app);
+      funcs = fnMod.getFunctions(app, REGION);
       try {
         db = fireMod.initializeFirestore(app, {
           localCache: fireMod.persistentLocalCache({ tabManager: fireMod.persistentMultipleTabManager() })
         });
       } catch (e) { db = fireMod.getFirestore(app); }
-      api = Object.assign({}, authMod, fireMod, storageMod);
+      api = Object.assign({}, authMod, fireMod, storageMod, fnMod);
       return true;
     });
     return loading;
@@ -92,6 +95,15 @@
   }
   function fileBlob(path) { needUser(); return api.getBlob(api.ref(storage, path)); }
 
+  /* Llama a una Cloud Function. El token de sesión viaja solo — por eso la
+     clave de la API de Anthropic puede quedarse del lado del servidor. */
+  function callFn(name, data) {
+    return init().then(function () {
+      needUser();
+      return api.httpsCallable(funcs, name)(data || {});
+    }).then(function (r) { return r.data; });
+  }
+
   global.BPAPLUS = global.BPAPLUS || {};
   global.BPAPLUS.cloud = {
     init: init,
@@ -99,6 +111,6 @@
     getAuth: function () { return auth; },
     api: function () { return api; },
     all: all, put: put, putMany: putMany, del: del, clear: clear,
-    uploadFile: uploadFile, fileBlob: fileBlob
+    uploadFile: uploadFile, fileBlob: fileBlob, callFn: callFn
   };
 })(window);

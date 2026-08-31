@@ -6,7 +6,7 @@ service firebase.storage {
       allow create, update: if request.auth != null
         && request.auth.uid == userId
         && request.resource.size < 25 * 1024 * 1024
-        && request.resource.contentType.matches('application/(pdf|vnd.openxmlformats-officedocument\\.(wordprocessingml\\.document|spreadsheetml\\.sheet))');
+        && request.resource.contentType.matches('application/(pdf|vnd.openxmlformats-officedocument\\.(wordprocessingml\\.document|spreadsheetml\\.sheet|presentationml\\.presentation))');
     }
   }
 }
