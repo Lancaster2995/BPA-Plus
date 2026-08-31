@@ -22,6 +22,12 @@ Una sola corrida: arranque, PIN, las cuatro vistas, CRUD de droguería, comporta
 los diálogos, cronograma XLSX con meses fusionados y dedupe, y separación
 plantilla/registro en la biblioteca. Sin frameworks; termina en `OK: …` o revienta.
 
+**Si falla una vez, es un fallo de verdad.** El harness espera con `sleep` fijos, y el del
+panel de evaluación (250 ms) perdía la carrera con la máquina cargada: fallaba 6 de 6 y
+pasaba con 3000 ms. El 31/08 ese punto pasó a `hasta(cond)`, que espera a que la condición
+se cumpla en vez de adivinar cuánto tarda. Los otros 30 `sleep` siguen ahí: si alguno
+empieza a fallar de a ratos, es el mismo problema y se arregla igual.
+
 Lo que el harness **no** puede ver: es jsdom con `fake-indexeddb`, así que no hay Firestore
 ni red. Todo lo que dependa de la nube se prueba sustituyendo `BPAPLUS.cloud`, o se
 comprueba leyendo el fuente (hay una aserción así, y dice por qué).
@@ -172,6 +178,9 @@ Lo que **no** hace: el sub-programa no sincroniza ni ve la base; el archivo se d
 y se carga a mano. El borrador a medio llenar vive en `localStorage` de ese dispositivo.
 
 ## Pendiente
+
+Lo que queda está encargado en **[ENCARGO-CODEX-1.md](ENCARGO-CODEX-1.md)**, con criterios
+de aceptación sobre valores reales. Lo de abajo es el resumen.
 
 - **Verificación en Chrome real** del borrado y el guardado sin conexión (modo avión con
   sesión iniciada). Es lo único que cierra del todo el reporte del 04/08.

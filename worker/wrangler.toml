@@ -2,9 +2,17 @@ name = "bpa-plus"
 main = "index.js"
 compatibility_date = "2026-08-31"
 
+# Sin observabilidad no hay forma de ver POR QUÉ falló una evaluación en producción.
+# El plan gratuito la incluye. (Misma decisión que en organolepticos-datax.)
+[observability]
+enabled = true
+
+# El secreto NO va acá — este archivo se versiona:
+#   npx wrangler secret put ANTHROPIC_API_KEY
+
 # Contador de evaluaciones por usuario y día. Crearlo una vez con
 #   npx wrangler kv namespace create CUPO
-# y pegar acá el id que imprime.
+# y pegar acá el id que imprime. Sin este binding el worker falla a propósito.
 [[kv_namespaces]]
 binding = "CUPO"
 id = "PEGAR_ID_DE_KV"

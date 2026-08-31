@@ -121,8 +121,12 @@ async function verificarToken(request) {
   const jwk = (await clavesGoogle()).find((k) => k.kid === cabecera.kid);
   if (!jwk) throw new ErrorHttp(401, 'La sesión venció. Volvé a entrar.');
 
+  /* Se rearma el JWK en vez de pasar el de Google tal cual: es lo que hace el worker de
+     Organolépticos, que ya corre en producción con este mismo esquema. El de Google trae
+     `use` y `kid` de más y no todos los runtimes los aceptan sin chistar. */
   const clave = await crypto.subtle.importKey(
-    'jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    'jwk', { kty: 'RSA', n: jwk.n, e: jwk.e, alg: 'RS256', ext: true },
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
   const firmado = new TextEncoder().encode(partes[0] + '.' + partes[1]);
   const valida = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', clave, b64urlABytes(partes[2]), firmado);
   if (!valida) throw new ErrorHttp(401, 'La sesión no es válida.');
@@ -237,9 +241,11 @@ export default {
       if (request.method !== 'POST') throw new ErrorHttp(405, 'Método no permitido.');
       const ruta = RUTAS[new URL(request.url).pathname];
       if (!ruta) throw new ErrorHttp(404, 'No existe esa función.');
-      if (!env.ANTHROPIC_API_KEY) throw new ErrorHttp(500, 'Falta el secreto ANTHROPIC_API_KEY en el worker.');
 
+      /* El token primero: sin él nadie tiene por qué enterarse de cómo está configurado
+         el worker, ni siquiera de si le falta el secreto. */
       const uid = await verificarToken(request);
+      if (!env.ANTHROPIC_API_KEY) throw new ErrorHttp(500, 'Falta el secreto ANTHROPIC_API_KEY en el worker.');
       let datos;
       try { datos = await request.json(); } catch (e) { throw new ErrorHttp(400, 'El cuerpo no es JSON.'); }
 
