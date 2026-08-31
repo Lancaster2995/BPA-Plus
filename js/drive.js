@@ -32,7 +32,13 @@
     });
   }
 
-  function getClientId() { try { return localStorage.getItem('bpa-plus-drive-client-id') || ''; } catch (e) { return ''; } }
+  function validClientId(id) { return /\.apps\.googleusercontent\.com$/i.test(String(id || '').trim()); }
+  function getClientId() {
+    try {
+      var id = localStorage.getItem('bpa-plus-drive-client-id') || '';
+      return validClientId(id) ? id : '';
+    } catch (e) { return ''; }
+  }
   function setClientId(id) { try { localStorage.setItem('bpa-plus-drive-client-id', id); } catch (e) {} }
 
   function isConnected() { return !!state.token && Date.now() < state.expiresAt; }
@@ -594,6 +600,7 @@
         root.querySelector('#dr_connect').onclick = function () {
           var v = root.querySelector('#dr_cid').value.trim();
           if (!v) return;
+          if (!validClientId(v)) { UI.note('El Client ID debe terminar en .apps.googleusercontent.com'); return; }
           setClientId(v);
           var btn = root.querySelector('#dr_connect'); btn.disabled = true; btn.textContent = 'Conectando…';
           ensureAuth().then(function () { m.close(); UI.note('Google Drive conectado'); if (onConnected) onConnected(); })
