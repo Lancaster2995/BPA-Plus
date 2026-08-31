@@ -15,4 +15,4 @@ enabled = true
 # y pegar acá el id que imprime. Sin este binding el worker falla a propósito.
 [[kv_namespaces]]
 binding = "CUPO"
-id = "PEGAR_ID_DE_KV"
+id = "8fe5a7f3f6c6403daf8579d46b15c548"
