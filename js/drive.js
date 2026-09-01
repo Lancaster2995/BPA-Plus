@@ -50,15 +50,20 @@
     return loadScript(GIS_SRC).then(function () {
       return new Promise(function (resolve, reject) {
         try {
+          var popupTimer = setTimeout(function () {
+            if (document.hasFocus()) reject(new Error('El navegador bloqueó la ventana de Google. Permití las ventanas emergentes y volvé a intentar.'));
+          }, 3000);
           var client = google.accounts.oauth2.initTokenClient({
             client_id: clientId, scope: SCOPE,
             callback: function (resp) {
+              clearTimeout(popupTimer);
               if (resp.error) { reject(new Error(resp.error)); return; }
               state.token = resp.access_token;
               state.expiresAt = Date.now() + (Number(resp.expires_in) || 3300) * 1000;
               resolve(state.token);
             },
             error_callback: function (error) {
+              clearTimeout(popupTimer);
               reject(new Error(error && error.type === 'popup_failed_to_open'
                 ? 'El navegador bloqueó la ventana de Google. Permití las ventanas emergentes y volvé a intentar.'
                 : 'No se completó la autorización de Google.'));
