@@ -117,7 +117,10 @@ queda guardada en la capacitación (`cap.evaluacion`), así que solo se paga al 
 El harness cubre el contrato del cliente (qué se manda, qué se guarda, que la clave de
 respuestas se marque) sustituyendo `cloud.callFn`, y lee el fuente del worker para las
 cuatro cosas que no puede ejecutar (firma, `aud`/`iss`/`exp`, cupo sin KV, clave desde el
-entorno). **Lo que no cubre**: el worker corriendo de verdad.
+entorno). El **01/09** se verificó el Worker real: KV y `ANTHROPIC_API_KEY` están
+configurados y sus cinco respuestas de entrada (401 sin token, 401 con token inválido,
+404, OPTIONS/CORS 204 y GET 405) cumplen el contrato. Falta una generación con una sesión
+real para comprobar la respuesta de Anthropic, el contador KV y el guardado en Firestore.
 
 ## Archivos: del bucket al Drive del usuario (2026-08-31)
 
@@ -190,11 +193,9 @@ de aceptación sobre valores reales. Lo de abajo es el resumen.
   CDN. Falta cargar un formato real de una droguería y ver qué tan bien salen el título,
   los campos y las columnas. Lo que salga mal se corrige en el diálogo de configuración,
   así que el peor caso es tipear, no romperse.
-- **Desplegar el worker**, que es lo único que queda para que ande *Evaluación*:
-  `npx wrangler kv namespace create CUPO` → pegar el id en `worker/wrangler.toml` →
-  `npx wrangler secret put ANTHROPIC_API_KEY` → `npx wrangler deploy` → pegar la URL en
-  `workerUrl` de [js/config.js](js/config.js). Con `workerUrl` vacío el botón avisa y no
-  hace nada.
+- **Generar una evaluación real** con sesión iniciada: el Worker ya está desplegado,
+  conectado en `workerUrl`, con KV y secreto configurados. Falta comprobar las 5 preguntas,
+  el contador KV y el guardado en Firestore.
 - **Probar la subida a Drive de verdad.** El harness sustituye `subirArchivo`: la subida
   resumable, la creación de la carpeta y el permiso `drive.file` nunca se ejercitaron
   contra Google. Ojo con un detalle: el Client ID de OAuth existente pide consentimiento
