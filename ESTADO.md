@@ -180,6 +180,48 @@ acta llenada afuera no encajaría al volver) y `domain.hallazgos` / `aplicarHall
 Lo que **no** hace: el sub-programa no sincroniza ni ve la base; el archivo se descarga
 y se carga a mano. El borrador a medio llenar vive en `localStorage` de ese dispositivo.
 
+## Retiro de mercado (2026-09-01) — `js/retiro.js`
+
+Un simulacro es **un registro** (`retiros`) del que salen **diez documentos**: carta del
+fabricante, carta de inmovilización y respuesta por cada destinatario, orden de retiro
+(Registro 009) por cada uno, conciliación (Registro 010), comunicación a DIGEMID y
+revisión de la eficacia (Registro 011). Con dos destinatarios —un almacén y un cliente—
+son exactamente los diez del expediente en papel que se tomó como modelo.
+
+Todo el módulo entra por un archivo. Lo que se tocó afuera es cableado y una sola cosa
+que no lo es: `actas.js` ahora **exporta `membrete` y `print`**, porque duplicar el
+membrete era garantizar que las hojas del expediente y las actas se separaran solas.
+
+Dos decisiones que no conviene aflojar:
+
+- **Nada se tipea dos veces.** En los formatos llenados a mano la cantidad se escribe en
+  la orden de retiro y otra vez en la conciliación, y no coinciden (en el expediente que
+  sirvió de modelo, tampoco). Acá la recuperada es el stock declarado, la consumida es
+  `entregada − stock`, y el N° de carta y de orden salen de la posición del destinatario:
+  un solo lugar cada uno. El harness lo prueba subiendo el stock y mirando las dos hojas.
+- **Un simulacro dice que lo es en los diez documentos**, en el título, no solo en el
+  asunto. Una comunicación a DIGEMID de un simulacro que no lo diga es un problema, no
+  un detalle de formato. Se apaga con el check «Es un simulacro» del formulario, que es
+  lo que convierte el mismo registro en un retiro real.
+
+Los datos de ejemplo (`retiro.ejemplo`, sembrados en `db.ensureSeed`) son reales de punta a
+punta: la droguería del seed pasó a ser **ITC** (INTELLIGENCE TECHNOLOGY COMPANY S.A.C.,
+RUC 20608966405) y el caso sale de `LogisticS/Docs/ITC/ITC - Ingresos y Salidas.xlsx` —
+**importación `IMP-0007`** (tomógrafo Scenaria View, serie `V0477`, RS `CRS_DBC0909E`,
+factura `IN 100-25FH`, DUA `235-2026-10-109249`) y **su salida**, la guía `EG07-00000254`
+al Hospital Regional de Medicina Tropical de Chanchamayo. La causa del retiro es la del
+único documento de fabricante que existe para ese equipo: el tubo de rayos X 7070HP.
+
+Esa importación destapó un error de modelo: sumar la columna «entregada» de la conciliación
+cuenta **dos veces la misma unidad** —el almacén la recibió por la importación y el cliente
+la recibió del almacén—, y la carta a DIGEMID decía «1 de 2». Lo distribuido ahora es un
+campo (`distribuida`, las unidades de la importación) y el pie de la conciliación es el del
+formato: subtotal de clientes, stock inmovilizado en el almacén, total recuperado.
+
+Lo que **no** hace: no se conecta con LogisticS —la importación se copió, no se lee—, ni
+recorre el inventario para saber a qué clientes se les despachó ese lote. Cuando eso haga
+falta, el puente natural es el mismo que usa el sub-programa: un archivo.
+
 ## Pendiente
 
 Lo que queda está encargado en **[ENCARGO-CODEX-1.md](ENCARGO-CODEX-1.md)**, con criterios

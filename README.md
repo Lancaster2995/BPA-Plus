@@ -24,6 +24,17 @@ la app sigue funcionando sin conexión después del primer acceso.
   menor / informativo) tal como en el formato original, respuesta Sí/No
   con observación, y acta imprimible o exportable a PDF desde el diálogo
   de impresión del navegador.
+- **Retiro de mercado** — el simulacro completo desde un solo registro:
+  cargás el producto, el lote, el ingreso del que salió y a quién se le
+  distribuyó, y BPA-Plus arma los **diez documentos del expediente** —
+  carta del fabricante, carta de inmovilización y respuesta por cada
+  destinatario, orden de retiro (Registro 009) por cada uno, conciliación
+  de productos retirados (Registro 010), comunicación a DIGEMID y revisión
+  de la eficacia (Registro 011). Se imprimen de a uno o los diez juntos, y
+  todos llevan la marca **SIMULACRO** mientras el registro esté marcado
+  como tal. La cantidad recuperada, la consumida y la numeración de cartas
+  y órdenes se derivan del stock declarado por cada destinatario: la orden
+  de retiro y la conciliación no pueden contradecirse.
 - **Sub-programa Autoinspecciones** (`autoinspecciones/`) — una página aparte,
   sin cuenta, sin nube y sin PIN, para llenar el acta donde la app completa no
   entra (una tablet prestada, el almacén del cliente, alguien que no es vos).
@@ -193,6 +204,7 @@ BPA-Plus/
    ├─ ui.js                Componentes (notas, diálogos, panel, hoja de acciones, buscador)
    ├─ formatos.js         Formatos propios de cada droguería (lectura, configuración, llenado)
    ├─ actas.js             Generación de actas imprimibles
+   ├─ retiro.js           Simulacro de retiro de mercado: los diez documentos del expediente
    ├─ drive.js            Google Drive: escaneo, importación y guardado de archivos
    ├─ views.js             Vistas y formularios
    └─ app.js               Estado, enrutado, chrome, arranque

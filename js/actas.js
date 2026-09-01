@@ -188,5 +188,8 @@
   }
 
   global.BPAPLUS = global.BPAPLUS || {};
-  global.BPAPLUS.actas = { actaAsistencia: actaAsistencia, actaEvaluacion: actaEvaluacion, actaInspeccion: actaInspeccion, itemsHtml: itemsHtml };
+  global.BPAPLUS.actas = {
+    actaAsistencia: actaAsistencia, actaEvaluacion: actaEvaluacion, actaInspeccion: actaInspeccion,
+    itemsHtml: itemsHtml, membrete: membrete, print: print
+  };
 })(window);

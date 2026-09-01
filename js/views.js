@@ -862,7 +862,10 @@
   /* ===================================================================== *
    *  Registro + despacho de vistas
    * ===================================================================== */
-  var RENDERERS = { dashboard: vDashboard, documentos: vDocumentos, capacitaciones: vCapacitaciones, autoinspecciones: vAutoinspecciones };
+  var RENDERERS = {
+    dashboard: vDashboard, documentos: vDocumentos, capacitaciones: vCapacitaciones,
+    autoinspecciones: vAutoinspecciones, retiros: function () { return global.BPAPLUS.retiro.view(); }
+  };
   function render(view) { return (RENDERERS[view] || vDashboard)(); }
 
   /* Formatos propios de la droguería: viven en la droguería, así que guardarlos
@@ -884,6 +887,7 @@
         if (a === 'nueva-cap') return capForm(null);
         if (a === 'programar-insp') return inspForm(null);
         if (a === 'nueva-acta') return actaForm(null);
+        if (a === 'nuevo-retiro') return global.BPAPLUS.retiro.form(null);
         if (a === 'cron-cap') return store.importCronograma('capacitaciones');
         if (a === 'cron-insp') return store.importCronograma('inspecciones');
         if (a === 'fmt-cap') return formatosPanel('capacitaciones');
@@ -906,6 +910,9 @@
       }
       var ca = t.closest('[data-capacta]');
       if (ca) { e.stopPropagation(); actas.actaAsistencia(store.dg(), store.find('capacitaciones', ca.dataset.capacta)); return; }
+      var rp = t.closest('[data-retiro-print]');
+      if (rp) { e.stopPropagation(); return global.BPAPLUS.retiro.imprimirTodo(store.dg(), store.find('retiros', rp.dataset.retiroPrint)); }
+      var rr = t.closest('[data-retiro]'); if (rr) return global.BPAPLUS.retiro.panel(store.find('retiros', rr.dataset.retiro));
       var dr = t.closest('[data-doc]'); if (dr) return docPanel(store.find('documentos', dr.dataset.doc));
       var cr = t.closest('[data-cap]'); if (cr) return capPanel(store.find('capacitaciones', cr.dataset.cap));
       var ir = t.closest('[data-insp]'); if (ir) return inspPanel(store.find('inspecciones', ir.dataset.insp));

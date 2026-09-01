@@ -45,7 +45,7 @@
   function showLockScreen(onUnlock, creating) {
     var el = document.createElement('div'); el.className = 'lockscreen';
     el.innerHTML =
-      '<div class="lock-mark"><img src="icons/icon-192.png" alt=""></div>' +
+      '<div class="lock-mark"><img src="icons/icon-192.png?v=3" alt=""></div>' +
       '<div class="lock-title" id="lockTitle">' + (creating ? 'Crear acceso' : 'Iniciar sesión') + '</div>' +
       '<div class="lock-sub" id="lockSub">' + (creating ? 'Creá un PIN de 4 a 6 dígitos para proteger tus datos' : 'Ingresá tu PIN para continuar') + '</div>' +
       '<div class="lock-dots" id="lockDots"></div>' +

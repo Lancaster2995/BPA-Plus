@@ -12,22 +12,23 @@
     { view: 'dashboard', label: 'Panorama', icon: 'dashboard' },
     { view: 'documentos', label: 'Documentos', icon: 'doc' },
     { view: 'capacitaciones', label: 'Capacitaciones', icon: 'cap' },
-    { view: 'autoinspecciones', label: 'Autoinspecciones', icon: 'insp' }
+    { view: 'autoinspecciones', label: 'Autoinspecciones', icon: 'insp' },
+    { view: 'retiros', label: 'Retiro de mercado', icon: 'flag' }
   ];
 
   /* ------------------------------ Store ------------------------------ */
   var store = {
     state: { dg: '', view: 'dashboard', qDoc: '', filtDoc: 'todos', filtCap: 'todos', filtInsp: 'todos' },
-    data: { droguerias: [], documentos: [], capacitaciones: [], inspecciones: [], actas: [] },
+    data: { droguerias: [], documentos: [], capacitaciones: [], inspecciones: [], actas: [], retiros: [] },
 
     load: function () {
       return Promise.all([
         DB.getAll('droguerias'), DB.getAll('documentos'), DB.getAll('capacitaciones'),
-        DB.getAll('inspecciones'), DB.getAll('actas'), DB.getMeta('dgActiva', '')
+        DB.getAll('inspecciones'), DB.getAll('actas'), DB.getAll('retiros'), DB.getMeta('dgActiva', '')
       ]).then(function (r) {
         store.data.droguerias = r[0]; store.data.documentos = r[1]; store.data.capacitaciones = r[2];
-        store.data.inspecciones = r[3]; store.data.actas = r[4];
-        store.state.dg = r[5] || (r[0][0] && r[0][0].id) || '';
+        store.data.inspecciones = r[3]; store.data.actas = r[4]; store.data.retiros = r[5];
+        store.state.dg = r[6] || (r[0][0] && r[0][0].id) || '';
       });
     },
 
@@ -72,7 +73,7 @@
       store.render(); store.renderChrome();
     },
     deleteDg: function (id) {
-      var kinds = ['documentos', 'capacitaciones', 'inspecciones', 'actas'];
+      var kinds = ['documentos', 'capacitaciones', 'inspecciones', 'actas', 'retiros'];
       var ops = store.data.droguerias.filter(function (e) { return e.id === id; }).map(function (e) { return DB.del('droguerias', e.id); });
       kinds.forEach(function (k) { store.data[k].filter(function (x) { return x.e === id; }).forEach(function (x) { ops.push(DB.del(k, x.id)); }); });
       Promise.all(ops).then(function () {
@@ -117,7 +118,7 @@
     var side = document.getElementById('sidebar');
     var alertN = global.BPAPLUS.alerts ? global.BPAPLUS.alerts.count() : 0;
     if (side) side.innerHTML =
-      '<div class="brand"><div class="brand-mark"><img src="icons/icon-192.png" alt=""></div><div><div class="brand-name">BPA-Plus</div><div class="brand-sub">Gestión BPA</div></div>' +
+      '<div class="brand"><div class="brand-mark"><img src="icons/icon-192.png?v=3" alt=""></div><div><div class="brand-name">BPA-Plus</div><div class="brand-sub">Gestión BPA</div></div>' +
         '<button class="bell-btn" id="alertBell" aria-label="Alertas">' + UI.icon('alert', 18) + (alertN ? '<span class="bell-badge">' + alertN + '</span>' : '') + '</button></div>' +
       '<button class="dg-switch" id="dgSwitch"><div class="dg-avatar">' + UI.esc(dg.init || '?') + '</div>' +
         '<div class="dg-txt"><div class="dg-name">' + UI.esc(dg.nombre) + '</div><div class="dg-ruc mono">' + (dg.ruc ? 'RUC ' + UI.esc(dg.ruc) : 'Sin RUC') + '</div></div>' +
@@ -140,7 +141,7 @@
 
     var top = document.getElementById('topbar');
     if (top) top.innerHTML =
-      '<div class="brand-mark sm"><img src="icons/icon-192.png" alt=""></div>' +
+      '<div class="brand-mark sm"><img src="icons/icon-192.png?v=3" alt=""></div>' +
       '<div class="top-mid"><div class="top-title">' + (NAV.filter(function (n) { return n.view === v; })[0] || { label: 'BPA-Plus' }).label + '</div>' +
       '<div class="top-dg">' + UI.esc(dg.nombre) + '</div></div>' +
       '<button class="icon-btn" id="alertBellM" aria-label="Alertas">' + UI.icon('alert', 20) + (alertN ? '<span class="bell-badge sm">' + alertN + '</span>' : '') + '</button>' +
@@ -225,7 +226,7 @@
   function applyTheme(t) {
     document.documentElement.classList.toggle('dark', t === 'dark');
     var meta = document.getElementById('themeColor');
-    if (meta) meta.content = t === 'dark' ? '#071724' : '#F6F3E9';
+    if (meta) meta.content = t === 'dark' ? '#111922' : '#F7F2E6';
     try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
   }
   function toggleTheme() { applyTheme(isDark() ? 'light' : 'dark'); renderChrome(); }
@@ -330,6 +331,7 @@
       var v = store.state.view;
       if (v === 'documentos') return V.open.docForm(null);
       if (v === 'capacitaciones') return V.open.capForm(null);
+      if (v === 'retiros') return global.BPAPLUS.retiro.form(null);
       if (v === 'autoinspecciones') return UI.actionsheet([
         { label: 'Nueva acta de inspección', icon: 'insp', onClick: function () { V.open.actaForm(null); } },
         { label: 'Programar autoinspección', icon: 'plus', onClick: function () { V.open.inspForm(null); } }

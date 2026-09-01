@@ -7,7 +7,7 @@
   'use strict';
 
   var DB_NAME = 'bpa-plus', DB_VERSION = 1;
-  var STORES = ['droguerias', 'documentos', 'capacitaciones', 'inspecciones', 'actas', 'meta'];
+  var STORES = ['droguerias', 'documentos', 'capacitaciones', 'inspecciones', 'actas', 'retiros', 'meta'];
   var _db = null;
 
   function open() {
@@ -75,9 +75,10 @@
     var D = global.BPAPLUS.domain, nid = D.nextId, off = D.isoDesdeHoy;
     var dgId = 'ejemplo';
     var drogueria = {
-      id: dgId, nombre: 'Droguería de ejemplo', ruc: '20481234567',
-      init: 'DE', criterios: D.CRITERIOS_DEFAULT.slice(),
-      direccion: 'Av. Industrial 123, Lima', dt: 'Q.F. Responsable Técnico', createdAt: Date.now()
+      id: dgId, nombre: 'INTELLIGENCE TECHNOLOGY COMPANY S.A.C.', ruc: '20608966405',
+      init: 'ITC', criterios: D.CRITERIOS_DEFAULT.slice(),
+      direccion: 'Av. Manuel Olguín 501, Int. 1105, Urb. Residencial Isabelita — Santiago de Surco, Lima',
+      dt: 'Q.F. Director Técnico', createdAt: Date.now()
     };
 
     var documentos = [
@@ -116,6 +117,7 @@
       .then(function () { return putMany('documentos', documentos); })
       .then(function () { return putMany('capacitaciones', caps); })
       .then(function () { return putMany('inspecciones', insp); })
+      .then(function () { return putMany('retiros', [global.BPAPLUS.retiro.ejemplo(dgId)]); })
       .then(function () { return setMeta('dgActiva', dgId); })
       .then(function () { return setMeta('seeded', true); });
   }
