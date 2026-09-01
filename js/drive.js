@@ -57,6 +57,11 @@
               state.token = resp.access_token;
               state.expiresAt = Date.now() + (Number(resp.expires_in) || 3300) * 1000;
               resolve(state.token);
+            },
+            error_callback: function (error) {
+              reject(new Error(error && error.type === 'popup_failed_to_open'
+                ? 'El navegador bloqueó la ventana de Google. Permití las ventanas emergentes y volvé a intentar.'
+                : 'No se completó la autorización de Google.'));
             }
           });
           client.requestAccessToken({ prompt: isConnected() ? '' : 'consent' });
