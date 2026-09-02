@@ -3,7 +3,7 @@
    Service worker cache-first: deja la app utilizable sin conexión una vez
    que se visitó al menos una vez servida por http(s).
    ========================================================================== */
-var CACHE = 'bpa-plus-v17';
+var CACHE = 'bpa-plus-v18';
 var ASSETS = [
   './', './index.html', './styles.css', './manifest.json',
   './js/config.js', './js/cloud.js', './js/auth.js', './js/domain.js', './js/db.js', './js/ui.js', './js/formatos.js', './js/actas.js', './js/retiro.js', './js/views.js', './js/lock.js', './js/drive.js', './js/alerts.js', './js/app.js',
@@ -20,6 +20,12 @@ self.addEventListener('activate', function (e) {
     caches.keys().then(function (keys) {
       return Promise.all(keys.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));
     }).then(function () { return self.clients.claim(); })
+      .then(function () { return self.clients.matchAll({ type: 'window' }); })
+      .then(function (clients) {
+        return Promise.all(clients.map(function (client) {
+          return client.navigate(client.url).catch(function () {});
+        }));
+      })
   );
 });
 
