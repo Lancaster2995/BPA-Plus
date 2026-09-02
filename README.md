@@ -150,8 +150,8 @@ propio en el medio, así que necesitás tu propio "Client ID" de OAuth
    prueba" agregá tu propia cuenta de Gmail (así solo vos podés conectarte).
 4. **APIs y servicios → Credenciales → Crear credenciales → ID de cliente
    de OAuth** → tipo "Aplicación web" → en "Orígenes de JavaScript
-   autorizados" agregá la URL donde publicaste la app (por ejemplo
-   `https://tuusuario.github.io`) — y `http://localhost:8080` si la
+   autorizados" agregá la URL oficial de la app,
+   `https://bpa-db.web.app` — y `http://localhost:8080` si la
    probás en tu máquina.
 5. Copiá el Client ID (termina en `.apps.googleusercontent.com`) y pegalo
    en la app cuando te lo pida, la primera vez que uses "Importar de
