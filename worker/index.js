@@ -20,6 +20,8 @@ const JWKS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken
 
 const ORIGENES = [
   'https://lancaster2995.github.io',
+  'https://bpa-db.web.app',
+  'https://bpa-db.firebaseapp.com',
   'http://localhost:8080',
   'http://127.0.0.1:8080'
 ];

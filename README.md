@@ -101,13 +101,13 @@ No requiere un servidor propio:
 
 ### Ponerla en línea gratis (para usarla desde el celular)
 
-El frontend es estático y el backend administrado vive en Firebase, por lo
-que cualquier hosting gratuito de archivos estáticos alcanza:
+El frontend es estático y el backend administrado vive en Firebase. La
+instancia oficial se publica en **Firebase Hosting**:
 
-- **GitHub Pages** — subí la carpeta a un repositorio y activá Pages en
-  la configuración del repo.
-- **Cloudflare Pages** / **Netlify** / **Vercel** — arrastrá la carpeta al
-  panel de "Deploy" de cualquiera de los tres (todos tienen plan gratuito).
+- **Aplicación:** `https://bpa-db.web.app/`
+- **Despliegue:** `firebase deploy --only hosting --project bpa-db`
+- **GitHub** conserva el código fuente y el historial; no almacena los datos
+  de la aplicación.
 
 Una vez publicada, instalala como app — te queda un ícono en la pantalla
 de inicio, abre sin la barra de Chrome, funciona sin conexión, y a
