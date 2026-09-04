@@ -453,6 +453,7 @@
      la carpeta y ahí toda subida falla con 404. Se resuelve una vez por pestaña. */
   var folderId = null;
   var APP_FOLDER = 'BPA-Plus';
+  var uploadQueue = Promise.resolve();
   function appFolder() {
     if (folderId) return Promise.resolve(folderId);
     var q = "name = '" + APP_FOLDER + "' and mimeType = '" + FOLDER_TYPE + "' and trashed = false";
@@ -474,27 +475,42 @@
       }).then(function (id) { folderId = id; return id; });
   }
 
+  function driveRequest(run, label, attempt) {
+    attempt = attempt || 0;
+    return run().then(function (res) {
+      if (res.ok) return res;
+      return res.text().then(function (body) {
+        var retryable = res.status === 429 || res.status >= 500 || /(?:user)?rateLimitExceeded|backendError/i.test(body);
+        if (retryable && attempt < 4) {
+          return new Promise(function (resolve) { setTimeout(resolve, Math.pow(2, attempt) * 1000 + Math.random() * 500); })
+            .then(function () { return driveRequest(run, label, attempt + 1); });
+        }
+        var message = body;
+        try { message = JSON.parse(body).error.message || body; } catch (e) {}
+        throw new Error(label + ' (' + res.status + '): ' + String(message || 'error de Google Drive').slice(0, 180));
+      });
+    });
+  }
+
   /* Resumable en un solo PUT. `uploadType=multipart` corta en 5 MB y acá se admiten 25. */
   function driveUpload(file, name, relative) {
     var contentType = mimeFromFile(file) || 'application/octet-stream';
     return appFolder().then(function (parent) {
       return ensureAuth().then(function (token) {
-        return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+        return driveRequest(function () { return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json; charset=UTF-8' },
           body: JSON.stringify({
             name: name, parents: [parent],
             appProperties: { bpaPath: String(relative || '').slice(0, 120) }
           })
-        });
+        }); }, 'No se pudo iniciar la subida');
       });
     }).then(function (res) {
-      if (!res.ok) throw new Error('No se pudo iniciar la subida a Drive');
       var session = res.headers.get('Location');
       if (!session) throw new Error('Drive no devolvió la sesión de subida');
-      return fetch(session, { method: 'PUT', headers: { 'Content-Type': contentType }, body: file });
+      return driveRequest(function () { return fetch(session, { method: 'PUT', headers: { 'Content-Type': contentType }, body: file }); }, 'No se pudo subir el archivo');
     }).then(function (res) {
-      if (!res.ok) throw new Error('No se pudo subir el archivo a Drive');
       return res.json();
     }).then(function (f) {
       return {
@@ -509,10 +525,13 @@
      carpeta de la app— pero viaja como `appProperties` para saber de dónde salió cada
      archivo. Se convierte siempre en un rechazo: sin Client ID no hay a dónde subir. */
   function subirArchivo(relative, file, name) {
-    return Promise.resolve().then(function () {
+    /* ponytail: una cola por pestaña; separar por cuenta solo si se permiten sesiones simultáneas. */
+    var job = uploadQueue.catch(function () {}).then(function () {
       if (!getClientId()) throw new Error('Conectá Google Drive para guardar archivos.');
       return driveUpload(file, name || file.name, relative);
     });
+    uploadQueue = job;
+    return job;
   }
   /* Todo el mundo sube por el export, incluidos storeFile y storeMaterial acá abajo:
      así hay un solo punto que sustituir —lo hace formatos.js y lo hace el harness— en

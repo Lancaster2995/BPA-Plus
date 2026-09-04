@@ -179,10 +179,11 @@
     var di = document.getElementById('driveImport');
     if (di) di.onclick = function () {
       global.BPAPLUS.drive.importPanel(function (drafts) {
-        var nuevos = 0, actualizados = 0;
+        var nuevos = 0, actualizados = 0, fallidos = 0, ultimoError = '';
         var hasFiles = drafts.some(function (d) { return !!d._file; });
         function saveAll() {
           var prepareUpload = global.BPAPLUS.drive.prepareUpload || global.BPAPLUS.drive.prepararUpload;
+          if (hasFiles) UI.note('Subiendo ' + drafts.filter(function (d) { return !!d._file; }).length + ' archivo(s) a Drive…');
           (hasFiles && prepareUpload ? prepareUpload() : Promise.resolve()).then(function () { return Promise.all(drafts.map(function (d) {
           var existing = d.existingId ? store.find('documentos', d.existingId) : null;
           var file = d._file;
@@ -190,10 +191,12 @@
           /* Todo lo que el escaneo usó para sí mismo va con guion bajo y no se guarda. */
           Object.keys(clean).forEach(function (k) { if (k.charAt(0) === '_') delete clean[k]; });
           var obj = existing ? Object.assign({}, existing, clean, { id: existing.id }) : Object.assign({ id: D.nextId(), e: store.dg().id, area: 'Almacén', version: 1 }, clean);
-          if (existing) actualizados++; else nuevos++;
-          var ready = file ? global.BPAPLUS.drive.storeFile(store.dg().id, obj, file, clean.role, clean.version) : Promise.resolve(obj);
-          return ready.then(function (saved) { return store.save('documentos', saved); });
-        })); }).then(function () { UI.note(nuevos + ' nuevo(s), ' + actualizados + ' actualizado(s) en la biblioteca'); })
+          var unchanged = existing && existing.file && existing.modifiedTime && existing.modifiedTime === clean.modifiedTime;
+          var ready = file && !unchanged ? global.BPAPLUS.drive.storeFile(store.dg().id, obj, file, clean.role, clean.version) : Promise.resolve(obj);
+          return ready.then(function (saved) { return store.save('documentos', saved); })
+            .then(function () { if (existing) actualizados++; else nuevos++; })
+            .catch(function (err) { fallidos++; ultimoError = err && err.message || String(err); });
+        })); }).then(function () { UI.note(nuevos + ' nuevo(s), ' + actualizados + ' actualizado(s)' + (fallidos ? ', ' + fallidos + ' no subido(s): ' + ultimoError : '') + ' en la biblioteca'); })
             .catch(function (err) { UI.note('No se pudieron subir los archivos: ' + (err && err.message || err)); });
         }
         if (hasFiles && !global.BPAPLUS.drive.getClientId()) return global.BPAPLUS.drive.connectPanel(saveAll);
