@@ -633,7 +633,7 @@
       var m = UI.dialog({
         title: 'Escanear documentos BPA', wide: true,
         body:
-          '<div class="field"><label>Carpeta o archivos del dispositivo</label><input class="inp" id="im_local" type="file" accept=".pdf,.docx,.xlsx" webkitdirectory multiple><div class="hint">Lee PDF con texto, Word y Excel. El archivo original no se sube.</div></div>' +
+          '<div class="field"><label>Carpeta o archivos del dispositivo</label><input class="inp" id="im_local" type="file" accept=".pdf,.docx,.xlsx" webkitdirectory multiple><div class="hint">Lee PDF con texto, Word y Excel. Cada original se guarda automáticamente en tu Drive.</div></div>' +
           '<div class="section-title">O seleccionar desde Google Drive</div>' +
           '<div class="grid-2"><div class="field"><label>Carpeta de Drive (URL o ID)</label><input class="inp" id="im_folder" placeholder="https://drive.google.com/drive/folders/…"></div>' +
           '<div class="field"><label>… o buscar por nombre</label><input class="inp" id="im_q" placeholder="POE, Registro…"></div></div>' +
@@ -789,7 +789,7 @@
           '<span class="rv-resumen-n">' + listos.length + '</span> listos para guardar' +
           (pendientes.length ? ' · <span class="rv-resumen-n warn">' + pendientes.length + '</span> necesitan un dato' : '') +
         '</div>' +
-        '<p class="dialog-note">Los archivos de Drive conservan su enlace y los locales solo se catalogan. Los códigos duplicados ya se fusionaron.</p>' +
+        '<p class="dialog-note">Cada documento conservará su archivo en Drive. Los códigos duplicados ya se fusionaron.</p>' +
         (pendientes.length
           ? '<div class="section-title">Necesitan tu revisión <span class="section-count">' + pendientes.length + '</span></div>' +
             '<div class="rv-list">' + pendientes.join('') + '</div>'
@@ -998,7 +998,7 @@
     analizarCronograma: analizarCronograma, analizarFilasCronograma: analizarFilasCronograma, analizarArchivo: analizarArchivo,
     codigoFromName: codigoFromName, normalizeCode: normalizeCode, isStandardCode: isStandardCode,
     standardName: standardName, tipoFromName: tipoFromName, localFiles: localFiles, leerFormato: leerFormato,
-    subirArchivo: subirArchivo, storeFile: storeFile, storeMaterial: storeMaterial,
+    prepararUpload: appFolder, subirArchivo: subirArchivo, storeFile: storeFile, storeMaterial: storeMaterial,
     textoDeArchivo: textoDeArchivo, downloadStored: downloadStored, filePanel: filePanel,
     linkPanel: linkPanel, extractIdFromUrl: extractIdFromUrl
   };
