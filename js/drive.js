@@ -998,7 +998,7 @@
     analizarCronograma: analizarCronograma, analizarFilasCronograma: analizarFilasCronograma, analizarArchivo: analizarArchivo,
     codigoFromName: codigoFromName, normalizeCode: normalizeCode, isStandardCode: isStandardCode,
     standardName: standardName, tipoFromName: tipoFromName, localFiles: localFiles, leerFormato: leerFormato,
-    prepareUpload: appFolder, subirArchivo: subirArchivo, storeFile: storeFile, storeMaterial: storeMaterial,
+    prepareUpload: appFolder, prepararUpload: appFolder, subirArchivo: subirArchivo, storeFile: storeFile, storeMaterial: storeMaterial,
     textoDeArchivo: textoDeArchivo, downloadStored: downloadStored, filePanel: filePanel,
     linkPanel: linkPanel, extractIdFromUrl: extractIdFromUrl
   };

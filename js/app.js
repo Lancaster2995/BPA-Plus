@@ -182,7 +182,8 @@
         var nuevos = 0, actualizados = 0;
         var hasFiles = drafts.some(function (d) { return !!d._file; });
         function saveAll() {
-          (hasFiles ? global.BPAPLUS.drive.prepareUpload() : Promise.resolve()).then(function () { return Promise.all(drafts.map(function (d) {
+          var prepareUpload = global.BPAPLUS.drive.prepareUpload || global.BPAPLUS.drive.prepararUpload;
+          (hasFiles && prepareUpload ? prepareUpload() : Promise.resolve()).then(function () { return Promise.all(drafts.map(function (d) {
           var existing = d.existingId ? store.find('documentos', d.existingId) : null;
           var file = d._file;
           var clean = Object.assign({}, d); delete clean.existingId; delete clean.modifiedTime;
