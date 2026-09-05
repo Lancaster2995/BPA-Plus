@@ -3,10 +3,10 @@
    Service worker network-first: actualiza en línea y usa caché sin conexión
    que se visitó al menos una vez servida por http(s).
    ========================================================================== */
-var CACHE = 'bpa-plus-v25';
+var CACHE = 'bpa-plus-v26';
 var ASSETS = [
   './', './index.html', './styles.css', './manifest.json',
-  './js/config.js', './js/cloud.js', './js/auth.js', './js/domain.js', './js/db.js', './js/ui.js', './js/formatos.js', './js/actas.js', './js/retiro.js', './js/views.js', './js/lock.js', './js/drive.js?v=25', './js/alerts.js', './js/app.js?v=25',
+  './js/config.js', './js/cloud.js', './js/auth.js', './js/domain.js', './js/db.js', './js/ui.js', './js/formatos.js', './js/actas.js', './js/retiro.js', './js/views.js', './js/lock.js', './js/drive.js?v=26', './js/alerts.js', './js/app.js?v=26',
   './autoinspecciones/index.html', './autoinspecciones/main.js',
   './icons/icon-44.png?v=3', './icons/icon-192.png?v=3', './icons/icon-512.png?v=3', './icons/apple-touch-icon.png?v=3'
 ];

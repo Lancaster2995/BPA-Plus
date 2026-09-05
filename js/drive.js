@@ -495,24 +495,42 @@
   /* Resumable en un solo PUT. `uploadType=multipart` corta en 5 MB y acá se admiten 25. */
   function driveUpload(file, name, relative) {
     var contentType = mimeFromFile(file) || 'application/octet-stream';
-    return appFolder().then(function (parent) {
-      return ensureAuth().then(function (token) {
-        return driveRequest(function () { return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
-          method: 'POST',
-          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json; charset=UTF-8' },
-          body: JSON.stringify({
-            name: name, parents: [parent],
-            appProperties: { bpaPath: String(relative || '').slice(0, 120) }
-          })
-        }); }, 'No se pudo iniciar la subida');
+    function attemptUpload(attempt) {
+      return appFolder().then(function (parent) {
+        return ensureAuth().then(function (token) {
+          return driveRequest(function () { return fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
+            method: 'POST',
+            headers: {
+              Authorization: 'Bearer ' + token, 'Content-Type': 'application/json; charset=UTF-8',
+              'X-Upload-Content-Type': contentType, 'X-Upload-Content-Length': file.size
+            },
+            body: JSON.stringify({
+              name: name, mimeType: contentType, parents: [parent],
+              appProperties: { bpaPath: String(relative || '').slice(0, 120) }
+            })
+          }); }, 'No se pudo iniciar la subida');
+        });
+      }).then(function (res) {
+        var session = res.headers.get('Location');
+        if (!session) throw new Error('Drive no devolvió la sesión de subida');
+        var headers = { 'Content-Type': contentType };
+        if (file.size) headers['Content-Range'] = 'bytes 0-' + (file.size - 1) + '/' + file.size;
+        return fetch(session, { method: 'PUT', headers: headers, body: file });
+      }).then(function (res) {
+        if (res.ok) return res.json();
+        return res.text().then(function (body) {
+          var retryable = res.status === 404 || res.status === 429 || res.status >= 500 || /(?:user)?rateLimitExceeded|backendError/i.test(body);
+          if (retryable && attempt < 4) {
+            return new Promise(function (resolve) { setTimeout(resolve, Math.pow(2, attempt) * 1000 + Math.random() * 500); })
+              .then(function () { return attemptUpload(attempt + 1); });
+          }
+          var message = body;
+          try { message = JSON.parse(body).error.message || body; } catch (e) {}
+          throw new Error('No se pudo subir el archivo (' + res.status + '): ' + String(message || 'error de Google Drive').slice(0, 180));
+        });
       });
-    }).then(function (res) {
-      var session = res.headers.get('Location');
-      if (!session) throw new Error('Drive no devolvió la sesión de subida');
-      return driveRequest(function () { return fetch(session, { method: 'PUT', headers: { 'Content-Type': contentType }, body: file }); }, 'No se pudo subir el archivo');
-    }).then(function (res) {
-      return res.json();
-    }).then(function (f) {
+    }
+    return attemptUpload(0).then(function (f) {
       return {
         driveId: f.id, name: name || file.name, originalName: file.name,
         size: file.size, contentType: contentType, uploadedAt: Date.now(),
