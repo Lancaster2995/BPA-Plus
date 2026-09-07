@@ -5,18 +5,17 @@ Verificado el **2026-09-06**. Estado completo: [ESTADO.md](ESTADO.md) · encargo
 
 ## Estado hoy
 
-- `main` en `e868422` (05/09), pusheado. Producción
-  `https://lancaster2995.github.io/BPA-Plus/` → 200 (push a `main` **es** el despliegue).
-- **Árbol sucio: 6 archivos, ~145 líneas sin commitear** — `js/retiro.js`, `js/views.js`,
-  `js/db.js`, `js/actas.js`, `styles.css` y `ESTADO.md`. Es el trabajo del 04-05/09 sobre
-  retiro de mercado: papelería por droguería (logo, sello del D.T., pie de página) y el
-  cambio del caso de ejemplo a `IMP-0004`. **`ESTADO.md` ya lo describe, también sin commitear.**
+- `main` en `f409055` (06/09), árbol **limpio**, **1 commit sin pushear**. Producción
+  `https://lancaster2995.github.io/BPA-Plus/` → 200.
+- El trabajo del 04-05/09 sobre retiro de mercado —papelería por droguería (logo, sello del
+  D.T., pie de página) y el caso de ejemplo pasado a `IMP-0004`— quedó commiteado el 06/09,
+  con el harness en **6/6**.
 - El Worker de Cloudflare **ya está desplegado** y conectado en `workerUrl`, con KV y secreto.
 
 ## Pendiente
 
-1. **Commitear el trabajo del árbol** antes de tocar nada más. Está terminado y documentado;
-   sólo le falta el commit. Un agente que empiece encima se pisa con esto.
+1. **`git push origin main`** — y acá eso **es el despliegue**: GitHub Pages publica lo que
+   entre en `main`, así que producción todavía no tiene la papelería por droguería.
 2. **Generar una evaluación real** con sesión iniciada: comprobar las 5 preguntas, el contador
    KV y el guardado en Firestore.
 3. **Probar la subida a Drive de verdad.** El harness sustituye `subirArchivo`, así que la
