@@ -787,6 +787,18 @@
   /* ===================================================================== *
    *  DROGUERÍAS + criterios
    * ===================================================================== */
+  /* El logo va como data URI dentro de la droguería: viaja con ella a otros
+     dispositivos y se imprime sin conexión, que es cuando hace falta. */
+  function leerLogo(arch) {
+    if (!arch) return Promise.resolve(null);
+    return new Promise(function (res, rej) {
+      var rd = new FileReader();
+      rd.onload = function () { res(String(rd.result)); };
+      rd.onerror = function () { rej(rd.error); };
+      rd.readAsDataURL(arch);
+    });
+  }
+
   function dgForm(existing) {
     var e = existing || { nombre: '', ruc: '', direccion: '', dt: '', criterios: D.CRITERIOS_DEFAULT.slice() };
     var m = UI.dialog({
@@ -795,7 +807,15 @@
         '<div class="field" id="wrap_en"><label>Razón social</label><input class="inp" id="e_nom" value="' + esc(e.nombre) + '"><div class="err">Ingresá la razón social.</div></div>' +
         '<div class="grid-2"><div class="field"><label>RUC</label><input class="inp mono" id="e_ruc" value="' + esc(e.ruc) + '" maxlength="11"></div>' +
         '<div class="field"><label>Director técnico</label><input class="inp" id="e_dt" value="' + esc(e.dt || '') + '"></div></div>' +
-        '<div class="field"><label>Dirección</label><input class="inp" id="e_dir" value="' + esc(e.direccion || '') + '"></div>',
+        '<div class="grid-2"><div class="field"><label>Cargo del D.T. (sello)</label><input class="inp" id="e_dtc" value="' + esc(e.dtCargo || '') + '" placeholder="D.T QUIMICO FARMACEUTICO"></div>' +
+        '<div class="field"><label>Colegiatura (sello)</label><input class="inp mono" id="e_dtn" value="' + esc(e.dtColegiatura || '') + '" placeholder="CQFP 29902"></div></div>' +
+        '<div class="field"><label>Dirección</label><input class="inp" id="e_dir" value="' + esc(e.direccion || '') + '"></div>' +
+        '<div class="grid-2"><div class="field"><label>Teléfono</label><input class="inp" id="e_tel" value="' + esc(e.telefono || '') + '"></div>' +
+        '<div class="field"><label>Correo</label><input class="inp" id="e_mail" value="' + esc(e.email || '') + '"></div></div>' +
+        '<div class="field"><label>Web</label><input class="inp" id="e_web" value="' + esc(e.web || '') + '"><div class="hint">Dirección, teléfono, correo y web salen en el pie de página del expediente de retiro.</div></div>' +
+        '<div class="field"><label>Logo del membrete</label><input class="inp" id="e_logo" type="file" accept="image/png,image/jpeg,image/svg+xml">' +
+          '<div class="hint">' + (e.logo ? 'Ya hay un logo cargado. ' : '') +
+          'Sale arriba en las actas y en el expediente de retiro. PNG, JPG o SVG de menos de 300 KB.</div></div>',
       footer: (existing ? '<button class="btn btn-danger" id="e_del" style="margin-right:auto">Eliminar</button>' : '') +
         '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="e_save">Guardar</button>',
       onMount: function (root) {
@@ -806,12 +826,20 @@
           var obj = Object.assign({}, existing || { criterios: D.CRITERIOS_DEFAULT.slice() }, {
             id: existing ? existing.id : D.nextId(), nombre: nom,
             ruc: root.querySelector('#e_ruc').value.trim(), dt: root.querySelector('#e_dt').value.trim(),
-            direccion: root.querySelector('#e_dir').value.trim(), init: init
+            direccion: root.querySelector('#e_dir').value.trim(), init: init,
+            dtCargo: root.querySelector('#e_dtc').value.trim(), dtColegiatura: root.querySelector('#e_dtn').value.trim(),
+            telefono: root.querySelector('#e_tel').value.trim(), email: root.querySelector('#e_mail').value.trim(),
+            web: root.querySelector('#e_web').value.trim()
           });
-          store.save('droguerias', obj).then(function () {
+          var arch = root.querySelector('#e_logo').files[0];
+          if (arch && arch.size >= 300 * 1024) { UI.note('El logo debe pesar menos de 300 KB.'); return; }
+          leerLogo(arch).then(function (logo) {
+            if (logo) obj.logo = logo;
+            return store.save('droguerias', obj);
+          }).then(function () {
             if (!existing) store.setDg(obj.id);
             m.close(); UI.note(existing ? 'Droguería actualizada' : 'Droguería creada'); store.renderChrome();
-          });
+          }).catch(function () { UI.note('No se pudo leer el logo.'); });
         };
         var del = root.querySelector('#e_del');
         if (del) del.onclick = function () {

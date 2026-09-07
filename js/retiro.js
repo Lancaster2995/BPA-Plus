@@ -42,7 +42,10 @@
   function titulo(t, r) { return esc(t) + (sim(r) ? ' <span class="acta-sim">SIMULACRO</span>' : ''); }
 
   /* ------------------------------ Documentos ------------------------------ */
-  function hoja(dg, cuerpo) { return '<div class="acta">' + A().membrete(dg) + cuerpo + '</div>'; }
+  /* Cada documento es una hoja: membrete arriba, pie de página abajo del todo. */
+  function hoja(dg, cuerpo) {
+    return '<div class="acta hoja-pie">' + A().membrete(dg) + '<div>' + cuerpo + '</div>' + pie(dg) + '</div>';
+  }
   function lema(r) { return r.lema ? '<div class="carta-lema">“' + esc(r.lema) + '”</div>' : ''; }
   function p(txt) { return '<p class="carta-p">' + txt + '</p>'; }
   function fechaLinea(iso, ciudad) {
@@ -55,7 +58,42 @@
     return '<div class="firma-line">' + esc(nombre || '') +
       (cargo ? '<br><small>' + esc(cargo) + '</small>' : '') + '</div>';
   }
-  function firma(nombre, cargo) { return '<div class="acta-firmas">' + firmaCol(nombre, cargo) + '</div>'; }
+  /* Las cartas llevan una sola firma y va abajo a la izquierda, en una línea. Los
+     registros (009, 010, 011) siguen con sus columnas de firmas. */
+  /* El sello del Director Técnico reemplaza la línea de firma donde antes decía
+     «Director Técnico»: es lo que se estampa en el papel. Sale de la droguería. */
+  function razonCorta(nombre) {
+    return String(nombre || '').replace(/\s*(S\.?A\.?C\.?|S\.?A\.?|E\.?I\.?R\.?L\.?|S\.?R\.?L\.?)\s*$/i, '').trim();
+  }
+  function selloDT(dg) {
+    return '<div class="sello">' +
+      '<div class="sello-emp">' + esc(razonCorta(dg.nombre)) + '</div>' +
+      '<div class="sello-linea"></div>' +
+      '<div class="sello-nom">' + esc(dg.dt || '') + '</div>' +
+      '<div class="sello-cargo">' + esc(dg.dtCargo || 'D.T QUIMICO FARMACEUTICO') + '</div>' +
+      (dg.dtColegiatura ? '<div class="sello-col">' + esc(dg.dtColegiatura) + '</div>' : '') + '</div>';
+  }
+  function firmaSello(dg) { return '<div class="acta-firma-uno">' + selloDT(dg) + '</div>'; }
+
+  var ICO = {
+    pin: '<path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>',
+    tel: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
+    mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 6 10-6"/>',
+    web: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9S14.5 18.3 12 21c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/>'
+  };
+  function pieItem(k, txt) {
+    return txt ? '<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+      'stroke-linecap="round" stroke-linejoin="round">' + ICO[k] + '</svg>' + esc(txt) + '</span>' : '';
+  }
+  function pie(dg) {
+    return '<div class="acta-pie">' + pieItem('pin', dg.direccion) + pieItem('tel', dg.telefono) +
+      pieItem('mail', dg.email) + pieItem('web', dg.web) + '</div>';
+  }
+
+  function firma(nombre, cargo) {
+    return '<div class="acta-firma-uno"><div class="firma-line">' + esc(nombre || '') +
+      (cargo ? ' <small>· ' + esc(cargo) + '</small>' : '') + '</div></div>';
+  }
 
   /* 1. Carta del fabricante — la que abre el expediente. */
   function cartaFabricante(dg, r) {
@@ -98,7 +136,7 @@
         '<li>Informar por escrito, dentro de las 24 horas de recibida la presente, la cantidad en stock a la fecha.</li>' +
         '<li>Mantener la inmovilización hasta recibir la orden de retiro correspondiente.</li>' +
       '</ol>' +
-      firma(dg.dt, 'Director Técnico · ' + dg.nombre));
+      firmaSello(dg));
   }
 
   /* 4 y 5. Respuesta del destinatario, con el stock declarado. */
@@ -142,7 +180,7 @@
         ', reportado por el fabricante ' + esc(r.fabricante) + ' mediante la carta N° ' + esc(r.cartaFabNum || '—') + '.') +
       '<div class="acta-firmas"><div class="firma-line">Rep. del establecimiento que entrega</div>' +
         '<div class="firma-line">Representante o resp. de almacén</div>' +
-        '<div class="firma-line">V°B° Director Técnico</div></div>');
+        '<div class="firma-line firma-sello">' + selloDT(dg) + '<small>V°B° Director Técnico</small></div></div>');
   }
 
   /* 8. Registro 010 — Conciliación de productos retirados del mercado. */
@@ -167,9 +205,10 @@
       '<tbody>' + filas + '</tbody>' +
       '<tfoot><tr><th colspan="2">Sub total recuperado de clientes</th><td colspan="4">' + (recuperado(r) - enAlmacen(r)) + '</td></tr>' +
         '<tr><th colspan="2">Stock inmovilizado en el almacén</th><td colspan="4">' + enAlmacen(r) + '</td></tr>' +
-        '<tr><th colspan="2">Total recuperado (de ' + distribuida(r) + ' distribuida[s])</th><td colspan="4"><b>' + recuperado(r) + '</b></td></tr></tfoot></table>' +
+        '<tr><th colspan="2">Unidades distribuidas (importación)</th><td colspan="4">' + distribuida(r) + '</td></tr>' +
+        '<tr><th colspan="2">Total recuperado</th><td colspan="4"><b>' + recuperado(r) + '</b></td></tr></tfoot></table>' +
       '<div class="acta-firmas">' + firmaCol(r.repLegal, 'Representante legal') +
-        firmaCol(dg.dt, 'Director Técnico') + '</div>');
+        '<div class="firma-line firma-sello">' + selloDT(dg) + '</div></div>');
   }
 
   /* 9. Comunicación a DIGEMID de las medidas adoptadas. */
@@ -226,7 +265,7 @@
         '<div><b>Acción correctiva:</b> retiro del mercado</div></div>' +
       '<table><thead><tr><th>Acciones de evaluación</th><th>Información</th></tr></thead><tbody>' + filas + '</tbody></table>' +
       p('<b>Conclusiones:</b> ' + esc(r.conclusiones || '')) +
-      '<div class="acta-firmas">' + firmaCol(dg.dt, 'Director Técnico') +
+      '<div class="acta-firmas"><div class="firma-line firma-sello">' + selloDT(dg) + '</div>' +
         firmaCol(D.fLocal(r.fCierre), 'Fecha') + '</div>');
   }
 
@@ -445,43 +484,43 @@
   }
 
   /* ------------------------------ Datos de ejemplo ------------------------------
-     Una importación real de LogisticS (`Docs/ITC/ITC - Ingresos y Salidas.xlsx`):
-     IMP-0007, tomógrafo Scenaria View serie V0477, con su salida real —guía
-     EG07-00000254 al Hospital Regional de Medicina Tropical— como destinatario
-     cliente. La causa del retiro es la del documento del fabricante que existe:
-     el tubo de rayos X 7070HP integrado al equipo. */
+     Una importación real de LogisticS, exportada desde su ficha: IMP-0004 del
+     26/08/2026 (proveedor AMPRONIX, monitor médico LG 32HR734S, serie
+     409NTHMB2561, RS CRS_DB9783E) con su salida del 27/08. La causa del retiro
+     es el evento que trae su propio kardex: el 01/09 la revisión organoléptica
+     devolvió el lote a cuarentena. */
   function ejemplo(dgId) {
     return {
       id: D.nextId(), e: dgId, simulacro: true,
-      producto: 'WHOLE BODY X-RAY CT SYSTEM — SCENARIA VIEW', codigo: 'ALM-0020', lote: 'V0477',
-      presentacion: 'Unidad — sistema de tomografía computarizada de cuerpo entero',
-      venc: 'N/A', rs: 'CRS_DBC0909E', distribuida: 1,
-      factura: 'IN 100-25FH — importación IMP-0007, DUA 235-2026-10-109249', facturaFecha: '2026-07-02',
-      fabricante: 'FUJIFILM Corporation', cartaFabNum: '06-2026', cartaFabFecha: '2026-08-20',
-      fabFirmante: 'Maki Chiku', fabCargo: 'Regional Business Manager',
-      motivo: 'una no conformidad de calidad en el tubo de rayos X modelo 7070HP integrado al sistema',
+      producto: 'MONITOR MÉDICO LG 32HR734S', codigo: 'ALM-0005', lote: '409NTHMB2561',
+      presentacion: 'Unidad — monitor médico para uso clínico, modelo 32HR734S',
+      venc: 'N/A', rs: 'CRS_DB9783E', distribuida: 1,
+      factura: '462079 — AMPRONIX, importación IMP-0004', facturaFecha: '2026-08-26',
+      fabricante: 'LG Electronics Inc', cartaFabNum: '01-2026', cartaFabFecha: '2026-09-01',
+      fabFirmante: '', fabCargo: 'Representante autorizado',
+      motivo: 'una no conformidad de calidad detectada en la revisión organoléptica, que devolvió el lote a cuarentena',
       dests: [
         {
           tipo: 'almacen', nombre: 'INTELLIGENCE TECHNOLOGY COMPANY S.A.C. — Almacén', ruc: '20608966405',
           direccion: 'Av. Manuel Olguín 501, Int. 1105 — Santiago de Surco, Lima',
-          firmante: '', cargo: 'Jefe de Almacén', guia: 'DUA 235-2026-10-109249',
-          entregada: 1, stock: 0, fechaCarta: '2026-08-21', fechaResp: '2026-08-24'
+          firmante: '', cargo: 'Jefe de Almacén', guia: 'GRE T001-27673',
+          entregada: 1, stock: 0, fechaCarta: '2026-09-02', fechaResp: '2026-09-03'
         },
         {
-          tipo: 'cliente', nombre: 'HOSPITAL REGIONAL DOCENTE DE MEDICINA TROPICAL DR. JULIO CÉSAR DEMARINI CARO',
-          ruc: '20607661848', direccion: 'Av. Daniel A. Carrión s/n, Pampa del Carmen — Chanchamayo, Junín',
-          firmante: '', cargo: 'Director Ejecutivo', guia: 'GRE EG07-00000254',
-          entregada: 1, stock: 1, fechaCarta: '2026-08-21', fechaResp: '2026-08-25'
+          tipo: 'cliente', nombre: 'INTELLIGENCE TECHNOLOGY COMPANY S.A.C.', ruc: '20608966405',
+          direccion: 'Av. Manuel Olguín 501, Int. 1105 — Santiago de Surco, Lima',
+          firmante: '', cargo: 'Gerente General', guia: 'GRE EG07-00000285',
+          entregada: 1, stock: 1, fechaCarta: '2026-09-02', fechaResp: '2026-09-03'
         }
       ],
       repLegal: 'ALVAREZ URIBE ORLANDO ENRIQUE', comunicacion: 'Carta',
-      fSolicitud: '2026-08-21', fIngreso: '2026-08-27', fIngresoUlt: '2026-08-27', fDestruccion: '',
-      digemidFecha: '2026-08-28', costoComercial: 0, costoProceso: 0, vencidas: 0,
-      conclusiones: 'Se procede con el retiro de la unidad del sistema Scenaria View, serie V0477, ingresada con la ' +
-        'importación IMP-0007 y despachada con la guía EG07-00000254, por una no conformidad de calidad en el tubo de ' +
-        'rayos X 7070HP informada por FUJIFILM Corporation. El almacén no tenía stock y se recuperó la única unidad ' +
+      fSolicitud: '2026-09-02', fIngreso: '2026-09-03', fIngresoUlt: '2026-09-03', fDestruccion: '',
+      digemidFecha: '2026-09-04', costoComercial: 0, costoProceso: 0, vencidas: 0,
+      conclusiones: 'Se procede con el retiro de la unidad del monitor médico LG 32HR734S, serie 409NTHMB2561, ' +
+        'ingresada con la importación IMP-0004 y despachada el 27/08/2026, por la no conformidad detectada en la ' +
+        'revisión organoléptica del 01/09/2026. El almacén ya no tenía stock y se recuperó la única unidad ' +
         'distribuida: 100 % de eficacia.',
-      fCierre: '2026-08-28', createdAt: Date.now()
+      fCierre: '2026-09-04', createdAt: Date.now()
     };
   }
 

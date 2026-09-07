@@ -629,8 +629,25 @@ textarea.inp { min-height: 88px; resize: vertical; }
   body * { visibility: hidden; }
   #printArea, #printArea * { visibility: visible; }
   #printArea { display: block !important; position: absolute; inset: 0; }
-  .acta { font-family: Georgia, 'Times New Roman', serif; color: #111; padding: 28px; }
+  .acta { font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; color: #111; padding: 28px; }
   .acta-membrete { display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 18px; }
+  .acta-logo { height: 44px; width: auto; flex: none; }
+  .acta-firma-uno { margin-top: 46px; }
+  .acta-firma-uno .firma-line { max-width: 62%; text-align: left; }
+  /* Hoja con pie: alto de la caja de A4 menos los márgenes de @page, para que el pie
+     caiga abajo del todo y no debajo del último párrafo. */
+  .acta.hoja-pie { display: flex; flex-direction: column; padding: 0; min-height: 265mm; }
+  .acta-pie { margin-top: auto; padding-top: 8px; border-top: 1px solid #bbb; display: flex;
+    flex-wrap: wrap; justify-content: center; gap: 6px 22px; font-size: 9.5px; color: #445; }
+  .acta-pie span { display: inline-flex; align-items: center; gap: 5px; }
+  .acta-pie svg { width: 11px; height: 11px; flex: none; }
+  /* Sello del Director Técnico: lo mismo que se estampa en el papel. */
+  .sello { display: inline-block; text-align: center; line-height: 1.28; padding: 0 6px; }
+  .sello-emp { font-weight: 700; font-size: 10.5px; }
+  .sello-linea { border-bottom: 1.6px dotted #111; margin: 6px 0 5px; }
+  .sello-nom { font-weight: 700; font-size: 11px; }
+  .sello-cargo, .sello-col { font-size: 10px; }
+  .firma-sello { border-top: none; padding-top: 0; }
   .acta-mark { width: 34px; height: 34px; border-radius: 8px; background: #111; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-family: Georgia, serif; flex: none; }
   .acta-org .emp { font-weight: 700; font-size: 15px; }
   .acta-org .ruc { font-size: 11px; color: #444; }

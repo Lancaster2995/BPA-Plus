@@ -10,7 +10,9 @@
 
   function membrete(dg) {
     return '<div class="acta-membrete">' +
-      '<div class="acta-mark">V</div>' +
+      (dg.logo
+        ? '<img class="acta-logo" src="' + esc(dg.logo) + '" alt="">'
+        : '<div class="acta-mark">' + esc(String(dg.init || 'B').slice(0, 1)) + '</div>') +
       '<div class="acta-org"><div class="emp">' + esc(dg.nombre || '') + '</div>' +
       (dg.ruc ? '<div class="ruc">RUC ' + esc(dg.ruc) + '</div>' : '') +
       (dg.direccion ? '<div class="ruc">' + esc(dg.direccion) + '</div>' : '') + '</div></div>';

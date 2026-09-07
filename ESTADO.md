@@ -180,7 +180,7 @@ acta llenada afuera no encajaría al volver) y `domain.hallazgos` / `aplicarHall
 Lo que **no** hace: el sub-programa no sincroniza ni ve la base; el archivo se descarga
 y se carga a mano. El borrador a medio llenar vive en `localStorage` de ese dispositivo.
 
-## Retiro de mercado (2026-09-01) — `js/retiro.js`
+## Retiro de mercado (2026-09-04) — `js/retiro.js`
 
 Un simulacro es **un registro** (`retiros`) del que salen **diez documentos**: carta del
 fabricante, carta de inmovilización y respuesta por cada destinatario, orden de retiro
@@ -204,13 +204,21 @@ Dos decisiones que no conviene aflojar:
   un detalle de formato. Se apaga con el check «Es un simulacro» del formulario, que es
   lo que convierte el mismo registro en un retiro real.
 
+La papelería sale de la droguería, no del código: **logo** del membrete (data URI, así se
+imprime sin conexión y viaja con ella), **sello del D.T.** (nombre, cargo y colegiatura) y
+**pie de página** (dirección, teléfono, correo, web). Todo se carga desde el formulario de
+droguería. El sello reemplaza la línea de firma en las seis hojas donde antes decía
+«Director Técnico»; donde firma otro —el fabricante, el destinatario, el representante
+legal— sigue siendo una línea. De paso, el membrete tenía una `V` escrita a mano que salía
+en el encabezado de cualquier droguería: ahora, sin logo, cae en su inicial.
+
 Los datos de ejemplo (`retiro.ejemplo`, sembrados en `db.ensureSeed`) son reales de punta a
 punta: la droguería del seed pasó a ser **ITC** (INTELLIGENCE TECHNOLOGY COMPANY S.A.C.,
-RUC 20608966405) y el caso sale de `LogisticS/Docs/ITC/ITC - Ingresos y Salidas.xlsx` —
-**importación `IMP-0007`** (tomógrafo Scenaria View, serie `V0477`, RS `CRS_DBC0909E`,
-factura `IN 100-25FH`, DUA `235-2026-10-109249`) y **su salida**, la guía `EG07-00000254`
-al Hospital Regional de Medicina Tropical de Chanchamayo. La causa del retiro es la del
-único documento de fabricante que existe para ese equipo: el tubo de rayos X 7070HP.
+RUC 20608966405) y el caso sale de la ficha exportada de **`IMP-0004`** en LogisticS —
+proveedor AMPRONIX, monitor médico LG `32HR734S`, serie `409NTHMB2561`, RS `CRS_DB9783E`,
+invoice `462079`, guía `T001-27673`, ingreso del 26/08/2026 y salida del 27/08. La causa del
+retiro no está inventada: es el evento que trae su propio kardex, la revisión organoléptica
+del 01/09 que devolvió el lote a cuarentena.
 
 Esa importación destapó un error de modelo: sumar la columna «entregada» de la conciliación
 cuenta **dos veces la misma unidad** —el almacén la recibió por la importación y el cliente
