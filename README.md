@@ -16,8 +16,14 @@ la app sigue funcionando sin conexión después del primer acceso.
   código, versión, área y fecha de próxima revisión. El estado
   (vigente / por vencer / vencido) se calcula solo. Se agrupan por criterio
   de clasificación, editable por droguería.
-- **Capacitaciones** — cronograma anual con participantes, estado
-  pendiente / realizada / vencida, y acta de asistencia imprimible.
+- **Documentos de inspección** — expediente por droguería organizado en
+  Listados, Resoluciones BPA y Documentos del almacén, con documentos requeridos
+  y espacio para agregar otros con título propio.
+- **Información del almacén** — ficha editable por droguería con razón social,
+  nombre comercial, RUC, direcciones, área, cuarentena, director técnico y tipo
+  de almacenamiento propio o tercerizado.
+- **Capacitaciones** — cronograma anual con participantes, nota individual de
+  evaluación, estado pendiente / realizada / vencida y acta de asistencia imprimible.
 - **Autoinspecciones** — cronograma, registro de resultados y hallazgos, y
   actas de inspección con el checklist oficial **REGISTRO_004 (DIGEMID)**:
   15 secciones, 291 ítems, cada uno con su severidad (crítico / mayor /
@@ -47,10 +53,10 @@ la app sigue funcionando sin conexión después del primer acceso.
 - **Formatos propios por droguería** — cargá el formato de asistencia (o el
   de autoinspección) en blanco que ya usa la droguería, en Excel, Word o PDF.
   BPA-Plus lee su título, sus campos de encabezado y las columnas de su tabla,
-  te deja elegir qué dato de la app llena cada uno, y desde entonces las actas
+  te deja elegir qué dato de la app llena cada uno (incluidas las notas), y desde entonces las actas
   se imprimen **con ese formato ya llenado** en vez del genérico. La
   configuración queda guardada en la droguería, así que viaja con ella. Se
-  administra desde el botón "Formato propio" de Capacitaciones y de
+  administra desde el botón "Formato de asistencia" de Capacitaciones y "Formato propio" de
   Autoinspecciones.
 - **Varias droguerías** — cambiá entre ellas desde la barra lateral; cada
   una tiene sus propios documentos, capacitaciones e inspecciones.

@@ -15,18 +15,23 @@
   'use strict';
   var D = global.BPAPLUS.domain, UI = global.BPAPLUS.ui, esc = UI.esc, icon = UI.icon;
 
-  var MODULOS = { capacitaciones: 'Capacitaciones', inspecciones: 'Autoinspecciones' };
+  var MODULOS = {
+    capacitaciones: 'Asistencia a capacitaciones',
+    evaluaciones: 'Evaluaciones de capacitaciones',
+    inspecciones: 'Autoinspecciones'
+  };
 
   /* Origen de cada dato: qué pone la app en ese campo / esa columna del formato. */
   var CAMPOS = [
     ['', '— en blanco —'], ['tema', 'Tema / actividad'], ['fecha', 'Fecha'], ['area', 'Área'],
     ['frec', 'Frecuencia'], ['expositor', 'Expositor / director técnico'], ['empresa', 'Razón social'],
-    ['ruc', 'RUC'], ['direccion', 'Dirección / lugar'], ['auditor', 'Auditor'],
+    ['ruc', 'RUC'], ['direccion', 'Dirección / lugar'], ['nombre', 'Nombre del participante'],
+    ['dni', 'DNI'], ['cargo', 'Cargo'], ['nota', 'Nota de evaluación'], ['auditor', 'Auditor'],
     ['numActa', 'N.° de acta'], ['cumplimiento', '% de cumplimiento'], ['hallazgos', 'Hallazgos (crít./may./men.)']
   ];
   var COLUMNAS = [
     ['', '— en blanco —'], ['indice', 'N.° correlativo'], ['nombre', 'Nombre del participante'],
-    ['dni', 'DNI'], ['cargo', 'Cargo'], ['areaP', 'Área del participante'],
+    ['dni', 'DNI'], ['cargo', 'Cargo'], ['areaP', 'Área del participante'], ['nota', 'Nota de evaluación'],
     ['texto', 'Ítem evaluado'], ['seccion', 'Sección'], ['si', 'Cumple (Sí)'], ['no', 'No cumple'],
     ['severidad', 'Severidad'], ['obs', 'Observación']
   ];
@@ -41,6 +46,10 @@
     ['empresa', ['empresa', 'razon social', 'drogueria', 'establecimiento']],
     ['ruc', ['ruc']],
     ['direccion', ['direccion', 'lugar', 'sede', 'local', 'ambiente']],
+    ['nombre', ['nombre', 'apellido', 'participante', 'trabajador', 'personal', 'evaluado']],
+    ['dni', ['dni', 'documento', 'identidad', 'cedula']],
+    ['cargo', ['cargo', 'puesto', 'funcion', 'ocupacion']],
+    ['nota', ['nota', 'calificacion', 'puntaje', 'puntuacion']],
     ['auditor', ['auditor', 'inspector']],
     ['numActa', ['acta']],
     ['area', ['area', 'unidad', 'servicio', 'departamento']]
@@ -50,7 +59,8 @@
     ['dni', ['dni', 'documento', 'identidad', 'cedula']],
     ['cargo', ['cargo', 'puesto', 'funcion', 'ocupacion']],
     ['severidad', ['severidad', 'criticidad', 'riesgo']],
-    ['obs', ['observacion', 'comentario', 'nota']],
+    ['nota', ['nota', 'calificacion', 'puntaje', 'puntuacion']],
+    ['obs', ['observacion', 'comentario']],
     ['texto', ['asunto', 'requisito', 'aspecto', 'criterio', 'descripcion', 'hallazgo']],
     ['seccion', ['seccion', 'capitulo']],
     ['areaP', ['area', 'unidad']],
@@ -62,7 +72,12 @@
     { label: 'N.°', key: 'indice' }, { label: 'Nombres y apellidos', key: 'nombre' },
     { label: 'Cargo', key: 'cargo' }, { label: 'Firma', key: '' }
   ];
-  var TITULO_HINT = /(asistencia|acta|registro|formato|capacitacion|inspeccion|constancia|control)/;
+  var TITULO_HINT = /(asistencia|acta|registro|formato|capacitacion|evaluacion|inspeccion|constancia|control)/;
+
+  function tituloDefault(modulo) {
+    return modulo === 'inspecciones' ? 'Acta de autoinspección'
+      : (modulo === 'evaluaciones' ? 'Evaluación de capacitación' : 'Registro de asistencia a capacitación');
+  }
 
   function norm(s) { return D.normTxt(s).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
 
@@ -86,6 +101,36 @@
     return (row || []).map(function (c) { return String(c == null ? '' : c).trim(); })
       .filter(function (t, i, a) { return t && t !== a[i - 1]; });
   }
+  function celdasPos(row) {
+    var out = [];
+    (row || []).forEach(function (value, col) {
+      var label = String(value == null ? '' : value).trim();
+      if (!label) return;
+      if (out.length && out[out.length - 1].label === label) out[out.length - 1].endCol = col;
+      else out.push({ label: label, col: col, endCol: col });
+    });
+    return out;
+  }
+
+  /* Datos del formato que no existen ya en la capacitación o sus participantes. */
+  function detectarRequeridos(read, modulo) {
+    if (modulo !== 'capacitaciones') return [];
+    var rows = read.rows || [], out = [], seen = {};
+    function add(label, key, type, value) {
+      if (seen[key]) return;
+      seen[key] = 1;
+      out.push({ label: label, key: key, type: type || 'text', value: value == null ? '' : value });
+    }
+    rows.forEach(function (row) {
+      celdasPos(row).forEach(function (cell) {
+        var n = norm(cell.label);
+        if (n === 'observacion' || n === 'observaciones') add('Observación', 'observacion');
+        else if (/^otros?$/.test(n)) add('Otros', 'otros');
+        else if (/^personal aprobado$|^personal en observacion$/.test(n)) add('Nota mínima aprobatoria', 'notaAprobatoria', 'number', 11);
+      });
+    });
+    return out;
+  }
 
   /* ------------------------------ Lectura del formato en blanco ------------------------------ */
   function parse(read, fileName, modulo) {
@@ -94,28 +139,28 @@
     // Cabecera de la tabla: la fila con más celdas reconocibles como columna.
     var head = -1, best = 1;
     for (var i = 0; i < Math.min(rows.length, 40); i++) {
-      var cs = celdas(rows[i]);
+      var cs = celdasPos(rows[i]);
       if (cs.length < 2) continue;
-      var hits = cs.filter(function (c) { return guess(c, ALIAS_COL); }).length;
-      if (hits > best) { best = hits; head = i; }
+      var hits = cs.filter(function (c) { return guess(c.label, ALIAS_COL); }).length;
+      if (hits > best && !cs.some(function (c) { return /:\s*$/.test(c.label); })) { best = hits; head = i; }
     }
     var columnas = head >= 0
-      ? celdas(rows[head]).map(function (c) { return { label: c, key: guess(c, ALIAS_COL) }; })
+      ? celdasPos(rows[head]).map(function (c) { return { label: c.label, key: guess(c.label, ALIAS_COL), col: c.col }; })
       : COLS_DEFAULT.map(function (c) { return { label: c.label, key: c.key }; });
 
     // Campos: lo que arriba de la tabla parece una etiqueta («Tema:», «Fecha:»).
     var campos = [], vistos = {};
-    function addCampo(label) {
+    function addCampo(label, row, valueCol) {
       label = String(label).replace(/[:\s]+$/, '').trim();
       var k = norm(label);
       if (!k || label.length > 44 || vistos[k]) return;
       vistos[k] = 1;
-      campos.push({ label: label, key: guess(label, ALIAS_CAMPO) });
+      campos.push({ label: label, key: guess(label, ALIAS_CAMPO), row: row, col: valueCol });
     }
     var limite = head >= 0 ? head : Math.min(rows.length, 15);
-    for (var r = 0; r < limite; r++) celdas(rows[r]).forEach(function (c) {
+    for (var r = 0; r < limite; r++) celdasPos(rows[r]).forEach(function (c) {
       // Un texto largo que menciona «capacitación» es el título, no una etiqueta.
-      if (/:\s*$/.test(c) || (norm(c).length <= 24 && guess(c, ALIAS_CAMPO))) addCampo(c);
+      if (/:\s*$/.test(c.label) || (norm(c.label).length <= 24 && guess(c.label, ALIAS_CAMPO))) addCampo(c.label, r, c.endCol + 1);
     });
     if (!campos.length) (text.match(/[^\n:]{3,44}:/g) || []).slice(0, 10).forEach(addCampo);
 
@@ -136,10 +181,10 @@
     return {
       id: D.nextId(), modulo: modulo,
       nombre: titulo || String(fileName || 'Formato').replace(/\.[^.]+$/, ''),
-      titulo: titulo || (modulo === 'inspecciones' ? 'Acta de autoinspección' : 'Registro de asistencia a capacitación'),
+      titulo: titulo || tituloDefault(modulo),
       codigo: codigo, version: (text.match(/versi[oó]n\s*[:.]?\s*(\d+)/i) || [])[1] || '',
-      campos: campos, columnas: columnas, firmas: ['Expositor / capacitador', 'Director técnico'],
-      minFilas: 0, archivo: null
+      campos: campos, columnas: columnas, filaTabla: head, firmas: ['Expositor / capacitador', 'Director técnico'],
+      requeridos: detectarRequeridos(read, modulo), minFilas: 0, archivo: null
     };
   }
 
@@ -230,14 +275,16 @@
         root.addEventListener('click', function (ev) {
           var b = ev.target.closest('[data-rm]'); if (b) b.closest('.mini-row').remove();
         });
-        function leer(sel) {
+        function leer(sel, originales) {
           return Array.prototype.map.call(root.querySelectorAll(sel + ' .mini-row'), function (row) {
             var k = row.querySelector('.fm-key');
-            return { label: row.querySelector('.fm-lab').value.trim(), key: k ? k.value : '' };
+            var item = { label: row.querySelector('.fm-lab').value.trim(), key: k ? k.value : '' };
+            var original = (originales || []).filter(function (x) { return x.label === item.label; })[0];
+            return Object.assign({}, original || {}, item);
           }).filter(function (x) { return x.label; });
         }
         root.querySelector('#fm_save').onclick = function () {
-          var cols = leer('#fm_cols');
+          var cols = leer('#fm_cols', f.columnas);
           if (!cols.length) { UI.note('El formato necesita al menos una columna.'); return; }
           var upd = Object.assign({}, f, {
             nombre: root.querySelector('#fm_nom').value.trim() || 'Formato',
@@ -245,7 +292,7 @@
             titulo: root.querySelector('#fm_tit').value.trim() || 'Formato',
             codigo: root.querySelector('#fm_cod').value.trim(),
             version: root.querySelector('#fm_ver').value.trim(),
-            campos: leer('#fm_campos'), columnas: cols,
+            campos: leer('#fm_campos', f.campos), columnas: cols,
             firmas: leer('#fm_firmas').map(function (x) { return x.label; }),
             minFilas: Math.max(0, Math.min(60, +root.querySelector('#fm_min').value || 0))
           });
@@ -260,12 +307,12 @@
   }
 
   /* ------------------------------ Panel: formatos de la droguería ------------------------------ */
-  function manage(drogueria, modulo, onSave) {
-    var dg = drogueria;
+  function manage(drogueria, modulo, onSave, options) {
+    var dg = drogueria, opts = options || {};
 
     function bodyHtml() {
       var list = (dg.formatos || []).filter(function (x) { return x.modulo === modulo; });
-      return '<p class="dialog-note">Cargá el formato en blanco que usa ' + esc(dg.nombre) + ' (XLSX, DOCX o PDF). ' +
+      return '<p class="dialog-note">Cargá el formato en blanco que usa ' + esc(opts.nombre || dg.nombre) + ' (XLSX, DOCX o PDF). ' +
         'BPA-Plus lee su título, sus campos y sus columnas; desde entonces las actas de ' + esc(MODULOS[modulo].toLowerCase()) +
         ' se imprimen con ese formato ya llenado.</p>' +
         (list.length ? list.map(function (x, i) {
@@ -277,7 +324,7 @@
             '<div class="row-foot">' +
               (i === 0 ? '' : '<button class="link-btn" data-usar="' + esc(x.id) + '">' + icon('check', 14) + ' Usar este</button>') +
               '<button class="link-btn" data-cfg="' + esc(x.id) + '">' + icon('edit', 14) + ' Configurar</button>' +
-              (x.archivo ? '<button class="link-btn" data-baj="' + esc(x.id) + '">' + icon('download', 14) + ' Original</button>' : '') +
+              (x.archivo ? '<button class="link-btn" data-baj="' + esc(x.id) + '">' + icon('doc', 14) + ' Vista previa</button>' : '') +
               '<button class="link-btn" data-quitar="' + esc(x.id) + '">' + icon('trash', 14) + ' Quitar</button>' +
             '</div></div>';
         }).join('') : '<div class="row-empty">Sin formato propio: se imprime el acta genérica de BPA-Plus.</div>');
@@ -306,7 +353,7 @@
           var resto = todos.filter(function (y) { return y !== x; });
           if (b.dataset.usar) return persist(alFrente(x, resto));
           if (b.dataset.quitar) return persist(resto);
-          if (b.dataset.baj) return global.BPAPLUS.drive.downloadStored(x.archivo).catch(function (e) { UI.note(e.message || e); });
+          if (b.dataset.baj) return global.BPAPLUS.drive.previewStored(x.archivo).catch(function (e) { UI.note(e.message || e); });
           form(x, function (upd) { return persist(alFrente(upd, resto)); });
         });
 
@@ -320,7 +367,7 @@
               /* Por el mismo punto de subida que los documentos: sin eso, el archivo no
                  quedaría en Drive y `downloadStored` de acá arriba no lo encontraría. */
               var subida = global.BPAPLUS.drive
-                .subirArchivo('droguerias/' + dg.id + '/formatos/' + upd.id + '/' + Date.now() + '_' + file.name, file, file.name)
+                .subirArchivo((opts.path || ('droguerias/' + dg.id + '/formatos')) + '/' + upd.id + '/' + Date.now() + '_' + file.name, file, file.name)
                 .then(function (meta) { upd.archivo = meta; })
                 .catch(function () { UI.note('La configuración se guardó; el archivo original no se pudo subir.'); });
               return subida.then(function () { return persist(alFrente(upd, (dg.formatos || []).slice())); });
@@ -334,6 +381,6 @@
 
   global.BPAPLUS = global.BPAPLUS || {};
   global.BPAPLUS.formatos = {
-    MODULOS: MODULOS, parse: parse, render: render, para: para, form: form, manage: manage
+    MODULOS: MODULOS, parse: parse, detectarRequeridos: detectarRequeridos, render: render, para: para, form: form, manage: manage
   };
 })(window);

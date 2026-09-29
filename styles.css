@@ -292,6 +292,14 @@ a { color: inherit; }
 .row-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; padding: 12px 14px; flex: none; }
 .row-empty { color: var(--ink-3); font-size: 13px; padding: 6px 0; }
 .row-foot { display: flex; gap: 16px; align-items: center; padding: 0 14px 12px 18px; flex-wrap: wrap; }
+.inspection-docs .btn { min-height: 44px; }
+.inspection-groups { display: grid; gap: 16px; margin-top: 18px; }
+.inspection-group { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; }
+.inspection-group-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.inspection-group-head h2 { margin: 0; font-family: var(--font-display); font-size: 18px; }
+.warehouse-info { max-width: 860px; }
+.warehouse-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
+.warehouse-actions .btn { min-height: 44px; }
 .link-btn { background: none; border: none; color: var(--navy-2); font-size: 12.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; padding: 4px 0; }
 :root.dark .link-btn { color: var(--beacon); }
 .link-btn:hover { text-decoration: underline; }
@@ -422,6 +430,9 @@ textarea.inp { min-height: 88px; resize: vertical; }
 }
 .dialog.show .dialog-card { transform: translateY(0) scale(1); }
 .dialog-card.wide { max-width: 620px; }
+.dialog-card.file-preview-dialog { max-width: 1000px; height: min(88vh, 760px); }
+.file-preview-dialog .dialog-body { display: flex; flex: 1; min-height: 0; padding: 0; }
+.file-preview { width: 100%; height: 100%; border: 0; background: var(--surface-2); }
 .dialog-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--border); flex: none; }
 .dialog-title { font-family: var(--font-display); font-size: 17px; font-weight: 600; }
 .dialog-body { padding: 18px; overflow-y: auto; }
@@ -577,6 +588,8 @@ textarea.inp { min-height: 88px; resize: vertical; }
 .rv-group > .rv-list { padding: 10px; }
 :root.dark .rv-badge.revisar { color: var(--navy); }
 .file-list { display: grid; gap: 7px; }
+.file-item-row { display: flex; align-items: stretch; gap: 7px; }
+.file-item-row .file-item { flex: 1; min-width: 0; }
 .file-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); text-align: left; color: var(--ink); }
 .file-item:hover { background: var(--surface-2); }
 .file-item span { display: grid; min-width: 0; }

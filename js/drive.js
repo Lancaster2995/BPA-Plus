@@ -15,6 +15,7 @@
   var GIS_SRC = 'https://accounts.google.com/gsi/client';
   var MAMMOTH_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.7.2/mammoth.browser.min.js';
   var XLSX_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  var JSZIP_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
   var PDF_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs';
   /* `drive.readonly` para escanear las carpetas que la droguería ya tiene; `drive.file`
      para guardar las nuestras. `drive.file` es el scope angosto: solo ve los archivos que
@@ -69,7 +70,7 @@
                 : 'No se completó la autorización de Google.'));
             }
           });
-          client.requestAccessToken({ prompt: isConnected() ? '' : 'consent' });
+          client.requestAccessToken({ prompt: '' });
         } catch (e) { reject(e); }
       });
     });
@@ -87,14 +88,14 @@
 
   function searchFiles(query, pageSize) {
     var q = "trashed = false and (mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' " +
-      "or mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType = 'application/pdf')" +
+      "or mimeType = 'application/msword' or mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType = 'application/pdf')" +
       (query ? " and name contains '" + query.replace(/'/g, "\\'") + "'" : '');
     var params = 'q=' + encodeURIComponent(q) + '&fields=' + encodeURIComponent('files(id,name,mimeType,webViewLink,modifiedTime)') +
       '&pageSize=' + (pageSize || 50) + '&orderBy=name';
     return api('files', params).then(function (r) { return r.json(); }).then(function (d) { return d.files || []; });
   }
 
-  var LEAF_TYPES = /wordprocessingml|spreadsheetml|application\/pdf/;
+  var LEAF_TYPES = /wordprocessingml|spreadsheetml|application\/(?:pdf|msword)/;
   var FOLDER_TYPE = 'application/vnd.google-apps.folder';
 
   function listChildren(folderId) {
@@ -105,7 +106,7 @@
   }
 
   /* Recorre la carpeta y sus subcarpetas (hasta 5 niveles) y devuelve solo
-     archivos hoja (docx/xlsx/pdf) — las carpetas nunca se listan como si
+     archivos hoja (doc/docx/xlsx/pdf) — las carpetas nunca se listan como si
      fueran documentos importables. */
   function filesInFolder(folderId, pageSize, _depth, _folderName) {
     _depth = _depth || 0;
@@ -199,7 +200,8 @@
             var rows = Array.prototype.map.call(doc.querySelectorAll('tr'), function (tr) {
               return Array.prototype.map.call(tr.cells, function (td) { return (td.textContent || '').trim(); });
             });
-            return { rows: rows, text: (doc.body.textContent || '').trim() };
+            var lines = Array.prototype.map.call(doc.querySelectorAll('p'), function (p) { return (p.textContent || '').trim(); });
+            return { rows: rows, text: lines.filter(Boolean).join('\n') };
           });
       }
       return textFromPdf(buf).then(function (t) { return { rows: [], text: t.replace('__BPA_FILLED__', '') }; });
@@ -209,7 +211,8 @@
   function mimeFromFile(file) {
     var ext = (file.name.split('.').pop() || '').toLowerCase();
     return file.type || (ext === 'pdf' ? 'application/pdf' : ext === 'docx'
-      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : ext === 'xlsx'
+      ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : ext === 'doc'
+      ? 'application/msword' : ext === 'xlsx'
       ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : '');
   }
   function localFiles(fileList) {
@@ -410,6 +413,7 @@
     var codigo = codigoFromName(file.name);
     var base = {
       driveFileId: file.localFile ? undefined : file.id, driveUrl: file.localFile ? undefined : (file.webViewLink || ('https://drive.google.com/file/d/' + file.id + '/view')),
+      sourceId: file.id,
       codigo: codigo, nombre: nombreFromFile(file.name, codigo), tipo: tipoFromName(file.name),
       version: 1, rev: '', area: 'Almacén', modifiedTime: file.modifiedTime || '', _file: file.localFile || null,
       _fileName: file.name, _folderName: file.folderName || '', _origen: codigo ? 'nombre' : ''
@@ -494,7 +498,7 @@
   }
 
   /* Resumable en un solo PUT. `uploadType=multipart` corta en 5 MB y acá se admiten 25. */
-  function driveUpload(file, name, relative) {
+  function driveUpload(file, name) {
     var contentType = mimeFromFile(file) || 'application/octet-stream';
     function attemptUpload(attempt) {
       return appFolder().then(function (parent) {
@@ -505,10 +509,7 @@
               Authorization: 'Bearer ' + token, 'Content-Type': 'application/json; charset=UTF-8',
               'X-Upload-Content-Type': contentType, 'X-Upload-Content-Length': file.size
             },
-            body: JSON.stringify({
-              name: name, mimeType: contentType, parents: [parent],
-              appProperties: { bpaPath: String(relative || '').slice(0, 120) }
-            })
+            body: JSON.stringify({ name: name, mimeType: contentType, parents: [parent] })
           }); }, 'No se pudo iniciar la subida');
         });
       }).then(function (res) {
@@ -540,14 +541,13 @@
     });
   }
 
-  /* Único punto de subida. `relative` ya no es una ruta —Drive guarda plano dentro de la
-     carpeta de la app— pero viaja como `appProperties` para saber de dónde salió cada
-     archivo. Se convierte siempre en un rechazo: sin Client ID no hay a dónde subir. */
+  /* Único punto de subida. Drive guarda plano dentro de la carpeta de la app. */
   function subirArchivo(relative, file, name) {
     /* ponytail: una cola por pestaña; separar por cuenta solo si se permiten sesiones simultáneas. */
     var job = uploadQueue.catch(function () {}).then(function () {
-      if (!getClientId()) throw new Error('Conectá Google Drive para guardar archivos.');
-      return driveUpload(file, name || file.name, relative);
+      return (getClientId() ? Promise.resolve() : new Promise(function (resolve, reject) {
+        connectPanel(resolve, reject);
+      })).then(function () { return driveUpload(file, name || file.name); });
     });
     uploadQueue = job;
     return job;
@@ -573,7 +573,7 @@
       }
       return Object.assign({}, doc, {
         role: role, version: version, file: meta, templateMissing: false,
-        history: doc.file ? (doc.history || []).concat(doc.file) : (doc.history || [])
+        history: doc.file && version > (+doc.version || 1) ? (doc.history || []).concat(doc.file) : (doc.history || [])
       });
     });
   }
@@ -608,12 +608,327 @@
       setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
     });
   }
+
+  /* Rellena el XLSX original: conserva hojas, celdas fusionadas, anchos y estilos
+     que SheetJS puede leer/escribir, en vez de reconstruir el formato en HTML. */
+  function exportarFormatoXlsx(fmt, documentos, nombre) {
+    var meta = fmt && fmt.archivo, fileName = meta && (meta.name || meta.originalName) || '';
+    var layout = fmt;
+    if (!meta || !/\.xlsx$/i.test(fileName)) return Promise.resolve(false);
+
+    function setCell(ws, row, col, value) {
+      if (row == null || col == null) return;
+      var addr = XLSX.utils.encode_cell({ r: row, c: col });
+      ws[addr] = Object.assign({}, ws[addr] || {}, { v: value == null ? '' : value, t: typeof value === 'number' ? 'n' : 's' });
+      var range = XLSX.utils.decode_range(ws['!ref'] || addr);
+      range.e.r = Math.max(range.e.r, row); range.e.c = Math.max(range.e.c, col);
+      ws['!ref'] = XLSX.utils.encode_range(range);
+    }
+    function fill(ws, doc) {
+      (layout.campos || []).forEach(function (field) { if (field.key) setCell(ws, field.row, field.col, doc.valores[field.key]); });
+      var start = (+layout.filaTabla || 0) + 1;
+      (doc.filas || []).forEach(function (row, i) {
+        (layout.columnas || []).forEach(function (col, j) {
+          var column = col.col == null ? j : col.col;
+          var source = XLSX.utils.encode_cell({ r: start, c: column });
+          var target = XLSX.utils.encode_cell({ r: start + i, c: column });
+          if (!ws[target] && ws[source]) ws[target] = Object.assign({}, ws[source]);
+          var value = col.key === 'indice' ? i + 1 : (col.key ? row[col.key] : '');
+          setCell(ws, start + i, column, value);
+        });
+        if (i && ws['!rows'] && ws['!rows'][start]) ws['!rows'][start + i] = Object.assign({}, ws['!rows'][start]);
+      });
+    }
+    function cloneSheet(ws) { return JSON.parse(JSON.stringify(ws)); }
+    function sheetName(name, index) {
+      return String(name || ('Participante ' + (index + 1))).replace(/[\\/?*\[\]:]/g, ' ').slice(0, 31) || ('Participante ' + (index + 1));
+    }
+
+    return Promise.all([downloadBinary(meta.driveId), loadScript(XLSX_SRC)]).then(function (result) {
+      var wb = XLSX.read(result[0], { type: 'array', cellStyles: true });
+      var base = wb.Sheets[wb.SheetNames[0]];
+      if (fmt.filaTabla == null || !(fmt.columnas || []).some(function (c) { return c.col != null; })) {
+        var rows = XLSX.utils.sheet_to_json(base, { header: 1, defval: '', raw: false, dateNF: 'dd/mm/yyyy' });
+        (base['!merges'] || []).forEach(function (merge) {
+          var cell = base[XLSX.utils.encode_cell(merge.s)], value = cell ? cell.v : '';
+          for (var r = merge.s.r; r <= merge.e.r; r++) for (var c = merge.s.c; c <= merge.e.c; c++) {
+            rows[r] = rows[r] || []; if (rows[r][c] === '' || rows[r][c] == null) rows[r][c] = value;
+          }
+        });
+        var parsed = global.BPAPLUS.formatos.parse({ rows: rows, text: rows.map(function (r) { return r.join(' '); }).join('\n') }, fileName, fmt.modulo);
+        function keepKeys(found, configured) {
+          return found.map(function (item) {
+            var old = (configured || []).filter(function (x) { return x.label === item.label; })[0];
+            return Object.assign({}, item, old ? { key: old.key } : {});
+          });
+        }
+        layout = Object.assign({}, fmt, { filaTabla: parsed.filaTabla, campos: keepKeys(parsed.campos, fmt.campos), columnas: keepKeys(parsed.columnas, fmt.columnas) });
+      }
+      if ((documentos || []).length > 1) {
+        /* ponytail: una hoja base por participante; formatos XLSX de varias hojas se
+           duplican completos cuando aparezca un caso real que lo necesite. */
+        wb = { SheetNames: [], Sheets: {} };
+        documentos.forEach(function (doc, i) {
+          var name = sheetName(doc.nombreHoja, i), unique = name;
+          while (wb.Sheets[unique]) unique = name.slice(0, 28) + '-' + (i + 1);
+          wb.SheetNames.push(unique); wb.Sheets[unique] = cloneSheet(base); fill(wb.Sheets[unique], doc);
+        });
+      } else fill(base, documentos[0] || { valores: {}, filas: [] });
+      var blob = new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true })], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      var url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = nombre || fileName; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      return true;
+    });
+  }
+
+  function exportarFormatoDocx(fmt, documentos, nombre) {
+    var meta = fmt && fmt.archivo, fileName = meta && (meta.name || meta.originalName) || '';
+    if (!meta || !/\.docx$/i.test(fileName)) return Promise.resolve(false);
+    var W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+    function direct(node, name) {
+      return Array.prototype.filter.call(node.children || [], function (x) { return x.localName === name; });
+    }
+    function text(node) {
+      return Array.prototype.map.call(node.getElementsByTagNameNS(W, 't'), function (x) { return x.textContent; }).join('');
+    }
+    function setText(node, value) {
+      var ts = node.getElementsByTagNameNS(W, 't'), first = ts[0];
+      if (!first) {
+        var p = node.getElementsByTagNameNS(W, 'p')[0] || node.appendChild(document.createElementNS(W, 'w:p'));
+        var r = p.appendChild(document.createElementNS(W, 'w:r'));
+        first = r.appendChild(document.createElementNS(W, 'w:t'));
+      }
+      first.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+      first.textContent = value == null ? '' : String(value);
+      for (var i = 1; i < ts.length; i++) ts[i].textContent = '';
+    }
+    function norm(value) { return D.normTxt(value || '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+    function fillProgram(xml, doc) {
+      var body = xml.getElementsByTagNameNS(W, 'body')[0], children = direct(body, 'p').concat(direct(body, 'tbl'));
+      var start = -1, bodyChildren = Array.prototype.slice.call(body.children || []);
+      bodyChildren.forEach(function (node, i) {
+        if (start < 0 && node.getElementsByTagNameNS(W, 'br').length && Array.prototype.some.call(node.getElementsByTagNameNS(W, 'br'), function (b) { return b.getAttributeNS(W, 'type') === 'page'; })) start = i;
+      });
+      if (start < 0 || !bodyChildren.slice(start).some(function (n) { return norm(text(n)).indexOf('programa de capacitacion') >= 0; })) return;
+      var end = bodyChildren.findIndex(function (n, i) { return i > start && n.localName === 'sectPr'; });
+      if (end < 0) end = bodyChildren.length;
+      var template = bodyChildren.slice(start, end).map(function (n) { return n.cloneNode(true); });
+      var participants = doc.filas && doc.filas.length ? doc.filas : [{}], values = doc.valores || {}, extras = doc.datosFormato || {};
+
+      function fillPage(nodes, participant) {
+        nodes.forEach(function (node) {
+          if (node.localName !== 'p') return;
+          var current = norm(text(node));
+          if (current.indexOf('nombre') === 0) setText(node, 'NOMBRE: ' + (participant.nombre || ''));
+          else if (current.indexOf('cargo') === 0 && current.indexOf('fecha') >= 0) setText(node, 'CARGO: ' + (participant.cargo || '') + '\t\tFECHA: ' + (values.fecha || ''));
+        });
+        nodes.forEach(function (node) {
+          Array.prototype.forEach.call(node.localName === 'tbl' ? [node] : node.getElementsByTagNameNS(W, 'tbl'), function (table) {
+            var rows = direct(table, 'tr'); if (!rows.length) return;
+            var headerCells = direct(rows[0], 'tc'), headers = headerCells.map(function (c) { return norm(text(c)); });
+            if (headers.some(function (h) { return h.indexOf('temas de capacitacion') >= 0; }) && rows[1]) {
+              var cells = direct(rows[1], 'tc');
+              headers.forEach(function (h, i) {
+                if (!cells[i]) return;
+                if (/^n$|^nro$|^numero$/.test(h)) setText(cells[i], '1');
+                else if (h.indexOf('temas de capacitacion') >= 0) setText(cells[i], values.tema || '');
+                else if (h === 'fecha') setText(cells[i], values.fecha || '');
+                else if (h.indexOf('observacion') >= 0) setText(cells[i], extras.observacion || '');
+              });
+              return;
+            }
+            rows.forEach(function (row) {
+              var cells = direct(row, 'tc'), label = norm(cells[0] ? text(cells[0]) : '');
+              if (cells.length < 2) return;
+              var score = participant.nota === '' || participant.nota == null ? null : +participant.nota;
+              var limit = extras.notaAprobatoria === '' || extras.notaAprobatoria == null ? 11 : +extras.notaAprobatoria;
+              if (label === 'personal aprobado') setText(cells[1], score == null ? 'SI (   )     NO (   )' : (score >= limit ? 'SI ( X )     NO (   )' : 'SI (   )     NO ( X )'));
+              else if (label === 'personal en observacion') setText(cells[1], score == null ? 'SI (   )     NO (   )' : (score < limit ? 'SI ( X )     NO (   )' : 'SI (   )     NO ( X )'));
+              else if (/^otros?$/.test(label)) setText(cells[1], extras.otros || '');
+              else if (label.indexOf('calificacion') === 0) setText(cells[1], score == null ? '' : score + ' / 20');
+            });
+          });
+        });
+      }
+
+      fillPage(bodyChildren.slice(start, end), participants[0]);
+      for (var i = 1; i < participants.length; i++) {
+        var page = template.map(function (n) { return n.cloneNode(true); });
+        fillPage(page, participants[i]);
+        page.forEach(function (n) { body.insertBefore(n, bodyChildren[end]); });
+      }
+    }
+    function fillAttendance(xml, doc) {
+      var definitions = (fmt.columnas || []).filter(function (c) { return c.label && c.key; });
+      var tables = xml.getElementsByTagNameNS(W, 'tbl'), best = null;
+      Array.prototype.forEach.call(tables, function (candidate) {
+        direct(candidate, 'tr').forEach(function (row, rowIndex) {
+          var cells = direct(row, 'tc'), used = {}, mapping = [];
+          definitions.forEach(function (definition, fallbackIndex) {
+            var label = norm(definition.label), found = -1;
+            cells.forEach(function (cell, cellIndex) {
+              var value = norm(text(cell));
+              if (found < 0 && !used[cellIndex] && value && (value === label || value.indexOf(label) >= 0 || label.indexOf(value) >= 0)) found = cellIndex;
+            });
+            if (found >= 0) used[found] = true;
+            mapping.push({ definition: definition, col: found >= 0 ? found : fallbackIndex, matched: found >= 0 });
+          });
+          var score = mapping.filter(function (m) { return m.matched; }).length;
+          if (!best || score > best.score) best = { table: candidate, row: rowIndex, mapping: mapping, score: score };
+        });
+      });
+      if (!best || !best.mapping.some(function (m) { return m.definition.key === 'nombre' && m.matched; })) {
+        throw new Error('No se encontró la columna configurada como Nombre del participante. Revisá la adaptación del formato.');
+      }
+      var table = best.table, rows = direct(table, 'tr'), header = best.row, mapping = best.mapping;
+      var footer = rows.length, maxCol = Math.max.apply(null, mapping.map(function (m) { return m.col; }));
+      var indexMap = mapping.filter(function (m) { return m.definition.key === 'indice'; })[0];
+      for (var ri = header + 1; ri < rows.length; ri++) {
+        var rowCells = direct(rows[ri], 'tc'), rowText = norm(text(rows[ri]));
+        var indexValue = indexMap && rowCells[indexMap.col] ? norm(text(rowCells[indexMap.col])) : '';
+        if (rowCells.length <= maxCol || /director tecnico|responsable|firma del|expositor/.test(rowText) || (indexValue && !/^\d+$/.test(indexValue))) {
+          footer = ri; break;
+        }
+      }
+      var values = doc.valores || {};
+      function fillField(container, field) {
+        var label = norm(field.label), current = norm(text(container));
+        if (!label || current.indexOf(label) !== 0) return false;
+        var original = String(field.label).replace(/[:\s]+$/, '');
+        setText(container, original + ': ' + (values[field.key] == null ? '' : values[field.key]));
+        return true;
+      }
+      (fmt.campos || []).filter(function (field) { return field.label && field.key; }).forEach(function (field) {
+        var filled = false;
+        rows.slice(0, header).some(function (row) {
+          return direct(row, 'tc').some(function (cell) { if (fillField(cell, field)) { filled = true; return true; } return false; });
+        });
+        if (filled) return;
+        var body = xml.getElementsByTagNameNS(W, 'body')[0];
+        direct(body, 'p').some(function (p) {
+          if (p.compareDocumentPosition(table) & 4) { if (fillField(p, field)) { filled = true; return true; } }
+          return false;
+        });
+      });
+      var participants = doc.filas || [], dataRows = rows.slice(header + 1, footer);
+      if (!dataRows.length) throw new Error('El formato no deja filas para participantes debajo de la cabecera configurada.');
+      while (participants.length > dataRows.length) {
+        var clone = dataRows[dataRows.length - 1].cloneNode(true);
+        table.insertBefore(clone, rows[footer]); dataRows.push(clone);
+      }
+      var firstIndex = indexMap && direct(dataRows[0], 'tc')[indexMap.col];
+      var pad = firstIndex ? (text(firstIndex).match(/\d+/) || [''])[0].length : 1;
+      dataRows.forEach(function (row, index) {
+        var cells = direct(row, 'tc'), participant = participants[index] || {};
+        mapping.forEach(function (m) {
+          var cell = cells[m.col]; if (!cell) return;
+          var key = m.definition.key;
+          if (key === 'indice') { if (participant.nombre) setText(cell, String(index + 1).padStart(pad, '0')); return; }
+          var value = participant[key]; setText(cell, value == null ? '' : value);
+        });
+      });
+      fillProgram(xml, doc);
+    }
+    function fillEvaluation(xml, doc) {
+      var values = doc.valores || {};
+      Array.prototype.forEach.call(xml.getElementsByTagNameNS(W, 'p'), function (p) {
+        var current = norm(text(p));
+        if (current.indexOf('nombre') === 0) setText(p, 'NOMBRE: ' + (values.nombre || ''));
+        else if (current.indexOf('cargo') === 0 && current.indexOf('fecha') >= 0) setText(p, 'CARGO: ' + (values.cargo || '') + '\t\tFECHA: ' + (values.fecha || ''));
+      });
+      Array.prototype.forEach.call(xml.getElementsByTagNameNS(W, 'tr'), function (row) {
+        var cells = direct(row, 'tc');
+        if (norm(text(row)).indexOf('calificacion') === 0 && cells[1]) setText(cells[1], values.nota == null ? '' : values.nota);
+      });
+    }
+    function filledBytes(buffer, doc) {
+      return JSZip.loadAsync(buffer).then(function (zip) {
+        return zip.file('word/document.xml').async('string').then(function (source) {
+          var xml = new DOMParser().parseFromString(source, 'application/xml');
+          if (fmt.modulo === 'evaluaciones') fillEvaluation(xml, doc); else fillAttendance(xml, doc);
+          zip.file('word/document.xml', new XMLSerializer().serializeToString(xml), { createFolders: false });
+          return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+        });
+      });
+    }
+    function download(blob, outputName) {
+      var url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = outputName; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    return Promise.all([downloadBinary(meta.driveId), loadScript(JSZIP_SRC)]).then(function (result) {
+      var buffer = result[0], docs = documentos || [];
+      if (docs.length <= 1) return filledBytes(buffer, docs[0] || { valores: {}, filas: [] }).then(function (bytes) {
+        download(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }), nombre + '.docx');
+        return true;
+      });
+      var outer = new JSZip();
+      return Promise.all(docs.map(function (doc, i) {
+        return filledBytes(buffer, doc).then(function (bytes) {
+          var person = String(doc.nombreHoja || ('participante-' + (i + 1))).replace(/[^a-z0-9 _-]/gi, '').trim() || ('participante-' + (i + 1));
+          outer.file(person + '.docx', bytes);
+        });
+      })).then(function () { return outer.generateAsync({ type: 'blob', compression: 'DEFLATE' }); })
+        .then(function (blob) { download(blob, nombre + '.zip'); return true; });
+    });
+  }
+
+  function exportarFormato(fmt, documentos, nombre) {
+    var fileName = fmt && fmt.archivo && (fmt.archivo.name || fmt.archivo.originalName) || '';
+    if (/\.docx$/i.test(fileName)) return exportarFormatoDocx(fmt, documentos, nombre);
+    return exportarFormatoXlsx(fmt, documentos, nombre + '.xlsx');
+  }
+  function camposRequeridos(fmt) {
+    if (fmt && fmt.requeridos) return Promise.resolve(fmt.requeridos);
+    var meta = fmt && fmt.archivo;
+    if (!meta || !/\.docx$/i.test(meta.name || meta.originalName || '') || !meta.driveId) return Promise.resolve([]);
+    return downloadBinary(meta.driveId).then(function (buf) {
+      var file = new File([buf], meta.name || meta.originalName, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      return leerFormato(file);
+    }).then(function (read) {
+      var F = global.BPAPLUS.formatos;
+      return F && F.detectarRequeridos ? F.detectarRequeridos(read, 'capacitaciones') : [];
+    });
+  }
+  function previewStored(meta) {
+    if (!meta || !meta.driveId) return Promise.reject(new Error('El archivo no está disponible.'));
+    var name = meta.name || meta.originalName || 'Documento';
+    var m = UI.dialog({
+      title: name,
+      wide: true,
+      body: '<iframe class="file-preview" title="Vista previa de ' + UI.esc(name) + '" src="https://drive.google.com/file/d/' + encodeURIComponent(meta.driveId) + '/preview" allow="autoplay"></iframe>',
+      footer: '<button class="btn btn-ghost" data-close>Cerrar</button><button class="btn btn-primary" data-preview-download>Descargar</button>',
+      onMount: function (root) {
+        root.querySelector('[data-preview-download]').onclick = function () {
+          downloadStored(meta).catch(function (error) { UI.note(error.message || error); });
+        };
+      }
+    });
+    m.el.classList.add('file-preview-dialog');
+    return Promise.resolve(m);
+  }
+  function deleteStored(meta) {
+    if (!meta || !meta.driveId) return Promise.resolve();
+    if (!getClientId()) return Promise.reject(new Error('Conectá Google Drive para eliminar el archivo.'));
+    return ensureAuth().then(function (token) {
+      return fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(meta.driveId), {
+        method: 'DELETE', headers: { Authorization: 'Bearer ' + token }
+      }).then(function (r) {
+        if (!r.ok && r.status !== 404) throw new Error('No se pudo eliminar el archivo de Google Drive (' + r.status + ').');
+      });
+    });
+  }
   function filePanel(doc, dgId, onSave) {
     var defaultRole = doc.tipo === 'Formato' ? 'plantilla' : 'controlado';
     var m = UI.dialog({
       title: doc.file ? 'Reemplazar archivo' : 'Cargar archivo',
       body: '<p class="dialog-note">El reemplazo conserva la versión anterior. Los formatos llenados se archivan como registros y no sustituyen la plantilla vacía.</p>' +
-        '<div class="field"><label>PDF, Word o Excel (máximo 25 MB)</label><input class="inp" id="df_file" type="file" accept=".pdf,.docx,.xlsx" required></div>' +
+        '<div class="field"><label>PDF, Word o Excel (máximo 25 MB)</label><input class="inp" id="df_file" type="file" accept=".pdf,.doc,.docx,.xlsx" required></div>' +
         '<div class="grid-2"><div class="field"><label>Uso del archivo</label><select class="inp" id="df_role">' +
           '<option value="controlado"' + (defaultRole === 'controlado' ? ' selected' : '') + '>Documento controlado</option>' +
           '<option value="plantilla"' + (defaultRole === 'plantilla' ? ' selected' : '') + '>Plantilla vacía</option>' +
@@ -624,7 +939,7 @@
         root.querySelector('#df_save').onclick = function () {
           var file = root.querySelector('#df_file').files[0], role = root.querySelector('#df_role').value;
           if (!file) { UI.note('Selecciona un archivo.'); return; }
-          if (!LEAF_TYPES.test(mimeFromFile(file)) || file.size >= 25 * 1024 * 1024) { UI.note('Usa PDF, DOCX o XLSX de menos de 25 MB.'); return; }
+          if (!LEAF_TYPES.test(mimeFromFile(file)) || file.size >= 25 * 1024 * 1024) { UI.note('Usa PDF, DOC, DOCX o XLSX de menos de 25 MB.'); return; }
           var btn = root.querySelector('#df_save'); btn.disabled = true; btn.textContent = 'Subiendo…';
           storeFile(dgId, doc, file, role, +root.querySelector('#df_version').value || doc.version).then(function (saved) {
             return onSave(saved);
@@ -636,8 +951,8 @@
   }
 
   /* ------------------------------ Panel de conexión ------------------------------ */
-  function connectPanel(onConnected) {
-    var clientId = getClientId();
+  function connectPanel(onConnected, onCancelled) {
+    var clientId = getClientId(), connected = false;
     var m = UI.dialog({
       title: 'Conectar Google Drive',
       body:
@@ -651,11 +966,13 @@
           if (!validClientId(v)) { UI.note('El Client ID debe terminar en .apps.googleusercontent.com'); return; }
           setClientId(v);
           var btn = root.querySelector('#dr_connect'); btn.disabled = true; btn.textContent = 'Conectando…';
-          ensureAuth().then(function () { m.close(); UI.note('Google Drive conectado'); if (onConnected) onConnected(); })
+          ensureAuth().then(function () { connected = true; m.close(); UI.note('Google Drive conectado'); if (onConnected) onConnected(); })
             .catch(function (e) { btn.disabled = false; btn.textContent = 'Conectar'; UI.note('No se pudo conectar: ' + (e && e.message || e)); });
         };
-      }
+      },
+      onClose: function () { if (!connected && onCancelled) onCancelled(new Error('Conexión con Google Drive cancelada.')); }
     });
+    return m;
   }
 
   function withAuth(run) {
@@ -671,7 +988,7 @@
       var m = UI.dialog({
         title: 'Escanear documentos BPA', wide: true,
         body:
-          '<div class="field"><label>Carpeta o archivos del dispositivo</label><input class="inp" id="im_local" type="file" accept=".pdf,.docx,.xlsx" webkitdirectory multiple><div class="hint">Lee PDF con texto, Word y Excel. Cada original se guarda automáticamente en tu Drive.</div></div>' +
+          '<div class="field"><label>Carpeta o archivos del dispositivo</label><input class="inp" id="im_local" type="file" accept=".pdf,.doc,.docx,.xlsx" webkitdirectory multiple><div class="hint">Lee PDF con texto, Word y Excel. Los Word .doc antiguos se identifican por el nombre. Cada original se guarda automáticamente en tu Drive.</div></div>' +
           '<div class="section-title">O seleccionar desde Google Drive</div>' +
           '<div class="grid-2"><div class="field"><label>Carpeta de Drive (URL o ID)</label><input class="inp" id="im_folder" placeholder="https://drive.google.com/drive/folders/…"></div>' +
           '<div class="field"><label>… o buscar por nombre</label><input class="inp" id="im_q" placeholder="POE, Registro…"></div></div>' +
@@ -729,22 +1046,6 @@
      carpetas distintas, ej. "POE 026" vs "poe-026") */
   function normCodigo(c) { return D.normTxt(c || '').replace(/[^a-z0-9]/g, ''); }
 
-  /* Junta duplicados dentro del mismo lote elegido (ej. el mismo código
-     aparece en la carpeta "POE" y en "POEs"): se queda con el que tenga
-     fecha de revisión, o si ninguno la tiene, con el más reciente. */
-  function mergeBatch(drafts) {
-    var byCode = {}, order = [];
-    function source(d) { return d.driveFileId || ((d.nombre || '') + '|' + (d.modifiedTime || '')); }
-    drafts.forEach(function (d) {
-      var key = normCodigo(d.codigo) || ('__' + source(d));
-      if (!byCode[key]) { byCode[key] = d; order.push(key); return; }
-      var prev = byCode[key];
-      var better = (d.rev && !prev.rev) ? d : (!d.rev && prev.rev) ? prev : ((d.modifiedTime || '') > (prev.modifiedTime || '') ? d : prev);
-      byCode[key] = Object.assign({}, better, { _mergedFrom: (prev._mergedFrom || [source(prev)]).concat(source(d)) });
-    });
-    return order.map(function (k) { return byCode[k]; });
-  }
-
   /* Por qué una ficha necesita ojo humano. Cadena vacía = lista para guardar. */
   function revisionPendiente(d) {
     if (!isStandardCode(d.codigo)) return 'Sin código estándar — escribilo (ej. POE-ALM-001).';
@@ -765,10 +1066,12 @@
   }
 
   function reviewPanel(drafts, onImport, existingDocs) {
-    drafts = mergeBatch(drafts);
     existingDocs = existingDocs || [];
-    var existingByCode = {};
-    existingDocs.forEach(function (d) { var key = normCodigo(d.codigo); if (key) existingByCode[key] = d; });
+    var existingByCode = {}, existingBySource = {}, claimedExisting = {};
+    existingDocs.forEach(function (d) {
+      var key = normCodigo(d.codigo); if (key) existingByCode[key] = d;
+      if (d.sourceId) existingBySource[d.sourceId] = d;
+    });
 
     var TYPES = ['POE', 'Formato', 'Registro', 'Instructivo', 'Manual', 'Otro'];
     var ROLES = [{ v: 'controlado', l: 'Documento controlado' }, { v: 'plantilla', l: 'Plantilla vacía' }, { v: 'registro', l: 'Formato llenado' }];
@@ -776,7 +1079,9 @@
     /* Una ficha por documento: el resumen se lee de un vistazo y los campos solo
        se despliegan si hacen falta (<details> nativo, sin JS de acordeón). */
     function cardHtml(d, i) {
-      var codeKey = normCodigo(d.codigo), match = codeKey ? existingByCode[codeKey] : null;
+      var codeKey = normCodigo(d.codigo), match = existingBySource[d.sourceId];
+      if (!match && codeKey && existingByCode[codeKey] && !claimedExisting[existingByCode[codeKey].id]) match = existingByCode[codeKey];
+      if (match) claimedExisting[match.id] = true;
       var aviso = revisionPendiente(d);
       var estado = aviso ? 'revisar' : match ? 'actualiza' : 'nuevo';
       var etiqueta = aviso ? 'Revisar' : match ? 'Actualiza el existente' : 'Nuevo';
@@ -827,7 +1132,7 @@
           '<span class="rv-resumen-n">' + listos.length + '</span> listos para guardar' +
           (pendientes.length ? ' · <span class="rv-resumen-n warn">' + pendientes.length + '</span> necesitan un dato' : '') +
         '</div>' +
-        '<p class="dialog-note">Cada documento conservará su archivo en Drive. Los códigos duplicados ya se fusionaron.</p>' +
+        '<p class="dialog-note">Cada archivo seleccionado se revisa y conserva como documento.</p>' +
         (pendientes.length
           ? '<div class="section-title">Necesitan tu revisión <span class="section-count">' + pendientes.length + '</span></div>' +
             '<div class="rv-list">' + pendientes.join('') + '</div>'
@@ -1037,7 +1342,10 @@
     codigoFromName: codigoFromName, normalizeCode: normalizeCode, isStandardCode: isStandardCode,
     standardName: standardName, tipoFromName: tipoFromName, localFiles: localFiles, leerFormato: leerFormato,
     prepareUpload: appFolder, prepararUpload: appFolder, subirArchivo: subirArchivo, storeFile: storeFile, storeMaterial: storeMaterial,
-    textoDeArchivo: textoDeArchivo, downloadStored: downloadStored, filePanel: filePanel,
+    textoDeArchivo: textoDeArchivo, previewStored: previewStored, downloadStored: downloadStored,
+    exportarFormato: exportarFormato, exportarFormatoXlsx: exportarFormatoXlsx, exportarFormatoDocx: exportarFormatoDocx,
+    camposRequeridos: camposRequeridos,
+    deleteStored: deleteStored, filePanel: filePanel,
     linkPanel: linkPanel, extractIdFromUrl: extractIdFromUrl
   };
 })(window);

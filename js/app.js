@@ -11,6 +11,8 @@
   var NAV = [
     { view: 'dashboard', label: 'Panorama', icon: 'dashboard' },
     { view: 'documentos', label: 'Documentos', icon: 'doc' },
+    { view: 'documentos-inspeccion', label: 'Documentos de inspección', icon: 'insp', bottom: false },
+    { view: 'informacion-almacen', label: 'Información del almacén', icon: 'building', bottom: false },
     { view: 'capacitaciones', label: 'Capacitaciones', icon: 'cap' },
     { view: 'autoinspecciones', label: 'Autoinspecciones', icon: 'insp' },
     { view: 'retiros', label: 'Retiro de mercado', icon: 'flag' }
@@ -19,16 +21,16 @@
   /* ------------------------------ Store ------------------------------ */
   var store = {
     state: { dg: '', view: 'dashboard', qDoc: '', filtDoc: 'todos', filtCap: 'todos', filtInsp: 'todos' },
-    data: { droguerias: [], documentos: [], capacitaciones: [], inspecciones: [], actas: [], retiros: [] },
+    data: { droguerias: [], documentos: [], documentosInspeccion: [], capacitaciones: [], inspecciones: [], actas: [], retiros: [] },
 
     load: function () {
       return Promise.all([
-        DB.getAll('droguerias'), DB.getAll('documentos'), DB.getAll('capacitaciones'),
+        DB.getAll('droguerias'), DB.getAll('documentos'), DB.getAll('documentosInspeccion'), DB.getAll('capacitaciones'),
         DB.getAll('inspecciones'), DB.getAll('actas'), DB.getAll('retiros'), DB.getMeta('dgActiva', '')
       ]).then(function (r) {
-        store.data.droguerias = r[0]; store.data.documentos = r[1]; store.data.capacitaciones = r[2];
-        store.data.inspecciones = r[3]; store.data.actas = r[4]; store.data.retiros = r[5];
-        store.state.dg = r[6] || (r[0][0] && r[0][0].id) || '';
+        store.data.droguerias = r[0]; store.data.documentos = r[1]; store.data.documentosInspeccion = r[2]; store.data.capacitaciones = r[3];
+        store.data.inspecciones = r[4]; store.data.actas = r[5]; store.data.retiros = r[6];
+        store.state.dg = r[7] || (r[0][0] && r[0][0].id) || '';
       });
     },
 
@@ -73,7 +75,7 @@
       store.render(); store.renderChrome();
     },
     deleteDg: function (id) {
-      var kinds = ['documentos', 'capacitaciones', 'inspecciones', 'actas', 'retiros'];
+      var kinds = ['documentos', 'documentosInspeccion', 'capacitaciones', 'inspecciones', 'actas', 'retiros'];
       var ops = store.data.droguerias.filter(function (e) { return e.id === id; }).map(function (e) { return DB.del('droguerias', e.id); });
       kinds.forEach(function (k) { store.data[k].filter(function (x) { return x.e === id; }).forEach(function (x) { ops.push(DB.del(k, x.id)); }); });
       Promise.all(ops).then(function () {
@@ -114,6 +116,7 @@
 
   function renderChrome() {
     var dg = store.dg(), counts = navCounts(), v = store.state.view;
+    var fab = document.getElementById('fab'); if (fab) fab.hidden = v === 'informacion-almacen';
 
     var side = document.getElementById('sidebar');
     var alertN = global.BPAPLUS.alerts ? global.BPAPLUS.alerts.count() : 0;
@@ -150,7 +153,7 @@
       '<button class="icon-btn" id="themeBtnM" aria-label="Tema">' + UI.icon(isDark() ? 'sun' : 'moon', 20) + '</button>';
 
     var bn = document.getElementById('bottomNav');
-    if (bn) bn.innerHTML = '<div class="bn-inner">' + NAV.map(function (n) {
+    if (bn) bn.innerHTML = '<div class="bn-inner">' + NAV.filter(function (n) { return n.bottom !== false; }).map(function (n) {
       var c = counts[n.view] || 0;
       return '<button class="bn-item ' + (v === n.view ? 'active' : '') + '" data-nav="' + n.view + '">' +
         UI.icon(n.icon, 21) + '<span>' + n.label.split(' ')[0] + '</span>' + (c ? '<span class="bn-badge">' + c + '</span>' : '') + '</button>';
@@ -180,26 +183,39 @@
     if (di) di.onclick = function () {
       global.BPAPLUS.drive.importPanel(function (drafts) {
         var nuevos = 0, actualizados = 0, fallidos = 0, ultimoError = '';
-        var hasFiles = drafts.some(function (d) { return !!d._file; });
+        var uploads = drafts.filter(function (d) { return d._file && !d.driveFileId; });
         function saveAll() {
           var prepareUpload = global.BPAPLUS.drive.prepareUpload || global.BPAPLUS.drive.prepararUpload;
-          if (hasFiles) UI.note('Subiendo ' + drafts.filter(function (d) { return !!d._file; }).length + ' archivo(s) a Drive…');
-          (hasFiles && prepareUpload ? prepareUpload() : Promise.resolve()).then(function () { return Promise.all(drafts.map(function (d) {
+          var canUpload = true, done = 0;
+          var progress = UI.note('Guardando 0/' + drafts.length + ' documento(s)…', { duration: 600000 });
+          (uploads.length && prepareUpload ? prepareUpload().catch(function (err) {
+            canUpload = false; ultimoError = err && err.message || String(err);
+          }) : Promise.resolve()).then(function () { return Promise.all(drafts.map(function (d) {
           var existing = d.existingId ? store.find('documentos', d.existingId) : null;
           var file = d._file;
-          var clean = Object.assign({}, d); delete clean.existingId; delete clean.modifiedTime;
+          var clean = Object.assign({}, d); delete clean.existingId;
           /* Todo lo que el escaneo usó para sí mismo va con guion bajo y no se guarda. */
           Object.keys(clean).forEach(function (k) { if (k.charAt(0) === '_') delete clean[k]; });
           var obj = existing ? Object.assign({}, existing, clean, { id: existing.id }) : Object.assign({ id: D.nextId(), e: store.dg().id, area: 'Almacén', version: 1 }, clean);
-          var unchanged = existing && existing.file && existing.modifiedTime && existing.modifiedTime === clean.modifiedTime;
-          var ready = file && !unchanged ? global.BPAPLUS.drive.storeFile(store.dg().id, obj, file, clean.role, clean.version) : Promise.resolve(obj);
-          return ready.then(function (saved) { return store.save('documentos', saved); })
-            .then(function () { if (existing) actualizados++; else nuevos++; })
-            .catch(function (err) { fallidos++; ultimoError = err && err.message || String(err); });
-        })); }).then(function () { UI.note(nuevos + ' nuevo(s), ' + actualizados + ' actualizado(s)' + (fallidos ? ', ' + fallidos + ' no subido(s): ' + ultimoError : '') + ' en la biblioteca'); })
+          var unchanged = existing && existing.file && clean.modifiedTime && existing.modifiedTime === clean.modifiedTime;
+          if (d.driveFileId) obj.file = {
+            driveId: d.driveFileId, name: d._fileName || d.nombre, originalName: d._fileName || d.nombre,
+            size: file && file.size || 0, contentType: file && file.type || '', driveUrl: d.driveUrl
+          };
+          var needsUpload = file && !d.driveFileId && !unchanged;
+          if (needsUpload && !canUpload) fallidos++;
+          var ready = needsUpload && canUpload ? global.BPAPLUS.drive.storeFile(store.dg().id, obj, file, clean.role, clean.version) : Promise.resolve(obj);
+          return ready.catch(function (err) {
+            fallidos++; ultimoError = err && err.message || String(err); return obj;
+          }).then(function (saved) { return store.save('documentos', saved); })
+            .then(function () {
+              if (existing) actualizados++; else nuevos++;
+              progress.querySelector('span').textContent = 'Guardando ' + (++done) + '/' + drafts.length + ' documento(s)…';
+            });
+        })); }).then(function () { progress.remove(); UI.note(nuevos + ' nuevo(s), ' + actualizados + ' actualizado(s)' + (fallidos ? ', ' + fallidos + ' sin archivo: ' + ultimoError : '') + ' en la biblioteca', { duration: fallidos ? 10000 : 4000 }); })
             .catch(function (err) { UI.note('No se pudieron subir los archivos: ' + (err && err.message || err)); });
         }
-        if (hasFiles && !global.BPAPLUS.drive.getClientId()) return global.BPAPLUS.drive.connectPanel(saveAll);
+        if (uploads.length && !global.BPAPLUS.drive.getClientId()) return global.BPAPLUS.drive.connectPanel(saveAll);
         saveAll();
       }, store.byDg('documentos'));
     };
@@ -339,6 +355,7 @@
     if (fab) fab.onclick = function () {
       var v = store.state.view;
       if (v === 'documentos') return V.open.docForm(null);
+      if (v === 'documentos-inspeccion') return V.open.documentoInspeccion();
       if (v === 'capacitaciones') return V.open.capForm(null);
       if (v === 'retiros') return global.BPAPLUS.retiro.form(null);
       if (v === 'autoinspecciones') return UI.actionsheet([

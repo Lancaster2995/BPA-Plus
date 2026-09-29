@@ -9,5 +9,6 @@ window.BPAPLUS_CONFIG = {
   /* Worker de Cloudflare que genera las evaluaciones (ver worker/). Es una URL pública:
      lo que la protege es que exige un ID token de Firebase de este proyecto, no el
      secreto de la URL. Vacío = el botón "Generar evaluación" avisa y no hace nada. */
-  workerUrl: 'https://bpa-plus.logisticss.workers.dev'
+  workerUrl: 'https://bpa-plus.logisticss.workers.dev',
+  logisticsUrl: 'https://impo-db.web.app/'
 };

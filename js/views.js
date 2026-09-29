@@ -12,6 +12,17 @@
   var AREAS = ['Almacén', 'Calidad', 'Aseguramiento de la calidad', 'Dirección Técnica', 'Administración', 'Otra'];
   var TIPOS = ['POE', 'Formato', 'Instructivo', 'Registro', 'Manual', 'Política', 'Otro'];
   var FRECS = ['Única', 'Trimestral', 'Semestral', 'Anual', 'Según necesidad'];
+  var SECCIONES_INSPECCION = [
+    { id: 'listados', titulo: 'Listados', docs: [
+      ['listado-clientes', 'Lista de clientes'], ['listado-proveedores', 'Lista de proveedores'], ['listado-registros', 'Listado de registros']
+    ] },
+    { id: 'resoluciones', titulo: 'Resoluciones BPA', docs: [
+      ['autorizacion-sanitaria', 'Autorización Sanitaria'], ['certificado-bpa', 'Certificado BPA']
+    ] },
+    { id: 'almacen', titulo: 'Documentos del almacén', docs: [
+      ['planos-almacen', 'Planos e información del almacén', ['planos-drogueria']]
+    ] }
+  ];
 
   function opts(list, sel) { return list.map(function (o) { return '<option ' + (o === sel ? 'selected' : '') + '>' + esc(o) + '</option>'; }).join(''); }
 
@@ -205,12 +216,13 @@
     var e = D.edoc(d), f = D.fDias(D.dias(d.rev));
     var history = d.history || [], records = d.records || [];
     var files = (d.templateMissing ? '<div class="file-warning">Falta cargar la plantilla vacía oficial.</div>' : '') +
-      (d.file ? '<button class="file-item" data-file-current>' + icon('download', 15) + '<span><b>Archivo vigente</b><small>' + esc(d.file.name) + '</small></span></button>' : '<div class="row-empty">Sin archivo vigente.</div>') +
+      (d.file ? '<button class="file-item" data-file-current>' + icon('doc', 15) + '<span><b>Archivo vigente</b><small>' + esc(d.file.name) + ' · Vista previa</small></span></button>' : '<div class="row-empty">Sin archivo vigente.</div>') +
       (history.length ? '<div class="section-title">Versiones anteriores (' + history.length + ')</div>' + history.map(function (file, i) {
-        return '<button class="file-item" data-file-history="' + i + '">' + icon('download', 15) + '<span><b>Versión archivada</b><small>' + esc(file.name) + '</small></span></button>';
+        return '<div class="file-item-row"><button class="file-item" data-file-history="' + i + '">' + icon('doc', 15) + '<span><b>Versión archivada</b><small>' + esc(file.name) + ' · Vista previa</small></span></button>' +
+          '<button class="icon-btn del" data-file-history-delete="' + i + '" aria-label="Eliminar versión anterior ' + esc(file.name) + '">' + icon('trash', 16) + '</button></div>';
       }).join('') : '') +
       (records.length ? '<div class="section-title">Formatos llenados (' + records.length + ')</div>' + records.map(function (file, i) {
-        return '<button class="file-item" data-file-record="' + i + '">' + icon('download', 15) + '<span><b>Registro</b><small>' + esc(file.name) + '</small></span></button>';
+        return '<button class="file-item" data-file-record="' + i + '">' + icon('doc', 15) + '<span><b>Registro</b><small>' + esc(file.name) + ' · Vista previa</small></span></button>';
       }).join('') : '');
     UI.panel({
       title: 'Documento',
@@ -236,10 +248,24 @@
           global.BPAPLUS.drive.linkPanel(d, function (link) { store.save('documentos', Object.assign({}, d, link)); });
         };
         var current = root.querySelector('[data-file-current]');
-        function download(file) { global.BPAPLUS.drive.downloadStored(file).catch(function (error) { UI.note(error.message || error); }); }
-        if (current) current.onclick = function () { download(d.file); };
-        root.querySelectorAll('[data-file-history]').forEach(function (button) { button.onclick = function () { download(history[+button.dataset.fileHistory]); }; });
-        root.querySelectorAll('[data-file-record]').forEach(function (button) { button.onclick = function () { download(records[+button.dataset.fileRecord]); }; });
+        function preview(file) { global.BPAPLUS.drive.previewStored(file).catch(function (error) { UI.note(error.message || error); }); }
+        if (current) current.onclick = function () { preview(d.file); };
+        root.querySelectorAll('[data-file-history]').forEach(function (button) { button.onclick = function () { preview(history[+button.dataset.fileHistory]); }; });
+        root.querySelectorAll('[data-file-history-delete]').forEach(function (button) {
+          button.onclick = function () {
+            var index = +button.dataset.fileHistoryDelete, file = history[index];
+            UI.confirm({ title: 'Eliminar versión anterior', message: 'Se eliminará “' + file.name + '” de Google Drive. Esta acción no se puede deshacer.', okLabel: 'Eliminar', danger: true })
+              .then(function (ok) {
+                if (!ok) return;
+                button.disabled = true;
+                return global.BPAPLUS.drive.deleteStored(file)
+                  .then(function () { return store.save('documentos', Object.assign({}, d, { history: history.filter(function (_, i) { return i !== index; }) })); })
+                  .then(function () { root.querySelector('[data-close]').click(); UI.note('Versión anterior eliminada'); })
+                  .catch(function (error) { button.disabled = false; UI.note(error.message || error); });
+              });
+          };
+        });
+        root.querySelectorAll('[data-file-record]').forEach(function (button) { button.onclick = function () { preview(records[+button.dataset.fileRecord]); }; });
         root.querySelector('[data-file-upload]').onclick = function () {
           root.querySelector('[data-close]').click();
           global.BPAPLUS.drive.filePanel(d, store.dg().id, function (saved) { return store.save('documentos', saved); });
@@ -250,6 +276,114 @@
 
   function detailRow(k, v) {
     return '<div class="detail-row"><span class="detail-k">' + esc(k) + '</span><span class="detail-v">' + esc(v) + '</span></div>';
+  }
+
+  /* ===================================================================== *
+   *  DOCUMENTOS DE INSPECCIÓN
+   * ===================================================================== */
+  function definicionInspeccion(tipo) {
+    for (var i = 0; i < SECCIONES_INSPECCION.length; i++) {
+      for (var j = 0; j < SECCIONES_INSPECCION[i].docs.length; j++) {
+        var d = SECCIONES_INSPECCION[i].docs[j];
+        if (d[0] === tipo || (d[2] || []).indexOf(tipo) >= 0) return d;
+      }
+    }
+  }
+
+  function documentoInspeccion(tipo) {
+    var existentes = store.byDg('documentosInspeccion');
+    var def = definicionInspeccion(tipo);
+    var doc = def ? existentes.filter(function (d) { return d.tipoInspeccion === def[0] || (def[2] || []).indexOf(d.tipoInspeccion) >= 0; })[0] :
+      existentes.filter(function (d) { return d.tipoInspeccion === tipo; })[0];
+    if (!doc && !def) return;
+    doc = doc || { id: D.nextId(), e: store.dg().id, tipoInspeccion: def[0], codigo: 'INS-DOC-' + String(Date.now()).slice(-6), nombre: def[1], tipo: 'Otro', version: 1 };
+    global.BPAPLUS.drive.filePanel(doc, store.dg().id, function (saved) { return store.save('documentosInspeccion', saved); });
+  }
+
+  function otroDocumentoInspeccion(seccionId) {
+    var seccion = SECCIONES_INSPECCION.filter(function (s) { return s.id === seccionId; })[0];
+    if (!seccion) return;
+    var m = UI.dialog({
+      title: 'Otro documento · ' + seccion.titulo,
+      body: '<div class="field" id="wrap_nombre"><label for="ins_otro_titulo">Título del documento</label><input class="inp" id="ins_otro_titulo" placeholder="Ej. Relación de vehículos"><div class="err">Ingresa un título.</div></div>',
+      footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="ins_otro_save">Continuar</button>',
+      onMount: function (root) {
+        var input = root.querySelector('#ins_otro_titulo'); input.focus();
+        root.querySelector('#ins_otro_save').onclick = function () {
+          var titulo = input.value.trim();
+          if (!titulo) { root.querySelector('#wrap_nombre').classList.add('invalid'); input.focus(); return; }
+          var doc = { id: D.nextId(), e: store.dg().id, tipoInspeccion: 'otro-' + D.nextId(), seccion: seccion.id, nombre: titulo, codigo: 'INS-OTR-' + String(Date.now()).slice(-6), tipo: 'Otro', version: 1 };
+          m.close(); global.BPAPLUS.drive.filePanel(doc, store.dg().id, function (saved) { return store.save('documentosInspeccion', saved); });
+        };
+      }
+    });
+  }
+
+  function vDocumentosInspeccion() {
+    var docs = store.byDg('documentosInspeccion');
+    function existente(def) { return docs.filter(function (d) { return d.tipoInspeccion === def[0] || (def[2] || []).indexOf(d.tipoInspeccion) >= 0; })[0]; }
+    function fila(d, titulo, tipo) {
+      var loaded = d && d.file;
+      return '<div class="row"><div class="row-top" style="cursor:default"><div class="chan insp"></div><div class="row-main">' +
+        '<div class="row-name">' + esc(titulo) + '</div><div class="row-meta">' + (loaded ? esc(d.file.name) : 'PDF, Word o Excel · máximo 25 MB') + '</div></div>' +
+        '<div class="row-side">' + tag(loaded ? 'vigente' : 'pendiente', loaded ? 'Cargado' : 'Pendiente') + '</div></div>' +
+        '<div class="row-foot">' + (loaded ? '<button class="btn btn-ghost btn-sm" data-ins-preview="' + d.id + '">' + icon('doc', 14) + 'Vista previa</button>' : '') +
+        '<button class="btn btn-primary btn-sm" data-ins-upload="' + (tipo || d.tipoInspeccion) + '">' + icon('upload', 14) + (loaded ? 'Reemplazar' : 'Cargar') + '</button>' +
+        (loaded ? '<button class="btn btn-danger btn-sm" data-ins-delete="' + d.id + '">' + icon('trash', 14) + 'Eliminar</button>' : '') + '</div></div>';
+    }
+    var requeridos = []; SECCIONES_INSPECCION.forEach(function (s) { requeridos = requeridos.concat(s.docs); });
+    var cargados = requeridos.filter(function (d) { var x = existente(d); return x && x.file; }).length;
+    var conocidos = {}; requeridos.forEach(function (d) { conocidos[d[0]] = true; (d[2] || []).forEach(function (a) { conocidos[a] = true; }); });
+    var legacySection = { 'ficha-ruc': 'resoluciones', 'resoluciones-bpa': 'resoluciones' };
+    return '<div class="inspection-docs"><div class="view-header"><div><div class="view-title">Documentos de inspección</div>' +
+      '<div class="view-sub">' + cargados + ' de ' + requeridos.length + ' requeridos cargados · ' + esc(store.dg().nombre) + '</div></div></div>' +
+      '<div class="progress"><div class="progress-top"><span>Expediente documental</span><strong>' + cargados + '/' + requeridos.length + '</strong></div>' +
+      '<div class="progress-track"><div class="progress-fill" style="width:' + Math.round(cargados / requeridos.length * 100) + '%"></div></div></div>' +
+      '<div class="inspection-groups">' + SECCIONES_INSPECCION.map(function (seccion) {
+        var otros = docs.filter(function (d) { return !conocidos[d.tipoInspeccion] && (d.seccion === seccion.id || legacySection[d.tipoInspeccion] === seccion.id); });
+        return '<section class="inspection-group"><div class="inspection-group-head"><h2>' + esc(seccion.titulo) + '</h2>' +
+          '<button class="btn btn-ghost" data-ins-other="' + seccion.id + '">' + icon('plus', 16) + 'Otro documento</button></div>' +
+          '<div class="list">' + seccion.docs.map(function (def) { return fila(existente(def), def[1], def[0]); }).join('') +
+          otros.map(function (d) { return fila(d, d.nombre); }).join('') + '</div></section>';
+      }).join('') + '</div></div>';
+  }
+
+  /* ===================================================================== *
+   *  INFORMACIÓN DEL ALMACÉN
+   * ===================================================================== */
+  function vInformacionAlmacen() {
+    var d = store.dg();
+    return '<div class="view-header"><div><div class="view-title">Información del almacén</div>' +
+      '<div class="view-sub">Datos declarados · ' + esc(d.nombre) + '</div></div></div>' +
+      '<form id="infoAlmacenForm" class="inspection-group warehouse-info" novalidate>' +
+        '<div class="grid-2"><div class="field" id="wrap_ia_razon"><label for="ia_razon">Razón social</label><input class="inp" id="ia_razon" value="' + esc(d.nombre) + '"><div class="err">Ingresa la razón social.</div></div>' +
+        '<div class="field"><label for="ia_comercial">Nombre comercial</label><input class="inp" id="ia_comercial" value="' + esc(d.nombreComercial || '') + '"></div></div>' +
+        '<div class="grid-2"><div class="field" id="wrap_ia_ruc"><label for="ia_ruc">RUC</label><input class="inp mono" id="ia_ruc" inputmode="numeric" maxlength="11" value="' + esc(d.ruc || '') + '"><div class="err">Ingresa un RUC de 11 dígitos.</div></div>' +
+        '<div class="field"><label for="ia_dt">Director técnico</label><input class="inp" id="ia_dt" value="' + esc(d.dt || '') + '"></div></div>' +
+        '<div class="field"><label for="ia_direccion">Dirección</label><input class="inp" id="ia_direccion" value="' + esc(d.direccion || '') + '"></div>' +
+        '<div class="field"><label for="ia_direccion_almacen">Dirección del almacén</label><input class="inp" id="ia_direccion_almacen" value="' + esc(d.direccionAlmacen || '') + '"></div>' +
+        '<div class="grid-2"><div class="field"><label for="ia_area">Área del almacén declarada (m²)</label><input class="inp" id="ia_area" type="number" min="0" step="0.01" value="' + esc(d.areaAlmacen || '') + '"></div>' +
+        '<div class="field"><label for="ia_cuarentena">Tipo de cuarentena</label><input class="inp" id="ia_cuarentena" value="' + esc(d.tipoCuarentena || '') + '"></div></div>' +
+        '<div class="field"><label for="ia_almacenamiento">Tipo de almacenamiento</label><select class="inp" id="ia_almacenamiento"><option' + (d.tipoAlmacenamiento !== 'Tercerizado' ? ' selected' : '') + '>Propio</option><option' + (d.tipoAlmacenamiento === 'Tercerizado' ? ' selected' : '') + '>Tercerizado</option></select></div>' +
+        '<div class="warehouse-actions"><button class="btn btn-primary" id="ia_save" type="submit">' + icon('check', 16) + 'Guardar información</button></div>' +
+      '</form>';
+  }
+
+  function guardarInformacionAlmacen(form) {
+    form.querySelectorAll('.invalid').forEach(function (x) { x.classList.remove('invalid'); });
+    var razon = form.querySelector('#ia_razon').value.trim(), ruc = form.querySelector('#ia_ruc').value.trim();
+    if (!razon) { form.querySelector('#wrap_ia_razon').classList.add('invalid'); form.querySelector('#ia_razon').focus(); return; }
+    if (ruc && !/^\d{11}$/.test(ruc)) { form.querySelector('#wrap_ia_ruc').classList.add('invalid'); form.querySelector('#ia_ruc').focus(); return; }
+    var button = form.querySelector('#ia_save'); button.disabled = true; button.textContent = 'Guardando…';
+    var obj = Object.assign({}, store.dg(), {
+      nombre: razon, nombreComercial: form.querySelector('#ia_comercial').value.trim(), ruc: ruc,
+      direccion: form.querySelector('#ia_direccion').value.trim(), direccionAlmacen: form.querySelector('#ia_direccion_almacen').value.trim(),
+      areaAlmacen: form.querySelector('#ia_area').value, tipoCuarentena: form.querySelector('#ia_cuarentena').value.trim(),
+      dt: form.querySelector('#ia_dt').value.trim(), tipoAlmacenamiento: form.querySelector('#ia_almacenamiento').value,
+      init: razon.split(/\s+/).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase()
+    });
+    store.save('droguerias', obj).then(function () { UI.note('Información del almacén guardada'); })
+      .catch(function () { button.disabled = false; button.textContent = 'Guardar información'; });
   }
 
   /* ===================================================================== *
@@ -273,7 +407,7 @@
       '<div class="view-header"><div><div class="view-title">Capacitaciones</div>' +
         '<div class="view-sub">' + real + ' de ' + all.length + ' realizadas · ' + esc(store.dg().nombre) + '</div></div>' +
         '<div class="header-actions">' +
-          '<button class="btn btn-ghost" data-action="fmt-cap">' + icon('settings', 16) + 'Formato propio</button>' +
+          '<button class="btn btn-ghost" data-action="fmt-cap">' + icon('settings', 16) + 'Formato de asistencia</button>' +
           '<button class="btn btn-ghost" data-action="cron-cap">' + icon('upload', 16) + 'Importar cronograma</button>' +
           '<button class="btn btn-primary" data-action="nueva-cap">' + icon('plus', 16) + 'Nueva</button></div></div>' +
       '<div class="progress" style="margin-bottom:14px"><div class="progress-top"><span>Avance del programa anual</span><strong>' + pct + '%</strong></div>' +
@@ -309,6 +443,15 @@
   function capForm(existing) {
     var c = existing || { tema: '', area: 'Almacén', frec: 'Anual', fecha: D.isoDesdeHoy(30), capacitados: [] };
     var attHtml = (c.capacitados || []).map(attRow).join('');
+    var conocidos = {}, guardados = [];
+    store.byDg('capacitaciones').forEach(function (cap) {
+      (cap.capacitados || []).forEach(function (p) {
+        var key = D.normTxt(p.nombre || '').replace(/\s+/g, ' ').trim();
+        if (key) conocidos[key] = { nombre: p.nombre, cargo: p.cargo || '' };
+      });
+    });
+    Object.keys(conocidos).forEach(function (key) { guardados.push(conocidos[key]); });
+    guardados.sort(function (a, b) { return a.nombre.localeCompare(b.nombre, 'es'); });
     var m = UI.dialog({
       title: existing ? 'Editar capacitación' : 'Nueva capacitación', wide: true,
       body:
@@ -320,26 +463,55 @@
           '<input class="inp" id="c_material" type="file" accept=".pdf,.docx,.xlsx,.pptx">' +
           '<div class="hint">' + ((c.materiales || []).length ? (c.materiales.length + ' archivo(s) ya cargado(s). ') : '') +
             'PDF, Word, Excel o PowerPoint de menos de 25 MB.</div></div>' +
-        '<div class="field"><label>Participantes</label><div id="attList">' + attHtml + '</div>' +
-        '<button class="btn btn-ghost btn-sm" id="c_add" type="button" style="margin-top:6px">' + icon('plus', 14) + 'Agregar participante</button></div>',
+        '<div id="c_format_fields"></div>' +
+        '<div class="field"><label>Participantes</label>' +
+        (guardados.length ? '<div class="mini-row"><select class="inp" id="c_known"><option value="">Seleccionar participante guardado…</option>' + guardados.map(function (p, i) { return '<option value="' + i + '">' + esc(p.nombre) + (p.cargo ? ' · ' + esc(p.cargo) : '') + '</option>'; }).join('') + '</select>' +
+          '<button class="btn btn-ghost btn-sm" id="c_add_known" type="button">' + icon('plus', 14) + 'Agregar</button></div>' : '') +
+        '<div id="attList">' + attHtml + '</div>' +
+        '<button class="btn btn-ghost btn-sm" id="c_add" type="button" style="margin-top:6px">' + icon('plus', 14) + 'Agregar participante nuevo</button></div>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="c_save">Guardar</button>',
       onMount: function (root) {
         var list = root.querySelector('#attList');
+        var addKnown = root.querySelector('#c_add_known');
+        if (addKnown) addKnown.onclick = function () {
+          var select = root.querySelector('#c_known'), p = guardados[+select.value]; if (!p) return;
+          var repeated = Array.prototype.some.call(list.querySelectorAll('.att-nom'), function (input) { return D.normTxt(input.value) === D.normTxt(p.nombre); });
+          if (repeated) { UI.note('Ese participante ya está agregado.'); return; }
+          var div = document.createElement('div'); div.innerHTML = attRow({ nombre: p.nombre, cargo: p.cargo, nota: '' }); list.appendChild(div.firstChild); select.value = '';
+        };
+        var fmt = global.BPAPLUS.formatos && global.BPAPLUS.formatos.para(store.dg(), 'capacitaciones');
+        var box = root.querySelector('#c_format_fields'), requiredReady = !fmt;
+        if (fmt) {
+          box.innerHTML = '<div class="hint">Analizando los campos del formato de asistencia…</div>';
+          global.BPAPLUS.drive.camposRequeridos(fmt).then(function (fields) {
+            box.innerHTML = fields.length ? '<div class="section-title">Datos requeridos por el formato de asistencia</div>' + fields.map(function (field) {
+              var value = (c.datosFormato || {})[field.key]; if (value == null) value = field.value;
+              return '<div class="field"><label>' + esc(field.label) + '</label><input class="inp c-format-field" data-format-key="' + esc(field.key) + '" type="' + (field.type || 'text') + '" value="' + esc(value) + '"></div>';
+            }).join('') : '';
+            requiredReady = true;
+          }).catch(function () { box.innerHTML = '<div class="hint">No se pudieron analizar los campos adicionales del formato.</div>'; requiredReady = true; });
+        }
         root.querySelector('#c_add').onclick = function () { var div = document.createElement('div'); div.innerHTML = attRow({ nombre: '', cargo: '' }); list.appendChild(div.firstChild); };
         list.addEventListener('click', function (e) { var b = e.target.closest('[data-delatt]'); if (b) b.closest('.mini-row').remove(); });
         root.querySelector('#c_save').onclick = function () {
+          if (!requiredReady) { UI.note('Esperá un momento: todavía se está analizando el formato de asistencia.'); return; }
           var tema = root.querySelector('#c_tema').value.trim();
           if (!tema) { root.querySelector('#wrap_tema').classList.add('invalid'); root.querySelector('#c_tema').focus(); return; }
           var att = Array.prototype.map.call(list.querySelectorAll('.mini-row'), function (r) {
-            return { nombre: r.querySelector('.att-nom').value.trim(), cargo: r.querySelector('.att-cargo').value.trim() };
+            var nota = r.querySelector('.att-nota').value;
+            return { nombre: r.querySelector('.att-nom').value.trim(), cargo: r.querySelector('.att-cargo').value.trim(), nota: nota === '' ? '' : +nota };
           }).filter(function (a) { return a.nombre; });
+          if (att.some(function (a) { return a.nota !== '' && (!Number.isInteger(a.nota) || a.nota < 0 || a.nota > 20); })) {
+            UI.note('Cada nota debe ser un número entero de 0 a 20.'); return;
+          }
           var obj = Object.assign({}, existing || {}, {
             id: existing ? existing.id : D.nextId(), e: store.dg().id,
             tema: tema, area: root.querySelector('#c_area').value, frec: root.querySelector('#c_frec').value,
             fecha: root.querySelector('#c_fecha').value || D.isoHoy(),
             est: existing ? existing.est : 'pendiente', capacitados: att,
-            materiales: (existing && existing.materiales) || []
+            materiales: (existing && existing.materiales) || [], datosFormato: Object.assign({}, c.datosFormato || {})
           });
+          root.querySelectorAll('.c-format-field').forEach(function (input) { obj.datosFormato[input.dataset.formatKey] = input.value.trim(); });
           var mat = root.querySelector('#c_material').files[0];
           if (mat && mat.size >= 25 * 1024 * 1024) { UI.note('El material debe pesar menos de 25 MB.'); return; }
           var btn = root.querySelector('#c_save'); btn.disabled = true;
@@ -357,6 +529,7 @@
   function attRow(p) {
     return '<div class="mini-row"><input class="inp att-nom" placeholder="Nombre y apellidos" value="' + esc(p.nombre || '') + '">' +
       '<input class="inp att-cargo" placeholder="Cargo" value="' + esc(p.cargo || '') + '" style="max-width:150px">' +
+      '<input class="inp att-nota" type="number" min="0" max="20" step="1" placeholder="Nota / 20" aria-label="Nota de evaluación" value="' + esc(p.nota == null ? '' : p.nota) + '" style="max-width:100px">' +
       '<button class="icon-btn del" type="button" data-delatt aria-label="Quitar">' + icon('x', 16) + '</button></div>';
   }
 
@@ -371,13 +544,13 @@
         '<div class="section-title">Material (' + mats.length + ')</div>' +
         (mats.length ? '<div class="file-list">' + mats.map(function (f, i) {
           return '<button class="file-item" data-mat="' + i + '">' + icon('doc', 16) +
-            '<span><b>' + esc(f.name || 'archivo') + '</b><small>Descargar</small></span></button>';
+            '<span><b>' + esc(f.name || 'archivo') + '</b><small>Vista previa</small></span></button>';
         }).join('') + '</div>' : '<div class="row-empty">Sin material cargado. Editá la capacitación para subirlo.</div>') +
         '<div class="section-title">Participantes (' + att.length + ')</div>' +
-        (att.length ? att.map(function (p) { return '<div class="att-item"><div class="att-nombre">' + esc(p.nombre) + '</div><div class="att-cargo">' + esc(p.cargo || '—') + '</div></div>'; }).join('')
+        (att.length ? att.map(function (p) { return '<div class="att-item"><div class="att-nombre">' + esc(p.nombre) + '</div><div class="att-cargo">' + esc(p.cargo || '—') + (p.nota == null || p.nota === '' ? '' : ' · Nota: ' + esc(p.nota) + '/20') + '</div></div>'; }).join('')
           : '<div class="row-empty">Sin participantes registrados.</div>'),
       footer:
-        '<button class="btn btn-ghost" data-acta>' + icon('print', 16) + 'Acta</button>' +
+        '<button class="btn btn-ghost" data-acta>' + icon('print', 16) + 'Acta de asistencia</button>' +
         '<button class="btn btn-ghost" data-eval>' + icon('check', 16) + 'Evaluación</button>' +
         '<button class="btn btn-ghost" data-edit>' + icon('edit', 16) + 'Editar</button>' +
         '<button class="btn btn-danger" data-del>' + icon('trash', 16) + 'Eliminar</button>',
@@ -385,7 +558,7 @@
         root.querySelector('[data-acta]').onclick = function () { actas.actaAsistencia(store.dg(), c); };
         root.querySelectorAll('[data-mat]').forEach(function (b) {
           b.onclick = function () {
-            global.BPAPLUS.drive.downloadStored(mats[+b.dataset.mat]).catch(function (e) { UI.note(e.message || e); });
+            global.BPAPLUS.drive.previewStored(mats[+b.dataset.mat]).catch(function (e) { UI.note(e.message || e); });
           };
         });
         root.querySelector('[data-eval]').onclick = function () { root.querySelector('[data-close]').click(); evalPanel(c); };
@@ -400,6 +573,7 @@
      la capacitación, así que se regenera solo cuando lo pedís. */
   function evalPanel(c) {
     var LETRAS = ['A', 'B', 'C', 'D'];
+    var tieneFormato = !!c.formatoEvaluacion;
     function preguntasHtml(ev) {
       return ev.preguntas.map(function (p, i) {
         return '<div class="ev-item"><div class="ev-q"><b>' + (i + 1) + '.</b> ' + esc(p.enunciado) + '</div>' +
@@ -416,11 +590,15 @@
           ? '<p class="dialog-note">Generada el ' + esc(D.fLocal(new Date(c.evaluacion.generadoEl).toISOString().slice(0, 10))) +
               (c.evaluacion.conMaterial ? ' a partir del material cargado.' : ' a partir del tema (sin material adjunto).') +
               ' La respuesta correcta va marcada; al imprimir sale en blanco.</p>' + preguntasHtml(c.evaluacion)
-          : '<div class="row-empty">Todavía no hay evaluación. Se generan 5 preguntas de alternativa múltiple con el tema y, si cargaste material, con su contenido.</div>') + '</div>',
+          : (tieneFormato
+            ? '<div class="row-empty">El formato de evaluación está listo para emitirse con los nombres y notas de los participantes.</div>'
+            : '<div class="row-empty">Todavía no hay evaluación. Se generan 5 preguntas de alternativa múltiple con el tema y, si cargaste material, con su contenido.</div>')) + '</div>',
       footer:
         '<button class="btn btn-primary" data-gen>' + icon('cap', 16) + (c.evaluacion ? 'Regenerar' : 'Generar evaluación') + '</button>' +
-        (c.evaluacion ? '<button class="btn btn-ghost" data-print>' + icon('print', 16) + 'Imprimir</button>' : ''),
+        '<button class="btn btn-ghost" data-formato-eval>' + icon('upload', 16) + (tieneFormato ? 'Cambiar formato' : 'Cargar formato') + '</button>' +
+        (c.evaluacion || tieneFormato ? '<button class="btn btn-ghost" data-print>' + icon('print', 16) + 'Emitir para participantes</button>' : ''),
       onMount: function (root) {
+        root.querySelector('[data-formato-eval]').onclick = function () { formatoEvaluacionPanel(c); };
         var pr = root.querySelector('[data-print]');
         if (pr) pr.onclick = function () { actas.actaEvaluacion(store.dg(), c); };
         root.querySelector('[data-gen]').onclick = function () {
@@ -463,6 +641,7 @@
       '<div class="view-header"><div><div class="view-title">Autoinspecciones</div>' +
         '<div class="view-sub">Cronograma, hallazgos y actas · ' + esc(store.dg().nombre) + '</div></div>' +
         '<div class="header-actions">' +
+          '<button class="btn btn-ghost" data-goto="documentos-inspeccion">' + icon('doc', 16) + 'Documentos</button>' +
           '<button class="btn btn-ghost" data-action="fmt-insp">' + icon('settings', 16) + 'Formato propio</button>' +
           '<button class="btn btn-ghost" data-action="cron-insp">' + icon('upload', 16) + 'Importar cronograma</button>' +
           '<button class="btn btn-ghost" data-action="nueva-acta">' + icon('insp', 16) + 'Nueva acta</button>' +
@@ -503,9 +682,10 @@
     var cls = a.completada ? 'realizada' : (pct > 0 ? 'por_vencer' : 'vencido');
     var hallTxt = a.hall > 0 ? ' · ' + a.hall + ' hallazgo' + (a.hall > 1 ? 's' : '') : '';
     var pasoTxt = (!a.completada && a.paso > 0 && a.paso <= checklist.length) ? ' · quedó en sección ' + a.paso + ' de ' + checklist.length : '';
+    var destino = store.find('inspecciones', a.inspeccionId);
     return '<div class="row" data-acta="' + a.id + '"><div class="row-top"><div class="chan insp"></div><div class="row-main">' +
       '<div class="row-name">Acta N.° ' + esc(a.numActa || '—') + ' · Inspección al almacén</div>' +
-      '<div class="row-meta"><span>' + esc(D.fLocal(a.fecha)) + (a.auditor ? ' · ' + esc(a.auditor) : '') + esc(hallTxt) + esc(pasoTxt) + '</span></div></div>' + tag(cls, label) + '</div></div>';
+      '<div class="row-meta"><span>' + esc(D.fLocal(a.fecha)) + (a.auditor ? ' · ' + esc(a.auditor) : '') + esc(hallTxt) + esc(pasoTxt) + (destino ? ' · ' + esc(destino.area) : '') + '</span></div></div>' + tag(cls, label) + '</div></div>';
   }
 
   function inspForm(existing) {
@@ -532,19 +712,31 @@
 
   function inspPanel(i) {
     var r = !!i.real;
+    var archivos = store.byDg('documentosInspeccion').filter(function (d) { return d.inspeccionId === i.id && d.file; });
+    var actasVinculadas = store.byDg('actas').filter(function (a) { return a.inspeccionId === i.id; });
     UI.panel({
       title: 'Autoinspección',
       body:
         '<div class="panel-lead-title" style="margin-bottom:12px">' + esc(i.area) + '</div>' +
         detailRow('Programada', D.fLocal(i.prog)) +
         (r ? detailRow('Realizada', D.fLocal(i.real)) + detailRow('Hallazgos abiertos', String(i.hall || 0)) : '') +
-        (r && i.result ? '<div class="section-title">Resultado</div><p class="panel-text">' + esc(i.result) + '</p>' : ''),
+        (r && i.result ? '<div class="section-title">Resultado</div><p class="panel-text">' + esc(i.result) + '</p>' : '') +
+        (r ? '<div class="section-title">Archivos (' + archivos.length + ')</div>' + (archivos.length ? '<div class="file-list">' + archivos.map(function (d) {
+          return '<div class="file-item"><button class="link-btn" data-ai-preview="' + d.id + '">' + icon('doc', 16) + esc(d.nombre) + '</button><button class="icon-btn del" data-ai-delete="' + d.id + '" aria-label="Eliminar">' + icon('trash', 16) + '</button></div>';
+        }).join('') + '</div>' : '<div class="row-empty">Sin archivos adjuntos.</div>') +
+        '<div class="section-title">Actas vinculadas (' + actasVinculadas.length + ')</div>' + (actasVinculadas.length ? '<div class="file-list">' + actasVinculadas.map(function (a) {
+          return '<button class="file-item" data-ai-acta="' + a.id + '">' + icon('insp', 16) + '<span><b>Acta N.° ' + esc(a.numActa || '—') + '</b><small>' + esc(D.fLocal(a.fecha)) + '</small></span></button>';
+        }).join('') + '</div>' : '<div class="row-empty">Sin actas vinculadas.</div>') : ''),
       footer:
-        (r ? '' : '<button class="btn btn-primary" data-close-ins>' + icon('check', 16) + 'Registrar resultado</button>') +
+        (r ? '<button class="btn btn-primary" data-add-ai-file>' + icon('upload', 16) + 'Agregar archivo</button>' : '<button class="btn btn-primary" data-close-ins>' + icon('check', 16) + 'Registrar resultado</button>') +
         '<button class="btn btn-ghost" data-edit>' + icon('edit', 16) + 'Editar</button>' +
         '<button class="btn btn-danger" data-del>' + icon('trash', 16) + 'Eliminar</button>',
       onMount: function (root) {
         var ce = root.querySelector('[data-close-ins]'); if (ce) ce.onclick = function () { root.querySelector('[data-close]').click(); inspCloseForm(i); };
+        var addFile = root.querySelector('[data-add-ai-file]'); if (addFile) addFile.onclick = function () { root.querySelector('[data-close]').click(); archivoAutoinspeccion(i); };
+        root.querySelectorAll('[data-ai-preview]').forEach(function (button) { button.onclick = function () { global.BPAPLUS.drive.previewStored(store.find('documentosInspeccion', button.dataset.aiPreview).file).catch(function (e) { UI.note(e.message || e); }); }; });
+        root.querySelectorAll('[data-ai-delete]').forEach(function (button) { button.onclick = function () { var d = store.find('documentosInspeccion', button.dataset.aiDelete); root.querySelector('[data-close]').click(); store.removeWithUndo('documentosInspeccion', d, 'Archivo eliminado'); }; });
+        root.querySelectorAll('[data-ai-acta]').forEach(function (button) { button.onclick = function () { root.querySelector('[data-close]').click(); actaForm(store.find('actas', button.dataset.aiActa)); }; });
         root.querySelector('[data-edit]').onclick = function () { root.querySelector('[data-close]').click(); inspForm(i); };
         root.querySelector('[data-del]').onclick = function () { root.querySelector('[data-close]').click(); store.removeWithUndo('inspecciones', i, 'Autoinspección eliminada'); };
       }
@@ -608,6 +800,7 @@
     var dg = store.dg();
     var isNew = !existing;
     var a = existing || D.actaNueva(dg);
+    var destinos = store.byDg('inspecciones').slice().sort(function (x, y) { return (y.prog || '').localeCompare(x.prog || ''); });
     a.checklist = a.checklist || D.checklistOficial();
     a.respuestas = a.respuestas || {};
     if (typeof a.paso !== 'number') a.paso = 0;
@@ -639,6 +832,7 @@
     /* ---- paso 0: datos generales ---- */
     function headerStepHtml() {
       return '<div class="field"><label>Acta N.°</label><input class="inp mono" id="a_num" value="' + esc(a.numActa) + '" placeholder="001-2026"></div>' +
+        '<div class="field"><label>Autoinspección destino</label><select class="inp" id="a_insp"><option value="">Sin asignar</option>' + destinos.map(function (i) { return '<option value="' + esc(i.id) + '"' + (a.inspeccionId === i.id ? ' selected' : '') + '>' + esc(i.area + ' · ' + D.fLocal(i.prog) + (i.real ? ' · Realizada' : ' · Pendiente')) + '</option>'; }).join('') + '</select></div>' +
         '<div class="grid-2"><div class="field"><label>Fecha</label><input class="inp" id="a_fecha" type="date" value="' + esc(a.fecha) + '"></div>' +
         '<div class="field"><label>Auditor</label><input class="inp" id="a_aud" value="' + esc(a.auditor) + '"></div></div>' +
         '<div class="field"><label>Almacén inspeccionado</label><input class="inp" id="a_almacen" value="' + esc(a.almacen) + '"></div>' +
@@ -655,6 +849,7 @@
     }
     function collectHeader(root) {
       a.numActa = root.querySelector('#a_num').value.trim();
+      a.inspeccionId = root.querySelector('#a_insp').value || '';
       a.fecha = root.querySelector('#a_fecha').value || D.isoHoy();
       a.auditor = root.querySelector('#a_aud').value.trim();
       a.almacen = root.querySelector('#a_almacen').value.trim() || dg.nombre;
@@ -857,6 +1052,7 @@
       return { label: e.nombre + (e.id === store.dg().id ? '  ✓' : ''), icon: 'building', onClick: function () { store.setDg(e.id); } };
     }).concat([
       { label: 'Nueva droguería…', icon: 'plus', onClick: function () { dgForm(null); } },
+      { label: 'Información del almacén…', icon: 'building', onClick: function () { store.go('informacion-almacen'); } },
       { label: 'Editar droguería actual…', icon: 'edit', onClick: function () { dgForm(store.dg()); } },
       { label: 'Editar criterios de clasificación…', icon: 'settings', onClick: function () { criteriosForm(); } },
       { label: 'Cambiar PIN…', icon: 'settings', onClick: function () { global.BPAPLUS.lock.openSettings(); } }
@@ -891,7 +1087,7 @@
    *  Registro + despacho de vistas
    * ===================================================================== */
   var RENDERERS = {
-    dashboard: vDashboard, documentos: vDocumentos, capacitaciones: vCapacitaciones,
+    dashboard: vDashboard, documentos: vDocumentos, 'documentos-inspeccion': vDocumentosInspeccion, 'informacion-almacen': vInformacionAlmacen, capacitaciones: vCapacitaciones,
     autoinspecciones: vAutoinspecciones, retiros: function () { return global.BPAPLUS.retiro.view(); }
   };
   function render(view) { return (RENDERERS[view] || vDashboard)(); }
@@ -901,6 +1097,33 @@
   function formatosPanel(modulo) {
     global.BPAPLUS.formatos.manage(store.dg(), modulo, function (dgNext) {
       return store.save('droguerias', dgNext);
+    });
+  }
+
+  function formatoEvaluacionPanel(cap) {
+    var holder = { id: cap.id, nombre: cap.tema, formatos: cap.formatoEvaluacion ? [cap.formatoEvaluacion] : [] };
+    global.BPAPLUS.formatos.manage(holder, 'evaluaciones', function (next) {
+      cap.formatoEvaluacion = global.BPAPLUS.formatos.para(next, 'evaluaciones');
+      return store.save('capacitaciones', Object.assign({}, cap));
+    }, {
+      nombre: cap.tema,
+      path: 'droguerias/' + store.dg().id + '/capacitaciones/' + cap.id + '/formato-evaluacion'
+    });
+  }
+
+  function archivoAutoinspeccion(i) {
+    var m = UI.dialog({
+      title: 'Agregar archivo a la autoinspección',
+      body: '<div class="field" id="wrap_ai_title"><label>Título del archivo</label><input class="inp" id="ai_title" placeholder="Ej. Evidencia fotográfica"><div class="err">Ingresa un título.</div></div>',
+      footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="ai_continue">Continuar</button>',
+      onMount: function (root) {
+        var input = root.querySelector('#ai_title'); input.focus();
+        root.querySelector('#ai_continue').onclick = function () {
+          var title = input.value.trim(); if (!title) { root.querySelector('#wrap_ai_title').classList.add('invalid'); return; }
+          var doc = { id: D.nextId(), e: store.dg().id, inspeccionId: i.id, tipoInspeccion: 'autoinspeccion-' + i.id + '-' + D.nextId(), nombre: title, codigo: 'INS-ADJ-' + String(Date.now()).slice(-6), tipo: 'Otro', version: 1 };
+          m.close(); global.BPAPLUS.drive.filePanel(doc, store.dg().id, function (saved) { return store.save('documentosInspeccion', saved); });
+        };
+      }
     });
   }
 
@@ -942,6 +1165,10 @@
       if (rp) { e.stopPropagation(); return global.BPAPLUS.retiro.imprimirTodo(store.dg(), store.find('retiros', rp.dataset.retiroPrint)); }
       var rr = t.closest('[data-retiro]'); if (rr) return global.BPAPLUS.retiro.panel(store.find('retiros', rr.dataset.retiro));
       var dr = t.closest('[data-doc]'); if (dr) return docPanel(store.find('documentos', dr.dataset.doc));
+      var io = t.closest('[data-ins-other]'); if (io) return otroDocumentoInspeccion(io.dataset.insOther);
+      var iu = t.closest('[data-ins-upload]'); if (iu) return documentoInspeccion(iu.dataset.insUpload);
+      var idl = t.closest('[data-ins-preview]'); if (idl) return global.BPAPLUS.drive.previewStored(store.find('documentosInspeccion', idl.dataset.insPreview).file).catch(function (err) { UI.note(err.message || err); });
+      var ide = t.closest('[data-ins-delete]'); if (ide) return store.removeWithUndo('documentosInspeccion', store.find('documentosInspeccion', ide.dataset.insDelete), 'Documento de inspección eliminado');
       var cr = t.closest('[data-cap]'); if (cr) return capPanel(store.find('capacitaciones', cr.dataset.cap));
       var ir = t.closest('[data-insp]'); if (ir) return inspPanel(store.find('inspecciones', ir.dataset.insp));
       var ar = t.closest('[data-acta]'); if (ar) return actaForm(store.find('actas', ar.dataset.acta));
@@ -949,13 +1176,16 @@
     container.addEventListener('input', function (e) {
       if (e.target.id === 'qDoc') { store.state.qDoc = e.target.value; store.renderInto(); }
     });
+    container.addEventListener('submit', function (e) {
+      if (e.target.id === 'infoAlmacenForm') { e.preventDefault(); guardarInformacionAlmacen(e.target); }
+    });
   }
 
   global.BPAPLUS = global.BPAPLUS || {};
   global.BPAPLUS.views = {
     setStore: function (s) { store = s; }, render: render, bind: bind,
     open: { docForm: docForm, capForm: capForm, inspForm: inspForm, actaForm: actaForm, dgSwitcher: dgSwitcher, dgForm: dgForm, criteriosForm: criteriosForm,
-      formatoActa: formatoActaDescarga, cargarActa: cargarActaLlenada },
+      formatoActa: formatoActaDescarga, cargarActa: cargarActaLlenada, documentoInspeccion: documentoInspeccion },
     panels: { docPanel: docPanel, capPanel: capPanel, inspPanel: inspPanel }
   };
 })(window);

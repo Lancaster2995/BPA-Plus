@@ -3,8 +3,8 @@
 Qué hace y cómo se usa: [README.md](README.md). Este archivo es el estado para quien
 continúe el trabajo (Claude Code, Codex o quien sea).
 
-Repo privado: https://github.com/Lancaster2995/BPA-Plus (rama `main`), publicado con
-GitHub Pages en https://lancaster2995.github.io/BPA-Plus/ — push a `main` es el despliegue.
+Repo privado: https://github.com/Lancaster2995/BPA-Plus (rama `main`). GitHub Pages está
+desactivado; producción se publica únicamente en https://bpa-db.web.app/ con Firebase Hosting.
 
 El proyecto de Firebase (`bpa-db`) está en el plan **Spark** y así se queda: eso descarta
 Cloud Functions y Cloud Storage, y es la razón de la forma que tiene el backend.
@@ -237,9 +237,10 @@ la recibió del almacén—, y la carta a DIGEMID decía «1 de 2». Lo distribu
 campo (`distribuida`, las unidades de la importación) y el pie de la conciliación es el del
 formato: subtotal de clientes, stock inmovilizado en el almacén, total recuperado.
 
-Lo que **no** hace: no se conecta con LogisticS —la importación se copió, no se lee—, ni
-recorre el inventario para saber a qué clientes se les despachó ese lote. Cuando eso haga
-falta, el puente natural es el mismo que usa el sub-programa: un archivo.
+El formulario ahora ofrece **Traer de LogisticS**. Abre la app, empareja la droguería por
+RUC, sigla o razón social normalizada y deja elegir un lote; completa producto, fabricante,
+importación, factura, stock y clientes despachados. El intercambio ocurre entre pestañas,
+solo en memoria, y LogisticS responde exclusivamente al origen `https://bpa-db.web.app`.
 
 ## Pendiente
 

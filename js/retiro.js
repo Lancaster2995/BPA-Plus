@@ -384,6 +384,90 @@
     };
   }
 
+  /* LogisticS entrega una ficha ya acotada a la droguería coincidente. Acá solo se
+     traduce su vocabulario al registro único del expediente de retiro. */
+  function desdeLogistics(dg, l) {
+    var hoy = D.isoHoy();
+    var ds = [{
+      tipo: 'almacen', nombre: dg.nombre + ' — Almacén', ruc: dg.ruc || '', direccion: dg.direccion || '',
+      cargo: 'Jefe de Almacén', guia: l.guideNo || '', entregada: num(l.quantity), stock: num(l.stock),
+      fechaCarta: hoy, fechaResp: ''
+    }].concat((l.clients || []).map(function (c) {
+      return {
+        tipo: 'cliente', nombre: c.name || c.destination || '', ruc: c.ruc || '', direccion: c.address || '',
+        cargo: 'Gerente General', guia: c.guide || '', entregada: num(c.quantity), stock: 0,
+        fechaCarta: hoy, fechaResp: ''
+      };
+    }).filter(function (d) { return d.nombre; }));
+    return {
+      producto: l.product || '', codigo: l.assignedId || '', lote: l.batch || '',
+      presentacion: l.product ? 'Unidad — ' + l.product + (l.model ? ', modelo ' + l.model : '') : '',
+      venc: l.expiration || 'N/A', rs: l.rs || '', distribuida: num(l.quantity),
+      factura: [l.invoiceNo, l.supplier, l.importNo && 'importación ' + l.importNo].filter(Boolean).join(' — '),
+      facturaFecha: l.invoiceDate || l.entryDate || '', fabricante: l.manufacturer || '', dests: ds
+    };
+  }
+
+  function aplicarLogistics(root, lot) {
+    var r = desdeLogistics(store().dg(), lot);
+    var fields = {
+      '#r_prod': r.producto, '#r_cod': r.codigo, '#r_lote': r.lote, '#r_pres': r.presentacion,
+      '#r_venc': r.venc, '#r_rs': r.rs, '#r_fact': r.factura, '#r_factf': r.facturaFecha,
+      '#r_dist': r.distribuida, '#r_fab': r.fabricante
+    };
+    Object.keys(fields).forEach(function (sel) { root.querySelector(sel).value = fields[sel]; });
+    root.querySelector('#destList').innerHTML = r.dests.map(destRow).join('');
+    UI.note('Datos de LogisticS cargados; revisá el stock recuperado antes de guardar.');
+  }
+
+  function elegirLoteLogistics(root, payload) {
+    var lots = payload && payload.lots || [];
+    if (!lots.length) { UI.note('La droguería coincidente no tiene lotes en LogisticS.'); return; }
+    var m = UI.dialog({
+      title: 'Traer lote de LogisticS',
+      body: '<div class="field"><label>Lote / serie</label><select class="inp" id="log_lot">' + lots.map(function (l, i) {
+        return '<option value="' + i + '">' + esc([l.importNo, l.product, 'lote ' + l.batch].filter(Boolean).join(' · ')) + '</option>';
+      }).join('') + '</select></div><p class="dialog-note">Coincidencia: ' + esc(payload.drogueria && payload.drogueria.name || '') + '</p>',
+      footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" data-use-logistics>Usar datos</button>',
+      onMount: function (pick) {
+        pick.querySelector('[data-use-logistics]').onclick = function () {
+          aplicarLogistics(root, lots[+pick.querySelector('#log_lot').value]); m.close();
+        };
+      }
+    });
+  }
+
+  function conectarLogistics(root) {
+    var url = global.BPAPLUS_CONFIG && global.BPAPLUS_CONFIG.logisticsUrl;
+    if (!url) { UI.note('Falta configurar logisticsUrl.'); return; }
+    var target = new URL(url, location.href).origin, requestId = D.nextId(), dg = store().dg();
+    var popup = global.open(url, 'bpa-logistics');
+    if (!popup) { UI.note('El navegador bloqueó LogisticS. Habilitá las ventanas emergentes.'); return; }
+    var button = root.querySelector('[data-logistics]'), timer, timeout;
+    if (button) button.disabled = true;
+    function finish() {
+      clearInterval(timer); clearTimeout(timeout); global.removeEventListener('message', receive);
+      if (button) button.disabled = false;
+    }
+    function send() {
+      popup.postMessage({
+        type: 'bpa-retiro-request', requestId: requestId,
+        drogueria: { name: dg.nombre || '', shortCode: dg.init || '', ruc: dg.ruc || '' }
+      }, target);
+    }
+    function receive(e) {
+      if (e.origin !== target || e.source !== popup || !e.data || e.data.type !== 'logistics-retiro-data' || e.data.requestId !== requestId) return;
+      finish();
+      if (e.data.error) UI.note(e.data.error); else elegirLoteLogistics(root, e.data.payload);
+      try { popup.close(); } catch (ignore) {}
+    }
+    global.addEventListener('message', receive);
+    timer = setInterval(send, 700); send();
+    timeout = setTimeout(function () {
+      finish(); UI.note('LogisticS no respondió. Iniciá sesión, desbloquealo y volvé a intentar.');
+    }, 120000);
+  }
+
   function form(existing) {
     var r = existing || nuevo(store().dg().id);
     var m = UI.dialog({
@@ -393,6 +477,7 @@
           '> Es un simulacro (se marca en los diez documentos)</label></div>' +
 
         '<div class="section-title">Producto</div>' +
+        '<button class="btn btn-ghost btn-sm" type="button" data-logistics>' + icon('download', 14) + 'Traer de LogisticS</button>' +
         '<div class="field" id="wrap_prod"><label>Producto</label><input class="inp" id="r_prod" value="' + esc(r.producto) +
           '"><div class="err">Ingresá el producto.</div></div>' +
         '<div class="grid-2"><div class="field"><label>Código</label><input class="inp mono" id="r_cod" value="' + esc(r.codigo || '') + '"></div>' +
@@ -432,6 +517,7 @@
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="r_save">Guardar</button>',
       onMount: function (root) {
         var list = root.querySelector('#destList');
+        root.querySelector('[data-logistics]').onclick = function () { conectarLogistics(root); };
         root.querySelector('#r_adddest').onclick = function () {
           var div = document.createElement('div'); div.innerHTML = destRow(null);
           list.appendChild(div.firstChild);
@@ -527,6 +613,7 @@
   global.BPAPLUS = global.BPAPLUS || {};
   global.BPAPLUS.retiro = {
     view: view, form: form, panel: panel, documentos: documentos,
-    imprimir: imprimir, imprimirTodo: imprimirTodo, ejemplo: ejemplo, nuevo: nuevo
+    imprimir: imprimir, imprimirTodo: imprimirTodo, ejemplo: ejemplo, nuevo: nuevo,
+    desdeLogistics: desdeLogistics
   };
 })(window);

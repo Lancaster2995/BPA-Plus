@@ -52,17 +52,25 @@
   /* ------------------------------ Acta de asistencia ------------------------------ */
   function actaAsistencia(dg, cap) {
     var caps = cap.capacitados || [];
-    var propio = conFormato(dg, 'capacitaciones', {
+    var valores = {
       tema: cap.tema || '', fecha: D.fLarga(cap.fecha), area: cap.area || '', frec: cap.frec || '',
       expositor: dg.dt || '', empresa: dg.nombre || '', ruc: dg.ruc || '', direccion: dg.direccion || ''
-    }, caps.map(function (p) {
-      return { nombre: p.nombre || '', cargo: p.cargo || '', dni: p.dni || '', areaP: p.area || cap.area || '' };
-    }));
+    };
+    var filasFormato = caps.map(function (p) {
+      return { nombre: p.nombre || '', cargo: p.cargo || '', dni: p.dni || '', areaP: p.area || cap.area || '', nota: p.nota == null ? '' : p.nota };
+    });
+    var F = global.BPAPLUS.formatos, fmt = F && F.para(dg, 'capacitaciones');
+    if (fmt && fmt.archivo && global.BPAPLUS.drive) {
+      return global.BPAPLUS.drive.exportarFormato(fmt, [{ valores: valores, filas: filasFormato, datosFormato: cap.datosFormato || {} }], 'acta-asistencia-' + (cap.tema || 'capacitacion'))
+        .then(function (done) { if (!done) conFormato(dg, 'capacitaciones', valores, filasFormato); })
+        .catch(function (err) { UI.note('No se pudo emitir el formato original: ' + (err.message || err)); });
+    }
+    var propio = conFormato(dg, 'capacitaciones', valores, filasFormato);
     if (propio) return;
 
     var filas = caps.length
-      ? caps.map(function (p, i) { return '<tr><td>' + (i + 1) + '</td><td>' + esc(p.nombre || '') + '</td><td>' + esc(p.cargo || '') + '</td><td></td></tr>'; }).join('')
-      : '<tr><td colspan="4" style="text-align:center;color:#888;padding:16px">Sin participantes registrados</td></tr>';
+      ? caps.map(function (p, i) { return '<tr><td>' + (i + 1) + '</td><td>' + esc(p.nombre || '') + '</td><td>' + esc(p.cargo || '') + '</td><td>' + esc(p.nota == null ? '' : p.nota) + '</td><td></td></tr>'; }).join('')
+      : '<tr><td colspan="5" style="text-align:center;color:#888;padding:16px">Sin participantes registrados</td></tr>';
 
     var html = '<div class="acta">' + membrete(dg) +
       '<h1>Acta de asistencia a capacitación</h1>' +
@@ -72,7 +80,7 @@
         '<div><b>Área:</b> ' + esc(cap.area || '') + '</div>' +
         '<div><b>Frecuencia:</b> ' + esc(cap.frec || '') + '</div>' +
       '</div>' +
-      '<table><thead><tr><th style="width:36px">N.°</th><th>Nombres y apellidos</th><th style="width:34%">Cargo</th><th style="width:22%">Firma</th></tr></thead>' +
+      '<table><thead><tr><th style="width:36px">N.°</th><th>Nombres y apellidos</th><th style="width:30%">Cargo</th><th style="width:11%">Nota / 20</th><th style="width:20%">Firma</th></tr></thead>' +
         '<tbody>' + filas + '</tbody></table>' +
       '<div class="acta-firmas">' +
         '<div class="firma-line">Expositor / capacitador</div>' +
@@ -86,6 +94,7 @@
      de respuestas queda en la app, no en el papel que se reparte. */
   function actaEvaluacion(dg, cap) {
     var ev = cap.evaluacion || { preguntas: [] };
+    var participantes = (cap.capacitados || []).length ? cap.capacitados : [null];
     var LETRAS = ['A', 'B', 'C', 'D'];
     var cuerpo = ev.preguntas.map(function (p, i) {
       return '<div class="eval-q"><div class="eval-enun">' + (i + 1) + '. ' + esc(p.enunciado) + '</div>' +
@@ -94,21 +103,47 @@
         }).join('') + '</div></div>';
     }).join('');
 
-    var html = '<div class="acta">' + membrete(dg) +
-      '<h1>Evaluación de capacitación</h1>' +
-      '<div class="acta-meta">' +
-        '<div><b>Tema:</b> ' + esc(cap.tema || '') + '</div>' +
-        '<div><b>Fecha:</b> ' + esc(D.fLarga(cap.fecha)) + '</div>' +
-        '<div><b>Área:</b> ' + esc(cap.area || '') + '</div>' +
-        '<div><b>Nota mínima aprobatoria:</b> 4 de 5</div>' +
-      '</div>' +
-      '<table class="eval-head"><tbody><tr><td><b>Participante:</b></td><td></td><td><b>Cargo:</b></td><td></td></tr></tbody></table>' +
-      (cuerpo || '<p style="color:#888">Esta capacitación todavía no tiene evaluación generada.</p>') +
-      '<div class="acta-firmas">' +
-        '<div class="firma-line">Firma del participante</div>' +
-        '<div class="firma-line">Evaluado por — ' + esc(dg.dt || '') + '</div>' +
-      '</div></div>';
+    var F = global.BPAPLUS.formatos, fmt = cap.formatoEvaluacion || null;
+    function valoresDe(p) {
+      p = p || {};
+      return {
+        tema: cap.tema || '', fecha: D.fLarga(cap.fecha), area: cap.area || '', frec: cap.frec || '',
+        expositor: dg.dt || '', empresa: dg.nombre || '', ruc: dg.ruc || '', direccion: dg.direccion || '',
+        nombre: p.nombre || '', dni: p.dni || '', cargo: p.cargo || '', nota: p.nota == null ? '' : p.nota
+      };
+    }
+    if (fmt && fmt.archivo && global.BPAPLUS.drive) {
+      return global.BPAPLUS.drive.exportarFormato(fmt, participantes.map(function (p) {
+        var valores = valoresDe(p);
+        return { valores: valores, filas: [valores], nombreHoja: valores.nombre };
+      }), 'evaluaciones-' + (cap.tema || 'capacitacion')).then(function (done) {
+        if (!done) imprimirEvaluaciones();
+      }).catch(function (err) { UI.note('No se pudo emitir el formato original: ' + (err.message || err)); });
+    }
+    return imprimirEvaluaciones();
+
+    function imprimirEvaluaciones() {
+    var html = participantes.map(function (p) {
+      p = p || {};
+      var valores = valoresDe(p);
+      if (fmt) return '<div class="acta">' + membrete(dg) + F.render(fmt, valores, [valores]) + '</div>';
+      return '<div class="acta">' + membrete(dg) +
+        '<h1>Evaluación de capacitación</h1>' +
+        '<div class="acta-meta">' +
+          '<div><b>Tema:</b> ' + esc(cap.tema || '') + '</div>' +
+          '<div><b>Fecha:</b> ' + esc(D.fLarga(cap.fecha)) + '</div>' +
+          '<div><b>Área:</b> ' + esc(cap.area || '') + '</div>' +
+          '<div><b>Nota:</b> ' + esc(p.nota == null ? '' : p.nota) + (p.nota == null || p.nota === '' ? '' : ' / 20') + '</div>' +
+        '</div>' +
+        '<table class="eval-head"><tbody><tr><td><b>Participante:</b></td><td>' + esc(p.nombre || '') + '</td><td><b>Cargo:</b></td><td>' + esc(p.cargo || '') + '</td></tr></tbody></table>' +
+        (cuerpo || '<p style="color:#888">Esta capacitación todavía no tiene evaluación generada.</p>') +
+        '<div class="acta-firmas">' +
+          '<div class="firma-line">Firma del participante</div>' +
+          '<div class="firma-line">Evaluado por — ' + esc(dg.dt || '') + '</div>' +
+        '</div></div>';
+    }).join('');
     print(html);
+    }
   }
 
   /* Una fila por ítem respondido, para el formato propio de la droguería. */

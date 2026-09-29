@@ -6,8 +6,8 @@
 (function (global) {
   'use strict';
 
-  var DB_NAME = 'bpa-plus', DB_VERSION = 1;
-  var STORES = ['droguerias', 'documentos', 'capacitaciones', 'inspecciones', 'actas', 'retiros', 'meta'];
+  var DB_NAME = 'bpa-plus', DB_VERSION = 2;
+  var STORES = ['droguerias', 'documentos', 'documentosInspeccion', 'capacitaciones', 'inspecciones', 'actas', 'retiros', 'meta'];
   var _db = null;
 
   function open() {
