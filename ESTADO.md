@@ -242,6 +242,63 @@ RUC, sigla o razón social normalizada y deja elegir un lote; completa producto,
 importación, factura, stock y clientes despachados. El intercambio ocurre entre pestañas,
 solo en memoria, y LogisticS responde exclusivamente al origen `https://bpa-db.web.app`.
 
+## Scroll y fluidez (2026-09-29)
+
+Reporte: «el scroll con la rueda no funciona, la navegación se siente lenta y floja». El render
+en JS mide ~1 ms por vista; lo lento eran los efectos, no el cálculo:
+
+- `.content > *` tenía una animación de entrada de 320 ms que se repetía en **cada** render
+  (filtro, tecla del buscador, guardado), no solo al navegar. Quitada.
+- `.row`/`.stat`/botones se levantaban con `transform` al pasar el mouse: al hacer scroll con la
+  rueda, cada fila bajo el cursor saltaba. Quedan borde y sombra, sin movimiento.
+- `.bell-badge` se posicionaba contra la barra superior (a `.icon-btn` le faltaba
+  `position: relative`) y desbordaba 4 px en horizontal por debajo de 920 px.
+- `overscroll-behavior: contain` en barra lateral, diálogos, paneles y menús: al llegar al final
+  ya no arrastran la página de atrás.
+- `lock.js` ya no pone `overflow: hidden` en el body (era el único código capaz de dejar la
+  página sin scroll) y no arranca la app dos veces si el mismo PIN se valida dos veces.
+
+En local (sin nube) el scroll con rueda ya funcionaba antes del cambio: **no se reprodujo la
+falla total**. Si persiste en producción, falta saber en qué pantalla.
+
+Latente, sin tocar: si la sesión de Firebase se cierra y se vuelve a abrir sin recargar,
+`auth.js` pone `started = false` y `start()` corre otra vez (listeners duplicados).
+
+## Rediseño de la interfaz (2026-09-29)
+
+Aprobado a partir de un lienzo con tres pantallas (escritorio Inicio y Documentos, móvil). Lo que
+cambió y dónde:
+
+- **Estructura** ([js/app.js](js/app.js) `renderChrome`): barra lateral clara agrupada
+  (Cumplimiento / Almacén / Herramientas) con buscador Ctrl K arriba y, abajo, el estado de
+  conexión y «Mi cuenta» (tema, PIN, respaldo, salir). Los ocho botones sueltos del pie se fueron
+  a ese menú y al buscador. El contenido va en un panel blanco con la ruta arriba.
+- **«Nuevo»** en la barra superior reemplaza al botón flotante (`#fab` → `#newBtn`), que tapaba el
+  final de las listas. En escritorio solo aparece en Inicio; en móvil, en todas las vistas, y ahí
+  se oculta el botón de alta de cada vista porque hace lo mismo.
+- **Móvil**: la barra inferior sigue con cinco destinos; Retiro, Información del almacén y
+  Documentos de inspección pasan al menú «Más».
+- **Menús** ([js/ui.js](js/ui.js) `actionsheet(options, anchor)`): con `anchor`, en escritorio es
+  un menú flotante junto al botón; en el celular sigue siendo la hoja inferior. Acepta `{sep:true}`.
+- **Inicio** ([js/views.js](js/views.js) `vDashboard`): anillo de cumplimiento con un medidor por
+  módulo, «Requiere atención» (vencidos, atrasadas y hallazgos, cada uno con su botón) y próximos
+  vencimientos. Reemplaza al faro + tarjetas + línea de tiempo, que repetían las mismas cifras.
+- **Estilo** ([styles.css](styles.css)): Geist / Geist Mono, navy para la acción principal
+  (dorado en modo oscuro), estados como píldoras, filtros como control segmentado, listas como
+  una sola superficie con filas.
+
+El documento sigue siendo el que hace scroll: no se agregaron contenedores con scroll propio.
+
+**Vista dividida de Documentos** ([js/views.js](js/views.js)): desde 1200 px de ancho, abrir un
+documento lo muestra en una columna a la derecha que queda fija bajo la barra superior mientras
+la lista hace scroll; la fila abierta queda marcada y Escape o la X cierran la columna. Por
+debajo de 1200 px abre el panel lateral de siempre. El detalle es uno solo (`docDetailHtml` +
+`docDetailClick`) montado en uno u otro contenedor. `V.panels.docPanel` ahora es `abrirDoc`:
+desde Inicio, alertas o el buscador lleva a Documentos con ese documento seleccionado
+(`store.state.selDoc`, que se limpia al cambiar de droguería). En la columna, editar o cargar un
+archivo no la cierra: el render del guardado la muestra actualizada. Las filas de documento
+ahora se enfocan con Tab y se abren con Enter.
+
 ## Pendiente
 
 Lo que queda está encargado en **[ENCARGO-CODEX-1.md](ENCARGO-CODEX-1.md)**, con criterios

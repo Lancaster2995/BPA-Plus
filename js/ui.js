@@ -32,7 +32,20 @@
     check: '<path d="M20 6 9 17l-5-5"/>',
     undo: '<path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/>',
     filter: '<path d="M22 3H2l8 9.5V19l4 2v-8.5z"/>',
-    flag: '<path d="M5 22V4"/><path d="M5 4h13l-3 5 3 5H5"/>'
+    flag: '<path d="M5 22V4"/><path d="M5 4h13l-3 5 3 5H5"/>',
+    home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/>',
+    bell: '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+    folder: '<path d="M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-8l-2-3H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1z"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+    clipboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="m9 13 2 2 4-4"/>',
+    updown: '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    sliders: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+    cloud: '<path d="M17.5 19H7a5 5 0 1 1 1-9.9A6 6 0 0 1 19.5 11 4 4 0 0 1 17.5 19z"/><path d="m9.5 13.5 2 2 3.5-3.5"/>',
+    cloudoff: '<path d="M17.5 19H7a5 5 0 1 1 1-9.9A6 6 0 0 1 19.5 11 4 4 0 0 1 17.5 19z"/><path d="M3 3l18 18"/>',
+    right: '<path d="m9 6 6 6-6 6"/>',
+    logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>'
   };
   function icon(name, size, cls) {
     var p = ICONS[name] || ''; size = size || 20;
@@ -154,15 +167,28 @@
     return api;
   }
 
-  /* ------------------------------ Hoja de acciones (móvil) ------------------------------ */
-  function actionsheet(options) {
-    var bd = document.createElement('div'); bd.className = 'scrim';
-    var sh = document.createElement('div'); sh.className = 'picker'; sh.setAttribute('role', 'menu');
-    sh.innerHTML = '<div class="picker-grip"></div>' + options.map(function (o, i) {
+  /* ------------------------------ Hoja de acciones / menú ------------------------------
+     En el celular es una hoja que sube desde abajo. En escritorio, con `anchor`, es un menú
+     flotante pegado al botón que lo abrió: una hoja de medio ancho de pantalla para elegir
+     entre tres opciones era lo más «de celular» que tenía la versión de escritorio. */
+  var DESKTOP = '(min-width: 921px)';
+  function actionsheet(options, anchor) {
+    var menu = !!(anchor && global.matchMedia && global.matchMedia(DESKTOP).matches);
+    var bd = document.createElement('div'); bd.className = 'scrim' + (menu ? ' clear' : '');
+    var sh = document.createElement('div'); sh.className = 'picker' + (menu ? ' menu' : ''); sh.setAttribute('role', 'menu');
+    sh.innerHTML = (menu ? '' : '<div class="picker-grip"></div>') + options.map(function (o, i) {
+      if (o.sep) return '<div class="picker-sep" role="separator"></div>';
       return '<button class="picker-opt ' + (o.danger ? 'danger' : '') + '" data-i="' + i + '" role="menuitem">' +
-        (o.icon ? icon(o.icon, 20) : '') + '<span>' + esc(o.label) + '</span></button>';
+        (o.icon ? icon(o.icon, menu ? 17 : 20) : '') + '<span>' + esc(o.label) + '</span>' +
+        (o.hint ? '<small>' + esc(o.hint) + '</small>' : '') + '</button>';
     }).join('');
     document.body.appendChild(bd); document.body.appendChild(sh);
+    if (menu) {
+      var r = anchor.getBoundingClientRect(), h = sh.offsetHeight, w = sh.offsetWidth;
+      var below = r.bottom + 6 + h <= global.innerHeight;
+      sh.style.top = Math.max(8, below ? r.bottom + 6 : r.top - 6 - h) + 'px';
+      sh.style.left = Math.max(8, r.left + w > global.innerWidth - 8 ? r.right - w : r.left) + 'px';
+    }
     function close() { bd.classList.remove('show'); sh.classList.remove('show'); setTimeout(function () { bd.remove(); sh.remove(); }, 220); }
     bd.addEventListener('click', close);
     sh.addEventListener('click', function (e) {

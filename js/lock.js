@@ -58,8 +58,9 @@
         }).join('') +
       '</div>' +
       (creating ? '' : '<button class="lock-reset" id="lockReset" type="button">¿Olvidaste el PIN?</button>');
+    // Sin `overflow: hidden` en el body: la pantalla es fija y tapa todo, y detrás todavía no
+    // hay contenido. Era el único código capaz de dejar la página sin scroll.
     document.body.appendChild(el);
-    document.body.style.overflow = 'hidden';
 
     var buf = '', firstPin = '', max = 6, dots = el.querySelector('#lockDots'), err = el.querySelector('#lockErr');
     function draw() {
@@ -89,7 +90,9 @@
       var check = creating ? setPin(buf).then(function () { return true; }) : verify(buf);
       check.then(function (ok) {
         if (ok) {
-          document.body.style.overflow = '';
+          // Enter y el temporizador de 550 ms pueden validar el mismo PIN dos veces: arrancar la
+          // app dos veces duplica los listeners y cada navegación se renderiza por partida doble.
+          if (!el.isConnected) return;
           document.removeEventListener('keydown', onKey);
           el.remove();
           onUnlock();

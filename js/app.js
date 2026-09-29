@@ -8,19 +8,21 @@
   'use strict';
   var D = global.BPAPLUS.domain, DB = global.BPAPLUS.db, UI = global.BPAPLUS.ui, V = global.BPAPLUS.views;
 
+  /* `group` arma las secciones de la barra lateral; `bottom: false` manda la vista al menú
+     «Más» del celular, que así conserva cinco destinos en la barra inferior. */
   var NAV = [
-    { view: 'dashboard', label: 'Panorama', icon: 'dashboard' },
-    { view: 'documentos', label: 'Documentos', icon: 'doc' },
-    { view: 'documentos-inspeccion', label: 'Documentos de inspección', icon: 'insp', bottom: false },
-    { view: 'informacion-almacen', label: 'Información del almacén', icon: 'building', bottom: false },
-    { view: 'capacitaciones', label: 'Capacitaciones', icon: 'cap' },
-    { view: 'autoinspecciones', label: 'Autoinspecciones', icon: 'insp' },
-    { view: 'retiros', label: 'Retiro de mercado', icon: 'flag' }
+    { view: 'dashboard', label: 'Inicio', short: 'Inicio', icon: 'home' },
+    { view: 'documentos', label: 'Documentos', short: 'Documentos', icon: 'doc', group: 'Cumplimiento' },
+    { view: 'capacitaciones', label: 'Capacitaciones', short: 'Capacitac.', icon: 'cap', group: 'Cumplimiento' },
+    { view: 'autoinspecciones', label: 'Autoinspecciones', short: 'Inspecc.', icon: 'clipboard', group: 'Cumplimiento' },
+    { view: 'retiros', label: 'Retiro de mercado', icon: 'flag', group: 'Cumplimiento', bottom: false },
+    { view: 'informacion-almacen', label: 'Información del almacén', icon: 'building', group: 'Almacén', bottom: false },
+    { view: 'documentos-inspeccion', label: 'Documentos de inspección', icon: 'folder', group: 'Almacén', bottom: false }
   ];
 
   /* ------------------------------ Store ------------------------------ */
   var store = {
-    state: { dg: '', view: 'dashboard', qDoc: '', filtDoc: 'todos', filtCap: 'todos', filtInsp: 'todos' },
+    state: { dg: '', view: 'dashboard', qDoc: '', filtDoc: 'todos', filtCap: 'todos', filtInsp: 'todos', selDoc: '' },
     data: { droguerias: [], documentos: [], documentosInspeccion: [], capacitaciones: [], inspecciones: [], actas: [], retiros: [] },
 
     load: function () {
@@ -71,7 +73,7 @@
 
     setDg: function (id) {
       store.state.dg = id; DB.setMeta('dgActiva', id);
-      store.state.qDoc = ''; store.state.filtDoc = 'todos'; store.state.filtCap = 'todos'; store.state.filtInsp = 'todos';
+      store.state.qDoc = ''; store.state.filtDoc = 'todos'; store.state.filtCap = 'todos'; store.state.filtInsp = 'todos'; store.state.selDoc = '';
       store.render(); store.renderChrome();
     },
     deleteDg: function (id) {
@@ -114,113 +116,150 @@
     };
   }
 
+  function syncChip() {
+    if (!global.BPAPLUS.cloud) return '<div class="sync">' + UI.icon('check', 15) + '<span>Guardado en este equipo</span></div>';
+    return navigator.onLine
+      ? '<div class="sync">' + UI.icon('cloud', 15) + '<span>Conectado · se sincroniza solo</span></div>'
+      : '<div class="sync off">' + UI.icon('cloudoff', 15) + '<span>Sin conexión · se envía al volver</span></div>';
+  }
+
   function renderChrome() {
     var dg = store.dg(), counts = navCounts(), v = store.state.view;
-    var fab = document.getElementById('fab'); if (fab) fab.hidden = v === 'informacion-almacen';
+    var alertN = global.BPAPLUS.alerts ? global.BPAPLUS.alerts.count() : 0;
+    var cur = NAV.filter(function (n) { return n.view === v; })[0] || NAV[0];
+    var esc = UI.esc;
+    function badge(c) { return c ? '<span class="ni-badge">' + c + '</span>' : ''; }
+    function item(n) {
+      var on = v === n.view;
+      return '<button class="nav-item' + (on ? ' active' : '') + '" data-nav="' + n.view + '"' + (on ? ' aria-current="page"' : '') + '>' +
+        UI.icon(n.icon, 18, 'ni-ico') + '<span>' + n.label + '</span>' + badge(counts[n.view]) + '</button>';
+    }
+    function group(name) {
+      return '<div class="nav-label">' + name + '</div>' + NAV.filter(function (n) { return n.group === name; }).map(item).join('');
+    }
+    var avatar = '<span class="ws-av">' + esc(dg.init || '?') + '</span>';
 
     var side = document.getElementById('sidebar');
-    var alertN = global.BPAPLUS.alerts ? global.BPAPLUS.alerts.count() : 0;
     if (side) side.innerHTML =
-      '<div class="brand"><div class="brand-mark"><img src="icons/icon-192.png?v=3" alt=""></div><div><div class="brand-name">BPA-Plus</div><div class="brand-sub">Gestión BPA</div></div>' +
-        '<button class="bell-btn" id="alertBell" aria-label="Alertas">' + UI.icon('alert', 18) + (alertN ? '<span class="bell-badge">' + alertN + '</span>' : '') + '</button></div>' +
-      '<button class="dg-switch" id="dgSwitch"><div class="dg-avatar">' + UI.esc(dg.init || '?') + '</div>' +
-        '<div class="dg-txt"><div class="dg-name">' + UI.esc(dg.nombre) + '</div><div class="dg-ruc mono">' + (dg.ruc ? 'RUC ' + UI.esc(dg.ruc) : 'Sin RUC') + '</div></div>' +
-        '<span class="chev">' + UI.icon('chevron', 14) + '</span></button>' +
-      '<nav class="nav">' + NAV.map(function (n) {
-        var c = counts[n.view] || 0;
-        return '<button class="nav-item ' + (v === n.view ? 'active' : '') + '" data-nav="' + n.view + '">' +
-          UI.icon(n.icon, 18, 'ni-ico') + '<span>' + n.label + '</span>' + (c ? '<span class="ni-badge">' + c + '</span>' : '') + '</button>';
-      }).join('') + '</nav>' +
-      '<div class="sidebar-foot">' +
-        '<button class="side-mini" id="cmdOpen">' + UI.icon('search', 16) + '<span>Buscar</span><span class="kbd mono">Ctrl K</span></button>' +
-        '<button class="side-mini" id="driveImport">' + UI.icon('upload', 16) + '<span>Escanear carpeta BPA</span></button>' +
-        '<button class="side-mini" id="cronImport">' + UI.icon('cap', 16) + '<span>Importar cronograma Excel</span></button>' +
-        '<button class="side-mini" id="importBtn">' + UI.icon('upload', 16) + '<span>Importar respaldo</span></button>' +
-        '<button class="side-mini" id="exportBtn">' + UI.icon('download', 16) + '<span>Exportar respaldo</span></button>' +
-        '<button class="side-mini" id="lockBtn">' + UI.icon('settings', 16) + '<span>Cambiar PIN</span></button>' +
-        '<button class="side-mini" id="logoutBtn">' + UI.icon('x', 16) + '<span>Cerrar sesión</span></button>' +
-        '<button class="side-mini" id="themeBtn">' + UI.icon(isDark() ? 'sun' : 'moon', 16) + '<span>' + (isDark() ? 'Tema claro' : 'Tema oscuro') + '</span></button>' +
+      '<button class="ws" id="dgSwitch" aria-label="Cambiar droguería">' + avatar +
+        '<span class="ws-txt"><span class="ws-name">' + esc(dg.nombre) + '</span><span class="ws-ruc mono">' + (dg.ruc ? 'RUC ' + esc(dg.ruc) : 'Sin RUC') + '</span></span>' +
+        UI.icon('updown', 16, 'ws-chev') + '</button>' +
+      '<button class="side-search" id="cmdOpen">' + UI.icon('search', 16) + '<span>Buscar o ejecutar…</span><kbd class="mono">Ctrl K</kbd></button>' +
+      '<nav class="nav" aria-label="Principal">' + item(NAV[0]) +
+        '<button class="nav-item" id="alertBell">' + UI.icon('bell', 18, 'ni-ico') + '<span>Alertas</span>' + badge(alertN) + '</button>' +
+        group('Cumplimiento') + group('Almacén') +
+        '<div class="nav-label">Herramientas</div>' +
+        '<button class="nav-item" id="driveImport">' + UI.icon('folder', 18, 'ni-ico') + '<span>Escanear carpeta BPA</span></button>' +
+        '<button class="nav-item" id="cronImport">' + UI.icon('calendar', 18, 'ni-ico') + '<span>Importar cronograma</span></button>' +
+      '</nav>' +
+      '<div class="side-foot">' + syncChip() +
+        '<button class="account" id="accountBtn"><span class="acc-av">' + UI.icon('user', 16) + '</span>' +
+          '<span class="acc-txt"><b>Mi cuenta</b><small>PIN, tema, respaldo, salir</small></span>' + UI.icon('sliders', 16, 'acc-ico') + '</button>' +
       '</div>';
 
+    /* Una sola barra superior: en escritorio muestra dónde estás; en el celular, la droguería.
+       «Nuevo» reemplaza al botón flotante, que tapaba el final de cada lista. En escritorio solo
+       aparece en Inicio: las demás vistas ya traen su propio botón de alta en el encabezado. */
     var top = document.getElementById('topbar');
     if (top) top.innerHTML =
-      '<div class="brand-mark sm"><img src="icons/icon-192.png?v=3" alt=""></div>' +
-      '<div class="top-mid"><div class="top-title">' + (NAV.filter(function (n) { return n.view === v; })[0] || { label: 'BPA-Plus' }).label + '</div>' +
-      '<div class="top-dg">' + UI.esc(dg.nombre) + '</div></div>' +
-      '<button class="icon-btn" id="alertBellM" aria-label="Alertas">' + UI.icon('alert', 20) + (alertN ? '<span class="bell-badge sm">' + alertN + '</span>' : '') + '</button>' +
-      '<button class="icon-btn" id="cmdOpenM" aria-label="Buscar">' + UI.icon('search', 20) + '</button>' +
-      '<button class="icon-btn" id="dgSwitchM" aria-label="Cambiar droguería">' + UI.icon('building', 20) + '</button>' +
-      '<button class="icon-btn" id="themeBtnM" aria-label="Tema">' + UI.icon(isDark() ? 'sun' : 'moon', 20) + '</button>';
+      '<button class="tb-dg" id="dgSwitchM" aria-label="Cambiar droguería">' + avatar + '<span class="tb-dg-name">' + esc(dg.nombre) + '</span>' + UI.icon('chevron', 14) + '</button>' +
+      '<nav class="crumbs" aria-label="Ubicación"><span>' + esc(dg.nombre) + '</span>' + (cur.group ? '<i>/</i><span>' + cur.group + '</span>' : '') + '<i>/</i><b>' + cur.label + '</b></nav>' +
+      '<span class="tb-grow"></span>' +
+      '<button class="icon-btn only-mobile" id="cmdOpenM" aria-label="Buscar">' + UI.icon('search', 20) + '</button>' +
+      '<button class="icon-btn" id="alertBellM" aria-label="Alertas' + (alertN ? ' (' + alertN + ')' : '') + '">' + UI.icon('bell', 20) + (alertN ? '<span class="bell-badge">' + alertN + '</span>' : '') + '</button>' +
+      '<button class="btn btn-primary tb-new' + (v === 'dashboard' ? '' : ' only-mobile') + '" id="newBtn" aria-label="Nuevo"' + (v === 'informacion-almacen' ? ' hidden' : '') + '>' +
+        UI.icon('plus', 16) + '<span>Nuevo</span></button>';
 
     var bn = document.getElementById('bottomNav');
+    var enMas = NAV.some(function (n) { return n.bottom === false && n.view === v; });
     if (bn) bn.innerHTML = '<div class="bn-inner">' + NAV.filter(function (n) { return n.bottom !== false; }).map(function (n) {
       var c = counts[n.view] || 0;
-      return '<button class="bn-item ' + (v === n.view ? 'active' : '') + '" data-nav="' + n.view + '">' +
-        UI.icon(n.icon, 21) + '<span>' + n.label.split(' ')[0] + '</span>' + (c ? '<span class="bn-badge">' + c + '</span>' : '') + '</button>';
-    }).join('') + '</div>';
+      return '<button class="bn-item' + (v === n.view ? ' active' : '') + '" data-nav="' + n.view + '">' +
+        '<span class="bn-ico">' + UI.icon(n.icon, 20) + '</span><span>' + n.short + '</span>' + (c ? '<span class="bn-badge">' + c + '</span>' : '') + '</button>';
+    }).join('') +
+      '<button class="bn-item' + (enMas ? ' active' : '') + '" id="moreBtn"><span class="bn-ico">' + UI.icon('menu', 20) + '</span><span>Más</span></button></div>';
 
     wireChrome();
   }
 
+  function on(id, fn) { var el = document.getElementById(id); if (el) el.onclick = fn; }
   function wireChrome() {
     document.querySelectorAll('[data-nav]').forEach(function (b) { b.onclick = function () { store.go(b.dataset.nav); }; });
-    var ds = document.getElementById('dgSwitch'); if (ds) ds.onclick = V.open.dgSwitcher;
-    var dsm = document.getElementById('dgSwitchM'); if (dsm) dsm.onclick = V.open.dgSwitcher;
-    var im = document.getElementById('importBtn'); if (im) im.onclick = importData;
-    var ex = document.getElementById('exportBtn'); if (ex) ex.onclick = exportData;
-    var lk = document.getElementById('lockBtn'); if (lk) lk.onclick = function () { global.BPAPLUS.lock.openSettings(); };
-    var lo = document.getElementById('logoutBtn'); if (lo) lo.onclick = function () {
-      var Auth = global.BPAPLUS.auth;
-      if (Auth) Auth.signOut().then(function () { location.reload(); }); else location.reload();
-    };
-    var th = document.getElementById('themeBtn'); if (th) th.onclick = toggleTheme;
-    var thm = document.getElementById('themeBtnM'); if (thm) thm.onclick = toggleTheme;
-    var co = document.getElementById('cmdOpen'); if (co) co.onclick = openCmd;
-    var com = document.getElementById('cmdOpenM'); if (com) com.onclick = openCmd;
-    var ab = document.getElementById('alertBell'); if (ab) ab.onclick = function () { global.BPAPLUS.alerts.open(); };
-    var abm = document.getElementById('alertBellM'); if (abm) abm.onclick = function () { global.BPAPLUS.alerts.open(); };
-    var di = document.getElementById('driveImport');
-    if (di) di.onclick = function () {
-      global.BPAPLUS.drive.importPanel(function (drafts) {
-        var nuevos = 0, actualizados = 0, fallidos = 0, ultimoError = '';
-        var uploads = drafts.filter(function (d) { return d._file && !d.driveFileId; });
-        function saveAll() {
-          var prepareUpload = global.BPAPLUS.drive.prepareUpload || global.BPAPLUS.drive.prepararUpload;
-          var canUpload = true, done = 0;
-          var progress = UI.note('Guardando 0/' + drafts.length + ' documento(s)…', { duration: 600000 });
-          (uploads.length && prepareUpload ? prepareUpload().catch(function (err) {
-            canUpload = false; ultimoError = err && err.message || String(err);
-          }) : Promise.resolve()).then(function () { return Promise.all(drafts.map(function (d) {
-          var existing = d.existingId ? store.find('documentos', d.existingId) : null;
-          var file = d._file;
-          var clean = Object.assign({}, d); delete clean.existingId;
-          /* Todo lo que el escaneo usó para sí mismo va con guion bajo y no se guarda. */
-          Object.keys(clean).forEach(function (k) { if (k.charAt(0) === '_') delete clean[k]; });
-          var obj = existing ? Object.assign({}, existing, clean, { id: existing.id }) : Object.assign({ id: D.nextId(), e: store.dg().id, area: 'Almacén', version: 1 }, clean);
-          var unchanged = existing && existing.file && clean.modifiedTime && existing.modifiedTime === clean.modifiedTime;
-          if (d.driveFileId) obj.file = {
-            driveId: d.driveFileId, name: d._fileName || d.nombre, originalName: d._fileName || d.nombre,
-            size: file && file.size || 0, contentType: file && file.type || '', driveUrl: d.driveUrl
-          };
-          var needsUpload = file && !d.driveFileId && !unchanged;
-          if (needsUpload && !canUpload) fallidos++;
-          var ready = needsUpload && canUpload ? global.BPAPLUS.drive.storeFile(store.dg().id, obj, file, clean.role, clean.version) : Promise.resolve(obj);
-          return ready.catch(function (err) {
-            fallidos++; ultimoError = err && err.message || String(err); return obj;
-          }).then(function (saved) { return store.save('documentos', saved); })
-            .then(function () {
-              if (existing) actualizados++; else nuevos++;
-              progress.querySelector('span').textContent = 'Guardando ' + (++done) + '/' + drafts.length + ' documento(s)…';
-            });
-        })); }).then(function () { progress.remove(); UI.note(nuevos + ' nuevo(s), ' + actualizados + ' actualizado(s)' + (fallidos ? ', ' + fallidos + ' sin archivo: ' + ultimoError : '') + ' en la biblioteca', { duration: fallidos ? 10000 : 4000 }); })
-            .catch(function (err) { UI.note('No se pudieron subir los archivos: ' + (err && err.message || err)); });
-        }
-        if (uploads.length && !global.BPAPLUS.drive.getClientId()) return global.BPAPLUS.drive.connectPanel(saveAll);
-        saveAll();
-      }, store.byDg('documentos'));
-    };
-    var ci = document.getElementById('cronImport');
-    if (ci) ci.onclick = function () { importCronograma(); };
+    on('dgSwitch', function () { V.open.dgSwitcher(); });
+    on('dgSwitchM', function () { V.open.dgSwitcher(); });
+    on('cmdOpen', openCmd); on('cmdOpenM', openCmd);
+    on('alertBell', openAlerts); on('alertBellM', openAlerts);
+    on('driveImport', driveImport);
+    on('cronImport', function () { importCronograma(); });
+    on('accountBtn', function () { UI.actionsheet(accountOptions(), this); });
+    on('moreBtn', function () {
+      UI.actionsheet(NAV.filter(function (n) { return n.bottom === false; }).map(function (n) {
+        return { label: n.label, icon: n.icon, onClick: function () { store.go(n.view); } };
+      }).concat([
+        { sep: true },
+        { label: 'Escanear carpeta BPA', icon: 'folder', onClick: driveImport },
+        { label: 'Importar cronograma', icon: 'calendar', onClick: function () { importCronograma(); } },
+        { sep: true }
+      ], accountOptions()), this);
+    });
+    on('newBtn', function () { quickNew(this); });
+  }
+
+  function openAlerts() { global.BPAPLUS.alerts.open(); }
+  function logout() {
+    var Auth = global.BPAPLUS.auth;
+    if (Auth) Auth.signOut().then(function () { location.reload(); }); else location.reload();
+  }
+  function accountOptions() {
+    return [
+      { label: isDark() ? 'Tema claro' : 'Tema oscuro', icon: isDark() ? 'sun' : 'moon', onClick: toggleTheme },
+      { label: 'Cambiar PIN', icon: 'settings', onClick: function () { global.BPAPLUS.lock.openSettings(); } },
+      { sep: true },
+      { label: 'Importar respaldo', icon: 'upload', onClick: importData },
+      { label: 'Exportar respaldo', icon: 'download', onClick: exportData },
+      { sep: true },
+      { label: 'Cerrar sesión', icon: 'logout', danger: true, onClick: logout }
+    ];
+  }
+
+  function driveImport() {
+    global.BPAPLUS.drive.importPanel(function (drafts) {
+      var nuevos = 0, actualizados = 0, fallidos = 0, ultimoError = '';
+      var uploads = drafts.filter(function (d) { return d._file && !d.driveFileId; });
+      function saveAll() {
+        var prepareUpload = global.BPAPLUS.drive.prepareUpload || global.BPAPLUS.drive.prepararUpload;
+        var canUpload = true, done = 0;
+        var progress = UI.note('Guardando 0/' + drafts.length + ' documento(s)…', { duration: 600000 });
+        (uploads.length && prepareUpload ? prepareUpload().catch(function (err) {
+          canUpload = false; ultimoError = err && err.message || String(err);
+        }) : Promise.resolve()).then(function () { return Promise.all(drafts.map(function (d) {
+        var existing = d.existingId ? store.find('documentos', d.existingId) : null;
+        var file = d._file;
+        var clean = Object.assign({}, d); delete clean.existingId;
+        /* Todo lo que el escaneo usó para sí mismo va con guion bajo y no se guarda. */
+        Object.keys(clean).forEach(function (k) { if (k.charAt(0) === '_') delete clean[k]; });
+        var obj = existing ? Object.assign({}, existing, clean, { id: existing.id }) : Object.assign({ id: D.nextId(), e: store.dg().id, area: 'Almacén', version: 1 }, clean);
+        var unchanged = existing && existing.file && clean.modifiedTime && existing.modifiedTime === clean.modifiedTime;
+        if (d.driveFileId) obj.file = {
+          driveId: d.driveFileId, name: d._fileName || d.nombre, originalName: d._fileName || d.nombre,
+          size: file && file.size || 0, contentType: file && file.type || '', driveUrl: d.driveUrl
+        };
+        var needsUpload = file && !d.driveFileId && !unchanged;
+        if (needsUpload && !canUpload) fallidos++;
+        var ready = needsUpload && canUpload ? global.BPAPLUS.drive.storeFile(store.dg().id, obj, file, clean.role, clean.version) : Promise.resolve(obj);
+        return ready.catch(function (err) {
+          fallidos++; ultimoError = err && err.message || String(err); return obj;
+        }).then(function (saved) { return store.save('documentos', saved); })
+          .then(function () {
+            if (existing) actualizados++; else nuevos++;
+            progress.querySelector('span').textContent = 'Guardando ' + (++done) + '/' + drafts.length + ' documento(s)…';
+          });
+      })); }).then(function () { progress.remove(); UI.note(nuevos + ' nuevo(s), ' + actualizados + ' actualizado(s)' + (fallidos ? ', ' + fallidos + ' sin archivo: ' + ultimoError : '') + ' en la biblioteca', { duration: fallidos ? 10000 : 4000 }); })
+          .catch(function (err) { UI.note('No se pudieron subir los archivos: ' + (err && err.message || err)); });
+      }
+      if (uploads.length && !global.BPAPLUS.drive.getClientId()) return global.BPAPLUS.drive.connectPanel(saveAll);
+      saveAll();
+    }, store.byDg('documentos'));
   }
 
   /* Un solo camino para importar el cronograma; lo llaman la barra lateral y los
@@ -251,7 +290,7 @@
   function applyTheme(t) {
     document.documentElement.classList.toggle('dark', t === 'dark');
     var meta = document.getElementById('themeColor');
-    if (meta) meta.content = t === 'dark' ? '#111922' : '#F7F2E6';
+    if (meta) meta.content = t === 'dark' ? '#0F151C' : '#F3F1EB';
     try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
   }
   function toggleTheme() { applyTheme(isDark() ? 'light' : 'dark'); renderChrome(); }
@@ -297,6 +336,10 @@
     idx.push({ type: 'Acción', name: 'Descargar formato de acta', run: function () { V.open.formatoActa(); } });
     idx.push({ type: 'Acción', name: 'Cargar acta llenada', run: function () { V.open.cargarActa(); } });
     idx.push({ type: 'Acción', name: 'Exportar respaldo', run: exportData });
+    idx.push({ type: 'Acción', name: 'Importar respaldo', run: importData });
+    idx.push({ type: 'Acción', name: 'Escanear carpeta BPA', run: driveImport });
+    idx.push({ type: 'Acción', name: 'Importar cronograma', run: function () { importCronograma(); } });
+    idx.push({ type: 'Acción', name: 'Cambiar tema claro/oscuro', run: toggleTheme });
     store.byDg('documentos').forEach(function (d) { idx.push({ type: 'Documento', name: d.codigo + ' · ' + d.nombre, run: function () { V.panels.docPanel(d); } }); });
     store.byDg('capacitaciones').forEach(function (c) { idx.push({ type: 'Capacitación', name: c.tema, run: function () { V.panels.capPanel(c); } }); });
     store.byDg('inspecciones').forEach(function (i) { idx.push({ type: 'Autoinspección', name: i.area + ' · ' + D.fLocal(i.prog), run: function () { V.panels.inspPanel(i); } }); });
@@ -349,25 +392,24 @@
     window.scrollTo(0, 0);
   }
 
-  /* ------------------------------ Botón de acción rápida (móvil) ------------------------------ */
-  function wireFab() {
-    var fab = document.getElementById('fab');
-    if (fab) fab.onclick = function () {
-      var v = store.state.view;
-      if (v === 'documentos') return V.open.docForm(null);
-      if (v === 'documentos-inspeccion') return V.open.documentoInspeccion();
-      if (v === 'capacitaciones') return V.open.capForm(null);
-      if (v === 'retiros') return global.BPAPLUS.retiro.form(null);
-      if (v === 'autoinspecciones') return UI.actionsheet([
-        { label: 'Nueva acta de inspección', icon: 'insp', onClick: function () { V.open.actaForm(null); } },
-        { label: 'Programar autoinspección', icon: 'plus', onClick: function () { V.open.inspForm(null); } }
-      ]);
-      UI.actionsheet([
-        { label: 'Nuevo documento', icon: 'doc', onClick: function () { V.open.docForm(null); } },
-        { label: 'Nueva capacitación', icon: 'cap', onClick: function () { V.open.capForm(null); } },
-        { label: 'Nueva acta de inspección', icon: 'insp', onClick: function () { V.open.actaForm(null); } }
-      ]);
-    };
+  /* ------------------------------ «Nuevo» (barra superior) ------------------------------ */
+  function quickNew(anchor) {
+    var v = store.state.view;
+    if (v === 'documentos') return V.open.docForm(null);
+    if (v === 'documentos-inspeccion') return V.open.documentoInspeccion();
+    if (v === 'capacitaciones') return V.open.capForm(null);
+    if (v === 'retiros') return global.BPAPLUS.retiro.form(null);
+    if (v === 'autoinspecciones') return UI.actionsheet([
+      { label: 'Nueva acta de inspección', icon: 'clipboard', onClick: function () { V.open.actaForm(null); } },
+      { label: 'Programar autoinspección', icon: 'calendar', onClick: function () { V.open.inspForm(null); } }
+    ], anchor);
+    UI.actionsheet([
+      { label: 'Nuevo documento', icon: 'doc', onClick: function () { V.open.docForm(null); } },
+      { label: 'Nueva capacitación', icon: 'cap', onClick: function () { V.open.capForm(null); } },
+      { label: 'Nueva acta de inspección', icon: 'clipboard', onClick: function () { V.open.actaForm(null); } },
+      { label: 'Programar autoinspección', icon: 'calendar', onClick: function () { V.open.inspForm(null); } },
+      { label: 'Simulacro de retiro', icon: 'flag', onClick: function () { global.BPAPLUS.retiro.form(null); } }
+    ], anchor);
   }
 
   /* ------------------------------ Arranque ------------------------------ */
@@ -386,7 +428,8 @@
         if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); openCmd(); }
       });
       window.addEventListener('hashchange', route);
-      wireFab();
+      window.addEventListener('online', renderChrome);
+      window.addEventListener('offline', renderChrome);
 
       DB.ensureSeed()
         .then(function () { return store.load(); })

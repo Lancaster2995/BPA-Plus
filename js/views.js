@@ -29,72 +29,102 @@
   /* ===================================================================== *
    *  PANORAMA (dashboard)
    * ===================================================================== */
+  var MES_CORTO = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+
+  /* Inicio: primero lo que hay que hacer, cada cosa con el botón que la resuelve. El panorama
+     anterior mostraba las mismas cifras dos veces (faro y tarjetas) sin decir qué hacer. */
   function vDashboard() {
     var docs = store.byDg('documentos'), caps = store.byDg('capacitaciones'), insp = store.byDg('inspecciones');
     var sc = D.scoreCumplimiento(docs, caps, insp);
-    var dV = docs.filter(function (d) { return D.edoc(d) === 'vencido'; }).length;
+    var dVenc = docs.filter(function (d) { return D.edoc(d) === 'vencido'; });
     var dPV = docs.filter(function (d) { return D.edoc(d) === 'por_vencer'; }).length;
-    var cPend = caps.filter(function (c) { var e = D.ecap(c); return e === 'pendiente' || e === 'vencida'; }).length;
-    var cV = caps.filter(function (c) { return D.ecap(c) === 'vencida'; }).length;
-    var hall = insp.reduce(function (a, i) { return a + (i.real ? (i.hall || 0) : 0); }, 0);
-    var proxI = insp.filter(function (i) { return !i.real; }).sort(function (a, b) { return D.dias(a.prog) - D.dias(b.prog); })[0];
+    var cVenc = caps.filter(function (c) { return D.ecap(c) === 'vencida'; });
+    var cPend = caps.filter(function (c) { return D.ecap(c) === 'pendiente'; }).length;
+    var iAtras = insp.filter(function (i) { return !i.real && D.dias(i.prog) < 0; });
+    var iHall = insp.filter(function (i) { return i.real && (i.hall || 0) > 0; });
+    var hall = iHall.reduce(function (a, i) { return a + i.hall; }, 0);
 
-    var evs = []
-      .concat(docs.map(function (d) { return { tipo: 'Documento', nombre: d.codigo + ' · ' + d.nombre, fecha: d.rev, est: D.edoc(d) }; }))
-      .concat(caps.filter(function (c) { return D.ecap(c) !== 'realizada'; }).map(function (c) {
-        return { tipo: 'Capacitación', nombre: c.tema, fecha: c.fecha, est: D.ecap(c) === 'vencida' ? 'vencido' : (D.dias(c.fecha) <= 30 ? 'por_vencer' : 'vigente') };
+    var todo = []
+      .concat(dVenc.map(function (d) {
+        return { dias: D.dias(d.rev), ico: 'doc', tone: 'doc', attr: 'data-doc="' + d.id + '"', nombre: d.nombre,
+          tipo: 'Documento · <span class="mono">' + esc(d.codigo) + '</span>', btn: '<button class="btn btn-ghost btn-sm" type="button">Revisar</button>' };
       }))
-      .concat(insp.filter(function (i) { return !i.real; }).map(function (i) {
-        return { tipo: 'Inspección', nombre: i.area, fecha: i.prog, est: D.dias(i.prog) < 0 ? 'vencido' : (D.dias(i.prog) <= 30 ? 'por_vencer' : 'vigente') };
+      .concat(cVenc.map(function (c) {
+        return { dias: D.dias(c.fecha), ico: 'cap', tone: 'cap', attr: 'data-cap="' + c.id + '"', nombre: c.tema,
+          tipo: 'Capacitación' + (c.area ? ' · ' + esc(c.area) : ''), btn: '<button class="btn btn-ghost btn-sm" type="button">Registrar</button>' };
       }))
-      .sort(function (a, b) { return D.dias(a.fecha) - D.dias(b.fecha); });
+      .concat(iAtras.map(function (i) {
+        return { dias: D.dias(i.prog), ico: 'clipboard', tone: 'insp', attr: 'data-insp="' + i.id + '"', nombre: i.area,
+          tipo: 'Autoinspección · programada ' + esc(D.fLocal(i.prog)), btn: '<button class="btn btn-primary btn-sm" type="button" data-action="nueva-acta">Iniciar acta</button>' };
+      }))
+      .sort(function (a, b) { return a.dias - b.dias; })
+      .concat(iHall.map(function (i) {
+        return { ico: 'alert', tone: 'bad', attr: 'data-insp="' + i.id + '"', nombre: i.hall + ' hallazgo(s) abierto(s) en ' + i.area,
+          tipo: 'Hallazgos · inspección del ' + esc(D.fLocal(i.real)), due: '<span class="days soon">Sin cerrar</span>',
+          btn: '<button class="btn btn-ghost btn-sm" type="button">Ver</button>' };
+      }));
 
-    var C = 2 * Math.PI * 50, off = C * (1 - sc.score / 100);
-    var ticks = ''; for (var t = 0; t < 24; t++) { var a = (t / 24) * Math.PI * 2 - Math.PI / 2; ticks += '<line x1="' + (60 + 56 * Math.cos(a)) + '" y1="' + (60 + 56 * Math.sin(a)) + '" x2="' + (60 + 60 * Math.cos(a)) + '" y2="' + (60 + 60 * Math.sin(a)) + '" />'; }
+    var proximos = []
+      .concat(docs.map(function (d) { return { tipo: d.tipo || 'Documento', codigo: d.codigo, nombre: d.nombre, fecha: d.rev }; }))
+      .concat(caps.filter(function (c) { return D.ecap(c) === 'pendiente'; }).map(function (c) { return { tipo: 'Capacitación', nombre: c.tema, fecha: c.fecha }; }))
+      .concat(insp.filter(function (i) { return !i.real; }).map(function (i) { return { tipo: 'Autoinspección', nombre: i.area, fecha: i.prog }; }))
+      .filter(function (e) { return D.dias(e.fecha) >= 0 && isFinite(D.dias(e.fecha)); })
+      .sort(function (a, b) { return D.dias(a.fecha) - D.dias(b.fecha); })
+      .slice(0, 6);
+
+    var C = 2 * Math.PI * 46, off = C * (1 - sc.score / 100);
 
     return '' +
       '<div class="view-header"><div>' +
-        '<div class="view-title">Panorama</div>' +
-        '<div class="view-sub">Buenas Prácticas de Almacenamiento · ' + esc(store.dg().nombre) + '</div>' +
+        '<div class="view-title">Inicio</div>' +
+        '<div class="view-sub">' + (todo.length ? todo.length + (todo.length === 1 ? ' asunto requiere' : ' asuntos requieren') + ' tu atención' : 'Todo al día') + ' · ' + esc(store.dg().nombre) + '</div>' +
       '</div>' +
-      '<button class="btn btn-secondary btn-sm" data-action="export">' + icon('download', 16) + 'Exportar</button>' +
-      '</div>' +
-
-      '<div class="beacon-card">' +
-        '<div class="beacon-wrap"><svg viewBox="0 0 120 120" class="beacon-svg">' +
-          '<g class="beacon-ticks">' + ticks + '</g>' +
-          '<circle class="beacon-bg" cx="60" cy="60" r="50"></circle>' +
-          '<circle class="beacon-fg ' + sc.cls + '" cx="60" cy="60" r="50" stroke-dasharray="' + C + '" stroke-dashoffset="' + off + '"></circle>' +
-        '</svg><div class="beacon-center"><div class="beacon-num ' + sc.cls + '">' + sc.score + '%</div><div class="beacon-lbl">Cumplimiento</div></div></div>' +
-        '<div class="beacon-info"><div class="beacon-msg ' + sc.cls + '">' + sc.msg + '</div>' +
-          '<div class="beacon-break">' +
-            '<span><i class="bk-dot doc"></i><b>' + sc.docsOK + '</b>/' + sc.docsTot + ' documentos al día</span>' +
-            '<span><i class="bk-dot cap"></i><b>' + sc.capsOK + '</b>/' + sc.capsTot + ' capacitaciones al día</span>' +
-            '<span><i class="bk-dot insp"></i><b>' + sc.inspOK + '</b>/' + sc.inspTot + ' inspecciones al día</span>' +
-          '</div></div>' +
+      '<button class="btn btn-ghost btn-sm" data-action="export">' + icon('download', 16) + 'Exportar respaldo</button>' +
       '</div>' +
 
-      '<div class="stats">' +
-        statCard('documentos', dV > 0 ? 'crit' : 'doc', 'doc', dV, 'Documentos vencidos', dPV + ' por vencer', dV > 0) +
-        statCard('capacitaciones', cV > 0 ? 'crit' : 'cap', 'cap', cPend, 'Capacitaciones pendientes', cV + ' vencidas', cV > 0) +
-        statCard('autoinspecciones', hall > 0 ? 'crit' : 'insp', 'insp', hall, 'Hallazgos abiertos', proxI ? ('Próxima: ' + esc(proxI.area)) : 'Sin pendientes', hall > 0) +
-      '</div>' +
+      '<div class="home">' +
+        '<section class="card score-card">' +
+          '<div class="card-head"><h2 class="card-title">Cumplimiento BPA</h2><span class="chip ' + sc.cls + '">' + esc(sc.msg) + '</span></div>' +
+          '<div class="score-body">' +
+            '<div class="ring"><svg viewBox="0 0 112 112" aria-hidden="true"><circle class="ring-bg" cx="56" cy="56" r="46"></circle>' +
+              '<circle class="ring-fg ' + sc.cls + '" cx="56" cy="56" r="46" stroke-dasharray="' + C + '" stroke-dashoffset="' + off + '"></circle></svg>' +
+              '<div class="ring-num"><b>' + sc.score + '%</b><span>al día</span></div></div>' +
+            '<div class="meters">' +
+              meter('Documentos', sc.docsOK, sc.docsTot, dVenc.length + ' vencido(s) · ' + dPV + ' por vencer') +
+              meter('Capacitaciones', sc.capsOK, sc.capsTot, cVenc.length + ' vencida(s) · ' + cPend + ' programada(s)') +
+              meter('Autoinspecciones', sc.inspOK, sc.inspTot, hall + ' hallazgo(s) abierto(s) · ' + iAtras.length + ' atrasada(s)') +
+            '</div>' +
+          '</div>' +
+        '</section>' +
 
-      '<div class="section-title">Próximos vencimientos</div>' +
-      (evs.length ? '<div class="timeline">' + evs.slice(0, 8).map(function (e) {
-        var f = D.fDias(D.dias(e.fecha));
-        return '<div class="tl-row"><span class="tl-dot ' + e.est + '"></span>' +
-          '<div class="tl-mid"><div class="tl-type">' + esc(e.tipo) + '</div><div class="tl-name">' + esc(e.nombre) + '</div></div>' +
-          '<span class="days ' + f.cls + '">' + f.txt + '</span></div>';
-      }).join('') + '</div>'
-      : emptyState('check', 'Todo al día', 'No hay vencimientos próximos para esta droguería.'));
+        '<section class="card todo-card">' +
+          '<div class="card-head"><h2 class="card-title">Requiere atención</h2>' + (todo.length ? '<span class="chip bad">' + todo.length + '</span>' : '') +
+            '<span class="grow"></span><button class="link-btn" type="button" data-action="alertas">Ver alertas</button></div>' +
+          (todo.length ? todo.slice(0, 6).map(function (t) {
+            return '<div class="todo-row" ' + t.attr + '><span class="todo-ico ' + t.tone + '">' + icon(t.ico, 16) + '</span>' +
+              '<span class="todo-txt"><span class="todo-tipo">' + t.tipo + '</span><span class="todo-name">' + esc(t.nombre) + '</span></span>' +
+              (t.due || '<span class="days late">' + D.fDias(t.dias).txt + '</span>') + t.btn + '</div>';
+          }).join('') : '<div class="todo-empty">' + icon('check', 20) + '<span>Nada vencido ni atrasado en esta droguería.</span></div>') +
+        '</section>' +
+
+        '<section class="card next-card">' +
+          '<div class="card-head"><h2 class="card-title">Próximos vencimientos</h2></div>' +
+          (proximos.length ? '<div class="next-grid">' + proximos.map(function (e) {
+            var n = D.dias(e.fecha), iso = String(e.fecha);
+            return '<div class="next-item"><span class="date-tile"><small>' + MES_CORTO[+iso.slice(5, 7) - 1] + '</small><b>' + iso.slice(8, 10) + '</b></span>' +
+              '<span class="todo-txt"><span class="todo-tipo">' + esc(e.tipo) + (e.codigo ? ' · <span class="mono">' + esc(e.codigo) + '</span>' : '') + ' · ' + (n === 0 ? 'hoy' : 'en ' + n + ' día' + (n === 1 ? '' : 's')) + '</span>' +
+              '<span class="todo-name">' + esc(e.nombre) + '</span></span></div>';
+          }).join('') + '</div>' : emptyState('check', 'Sin vencimientos próximos', 'No hay fechas pendientes para esta droguería.')) +
+        '</section>' +
+      '</div>';
   }
 
-  function statCard(goto, icoCls, ch, val, label, detail, crit) {
-    return '<button class="stat" data-goto="' + goto + '">' +
-      '<div class="stat-ico ' + icoCls + '">' + icon(ch === 'doc' ? 'doc' : ch === 'cap' ? 'cap' : 'insp', 18) + '</div>' +
-      '<div class="stat-val ' + (crit ? 'crit' : '') + '">' + val + '</div>' +
-      '<div class="stat-label">' + esc(label) + '</div><div class="stat-detail">' + esc(detail) + '</div></button>';
+  function meter(label, ok, tot, sub) {
+    var pct = tot ? Math.round(ok / tot * 100) : 100;
+    var cls = pct >= 80 ? 'good' : pct >= 50 ? 'warn' : 'bad';
+    return '<div class="meter"><div class="meter-top"><span>' + label + '</span><span class="mono">' + (tot ? ok + '/' + tot : '—') + '</span></div>' +
+      '<div class="meter-track"><div class="meter-fill ' + cls + '" style="width:' + pct + '%"></div></div>' +
+      '<div class="meter-sub">' + (tot ? sub : 'Sin registros') + '</div></div>';
   }
 
   function emptyState(ico, title, sub, actionHtml) {
@@ -138,12 +168,29 @@
       vencido: all.filter(function (d) { return D.edoc(d) === 'vencido'; }).length
     };
 
+    /* Vista dividida: el documento seleccionado se abre en una columna al costado y la lista
+       sigue a la vista. Sin selección (o en pantalla angosta), la lista ocupa todo el ancho. */
+    var sel = vistaDividida() && S.selDoc ? store.byDg('documentos').filter(function (d) { return d.id === S.selDoc; })[0] : null;
+    var selId = sel ? sel.id : '';
+
     var body = cats.map(function (cat) {
       var lista = grupos[cat]; if (!lista || !lista.length) return '';
       return '<div class="section-title" style="margin-top:18px">' + esc(cat) + ' <span class="section-count">· ' + lista.length + '</span></div>' +
-        '<div class="list">' + lista.map(docRow).join('') + '</div>';
+        '<div class="list">' + lista.map(function (d) { return docRow(d, selId); }).join('') + '</div>';
     }).join('');
 
+    var lista = listaDocumentos(S, all, docs, counts, body);
+    if (!sel) return lista;
+    return '<div class="split"><div class="split-main">' + lista + '</div>' +
+      '<aside class="doc-detail" data-doc-detail="' + sel.id + '" aria-label="Detalle del documento">' +
+        '<div class="panel-head"><div class="dialog-title">Documento</div>' +
+          '<button class="icon-btn" data-detail-close aria-label="Cerrar detalle">' + icon('x', 18) + '</button></div>' +
+        '<div class="panel-body">' + docDetailHtml(sel) + '</div>' +
+        '<div class="panel-foot">' + DOC_FOOTER + '</div>' +
+      '</aside></div>';
+  }
+
+  function listaDocumentos(S, all, docs, counts, body) {
     return '' +
       '<div class="view-header"><div><div class="view-title">Documentos</div>' +
         '<div class="view-sub">' + all.length + ' documento(s) · ' + esc(store.dg().nombre) + '</div></div>' +
@@ -169,9 +216,10 @@
     return D.clasificarPorCriterio(d.codigo + ' ' + d.nombre, crit);
   }
 
-  function docRow(d) {
-    var e = D.edoc(d), f = D.fDias(D.dias(d.rev));
-    return '<div class="row" data-doc="' + d.id + '"><div class="row-top"><div class="chan doc"></div><div class="row-main">' +
+  function docRow(d, selId) {
+    var e = D.edoc(d), f = D.fDias(D.dias(d.rev)), on = d.id === selId;
+    return '<div class="row' + (on ? ' selected' : '') + '" data-doc="' + d.id + '" tabindex="0" role="button"' + (on ? ' aria-current="true"' : '') + '>' +
+      '<div class="row-top"><div class="chan doc"></div><div class="row-main">' +
       '<div class="row-code mono">' + esc(d.codigo) + ' · v' + esc(d.version) + '</div>' +
       '<div class="row-name">' + esc(d.nombre) + '</div>' +
       '<div class="row-meta"><span><b>Área</b>' + esc(d.area) + '</span><span><b>Tipo</b>' + esc(d.tipo) + '</span>' +
@@ -212,7 +260,13 @@
     });
   }
 
-  function docPanel(d) {
+  /* El detalle de un documento vive en dos contenedores: una columna junto a la lista (vista
+     dividida, pantallas anchas) o el panel lateral (pantallas angostas). El HTML y los clics
+     son uno solo; cambia solo dónde se monta. */
+  var VISTA_DIVIDIDA = '(min-width: 1200px)';
+  function vistaDividida() { return !!(global.matchMedia && global.matchMedia(VISTA_DIVIDIDA).matches); }
+
+  function docDetailHtml(d) {
     var e = D.edoc(d), f = D.fDias(D.dias(d.rev));
     var history = d.history || [], records = d.records || [];
     var files = (d.templateMissing ? '<div class="file-warning">Falta cargar la plantilla vacía oficial.</div>' : '') +
@@ -224,55 +278,65 @@
       (records.length ? '<div class="section-title">Formatos llenados (' + records.length + ')</div>' + records.map(function (file, i) {
         return '<button class="file-item" data-file-record="' + i + '">' + icon('doc', 15) + '<span><b>Registro</b><small>' + esc(file.name) + ' · Vista previa</small></span></button>';
       }).join('') : '');
-    UI.panel({
-      title: 'Documento',
-      body:
-        '<div class="panel-lead"><div><div class="row-code mono">' + esc(d.codigo) + ' · v' + esc(d.version) + '</div>' +
+    return '<div class="panel-lead"><div><div class="row-code mono">' + esc(d.codigo) + ' · v' + esc(d.version) + '</div>' +
         '<div class="panel-lead-title">' + esc(d.nombre) + '</div></div>' + tag(e) + '</div>' +
-        detailRow('Área', d.area) + detailRow('Tipo', d.tipo) +
-        detailRow('Próxima revisión', D.fLocal(d.rev) + ' · ' + f.txt) +
-        detailRow('Clasificación', criterioDeDoc(d, store.dg().criterios || D.CRITERIOS_DEFAULT)) +
-        '<div class="section-title">Biblioteca documental</div><div class="file-list">' + files + '</div>' +
-        '<button class="btn btn-primary btn-sm" data-file-upload style="margin-top:12px">' + icon('upload', 14) + (d.file ? 'Reemplazar / archivar registro' : 'Cargar archivo') + '</button>' +
-        (d.driveUrl
-          ? '<div class="drive-linked"><span>' + icon('doc', 15) + 'Vinculado a Google Drive</span><a href="' + d.driveUrl + '" target="_blank" rel="noopener" class="link-btn">Abrir original</a></div>'
-          : '<button class="btn btn-ghost btn-sm" data-drivelink style="margin-top:12px">' + icon('upload', 14) + 'Vincular a Google Drive</button>'),
-      footer:
-        '<button class="btn btn-ghost" data-edit>' + icon('edit', 16) + 'Editar</button>' +
-        '<button class="btn btn-danger" data-del>' + icon('trash', 16) + 'Eliminar</button>',
-      onMount: function (root) {
-        root.querySelector('[data-edit]').onclick = function () { root.querySelector('[data-close]').click(); docForm(d); };
-        root.querySelector('[data-del]').onclick = function () { root.querySelector('[data-close]').click(); store.removeWithUndo('documentos', d, 'Documento eliminado'); };
-        var dl = root.querySelector('[data-drivelink]');
-        if (dl) dl.onclick = function () {
-          global.BPAPLUS.drive.linkPanel(d, function (link) { store.save('documentos', Object.assign({}, d, link)); });
-        };
-        var current = root.querySelector('[data-file-current]');
-        function preview(file) { global.BPAPLUS.drive.previewStored(file).catch(function (error) { UI.note(error.message || error); }); }
-        if (current) current.onclick = function () { preview(d.file); };
-        root.querySelectorAll('[data-file-history]').forEach(function (button) { button.onclick = function () { preview(history[+button.dataset.fileHistory]); }; });
-        root.querySelectorAll('[data-file-history-delete]').forEach(function (button) {
-          button.onclick = function () {
-            var index = +button.dataset.fileHistoryDelete, file = history[index];
-            UI.confirm({ title: 'Eliminar versión anterior', message: 'Se eliminará “' + file.name + '” de Google Drive. Esta acción no se puede deshacer.', okLabel: 'Eliminar', danger: true })
-              .then(function (ok) {
-                if (!ok) return;
-                button.disabled = true;
-                return global.BPAPLUS.drive.deleteStored(file)
-                  .then(function () { return store.save('documentos', Object.assign({}, d, { history: history.filter(function (_, i) { return i !== index; }) })); })
-                  .then(function () { root.querySelector('[data-close]').click(); UI.note('Versión anterior eliminada'); })
-                  .catch(function (error) { button.disabled = false; UI.note(error.message || error); });
-              });
-          };
+      detailRow('Área', d.area) + detailRow('Tipo', d.tipo) +
+      detailRow('Próxima revisión', D.fLocal(d.rev) + ' · ' + f.txt) +
+      detailRow('Clasificación', criterioDeDoc(d, store.dg().criterios || D.CRITERIOS_DEFAULT)) +
+      '<div class="section-title">Biblioteca documental</div><div class="file-list">' + files + '</div>' +
+      '<button class="btn btn-primary btn-sm" data-file-upload style="margin-top:12px">' + icon('upload', 14) + (d.file ? 'Reemplazar / archivar registro' : 'Cargar archivo') + '</button>' +
+      (d.driveUrl
+        ? '<div class="drive-linked"><span>' + icon('doc', 15) + 'Vinculado a Google Drive</span><a href="' + d.driveUrl + '" target="_blank" rel="noopener" class="link-btn">Abrir original</a></div>'
+        : '<button class="btn btn-ghost btn-sm" data-drivelink style="margin-top:12px">' + icon('upload', 14) + 'Vincular a Google Drive</button>');
+  }
+  var DOC_FOOTER = '<button class="btn btn-ghost" data-edit>' + icon('edit', 16) + 'Editar</button>' +
+    '<button class="btn btn-danger" data-del>' + icon('trash', 16) + 'Eliminar</button>';
+
+  /* `close` cierra el contenedor. En la vista dividida (`split`) el detalle se queda abierto al
+     editar o cargar un archivo: el render que sigue al guardado ya lo muestra actualizado. */
+  function docDetailClick(e, d, close, split) {
+    var t = e.target, b;
+    function leave() { if (!split) close(); }
+    function preview(file) { global.BPAPLUS.drive.previewStored(file).catch(function (error) { UI.note(error.message || error); }); }
+    if (!d) return;
+    if (t.closest('[data-detail-close]')) return close();
+    if (t.closest('[data-edit]')) { leave(); return docForm(d); }
+    if (t.closest('[data-del]')) { close(); return store.removeWithUndo('documentos', d, 'Documento eliminado'); }
+    if (t.closest('[data-drivelink]')) return global.BPAPLUS.drive.linkPanel(d, function (link) { store.save('documentos', Object.assign({}, d, link)); });
+    if (t.closest('[data-file-current]')) return preview(d.file);
+    if ((b = t.closest('[data-file-history-delete]'))) {
+      var history = d.history || [], index = +b.dataset.fileHistoryDelete, file = history[index], button = b;
+      return UI.confirm({ title: 'Eliminar versión anterior', message: 'Se eliminará “' + file.name + '” de Google Drive. Esta acción no se puede deshacer.', okLabel: 'Eliminar', danger: true })
+        .then(function (ok) {
+          if (!ok) return;
+          button.disabled = true;
+          return global.BPAPLUS.drive.deleteStored(file)
+            .then(function () { return store.save('documentos', Object.assign({}, d, { history: history.filter(function (_, i) { return i !== index; }) })); })
+            .then(function () { leave(); UI.note('Versión anterior eliminada'); })
+            .catch(function (error) { button.disabled = false; UI.note(error.message || error); });
         });
-        root.querySelectorAll('[data-file-record]').forEach(function (button) { button.onclick = function () { preview(records[+button.dataset.fileRecord]); }; });
-        root.querySelector('[data-file-upload]').onclick = function () {
-          root.querySelector('[data-close]').click();
-          global.BPAPLUS.drive.filePanel(d, store.dg().id, function (saved) { return store.save('documentos', saved); });
-        };
-      }
+    }
+    if ((b = t.closest('[data-file-history]'))) return preview(d.history[+b.dataset.fileHistory]);
+    if ((b = t.closest('[data-file-record]'))) return preview(d.records[+b.dataset.fileRecord]);
+    if (t.closest('[data-file-upload]')) { leave(); return global.BPAPLUS.drive.filePanel(d, store.dg().id, function (saved) { return store.save('documentos', saved); }); }
+  }
+
+  function docPanel(d) {
+    var p = UI.panel({
+      title: 'Documento', body: docDetailHtml(d), footer: DOC_FOOTER,
+      onMount: function (root) { root.addEventListener('click', function (e) { docDetailClick(e, d, function () { p.close(); }, false); }); }
     });
   }
+
+  /* Abrir un documento desde cualquier lado (lista, Inicio, alertas, buscador): en pantalla
+     ancha va a Documentos con ese documento seleccionado; si no, al panel lateral. */
+  function abrirDoc(d) {
+    if (!d) return;
+    if (!vistaDividida()) return docPanel(d);
+    store.state.selDoc = d.id;
+    if (store.state.view === 'documentos') store.render(); else store.go('documentos');
+  }
+  function cerrarDetalle() { store.state.selDoc = ''; store.render(); }
 
   function detailRow(k, v) {
     return '<div class="detail-row"><span class="detail-k">' + esc(k) + '</span><span class="detail-v">' + esc(v) + '</span></div>';
@@ -1051,12 +1115,13 @@
     UI.actionsheet(list.map(function (e) {
       return { label: e.nombre + (e.id === store.dg().id ? '  ✓' : ''), icon: 'building', onClick: function () { store.setDg(e.id); } };
     }).concat([
+      { sep: true },
       { label: 'Nueva droguería…', icon: 'plus', onClick: function () { dgForm(null); } },
       { label: 'Información del almacén…', icon: 'building', onClick: function () { store.go('informacion-almacen'); } },
       { label: 'Editar droguería actual…', icon: 'edit', onClick: function () { dgForm(store.dg()); } },
       { label: 'Editar criterios de clasificación…', icon: 'settings', onClick: function () { criteriosForm(); } },
       { label: 'Cambiar PIN…', icon: 'settings', onClick: function () { global.BPAPLUS.lock.openSettings(); } }
-    ]));
+    ]), document.getElementById('dgSwitch'));
   }
 
   function criteriosForm() {
@@ -1130,6 +1195,8 @@
   function bind(container) {
     container.addEventListener('click', function (e) {
       var t = e.target;
+      var det = t.closest('[data-doc-detail]');
+      if (det) return docDetailClick(e, store.find('documentos', det.dataset.docDetail), cerrarDetalle, true);
       var goto = t.closest('[data-goto]'); if (goto) return store.go(goto.dataset.goto);
       var act = t.closest('[data-action]');
       if (act) {
@@ -1147,6 +1214,7 @@
         if (a === 'formato-acta') return formatoActaDescarga();
         if (a === 'cargar-acta') return cargarActaLlenada();
         if (a === 'export') return store.exportData();
+        if (a === 'alertas') return global.BPAPLUS.alerts.open();
         return;
       }
       var fd = t.closest('[data-fdoc]'); if (fd) { store.state.filtDoc = fd.dataset.fdoc; return store.render(); }
@@ -1164,7 +1232,7 @@
       var rp = t.closest('[data-retiro-print]');
       if (rp) { e.stopPropagation(); return global.BPAPLUS.retiro.imprimirTodo(store.dg(), store.find('retiros', rp.dataset.retiroPrint)); }
       var rr = t.closest('[data-retiro]'); if (rr) return global.BPAPLUS.retiro.panel(store.find('retiros', rr.dataset.retiro));
-      var dr = t.closest('[data-doc]'); if (dr) return docPanel(store.find('documentos', dr.dataset.doc));
+      var dr = t.closest('[data-doc]'); if (dr) return abrirDoc(store.find('documentos', dr.dataset.doc));
       var io = t.closest('[data-ins-other]'); if (io) return otroDocumentoInspeccion(io.dataset.insOther);
       var iu = t.closest('[data-ins-upload]'); if (iu) return documentoInspeccion(iu.dataset.insUpload);
       var idl = t.closest('[data-ins-preview]'); if (idl) return global.BPAPLUS.drive.previewStored(store.find('documentosInspeccion', idl.dataset.insPreview).file).catch(function (err) { UI.note(err.message || err); });
@@ -1176,6 +1244,15 @@
     container.addEventListener('input', function (e) {
       if (e.target.id === 'qDoc') { store.state.qDoc = e.target.value; store.renderInto(); }
     });
+    // Las filas de documento son foco de teclado: Enter o espacio las abren como un clic.
+    container.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.row[data-doc]')) { e.preventDefault(); e.target.click(); }
+    });
+    /* Escape cierra el detalle de la vista dividida, salvo que haya un diálogo o menú encima. En
+       captura, para mirar antes de que ui.js cierre ese diálogo con la misma tecla. */
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && document.querySelector('.doc-detail') && !document.querySelector('.dialog, .panel, .picker, .finder')) cerrarDetalle();
+    }, true);
     container.addEventListener('submit', function (e) {
       if (e.target.id === 'infoAlmacenForm') { e.preventDefault(); guardarInformacionAlmacen(e.target); }
     });
@@ -1186,6 +1263,6 @@
     setStore: function (s) { store = s; }, render: render, bind: bind,
     open: { docForm: docForm, capForm: capForm, inspForm: inspForm, actaForm: actaForm, dgSwitcher: dgSwitcher, dgForm: dgForm, criteriosForm: criteriosForm,
       formatoActa: formatoActaDescarga, cargarActa: cargarActaLlenada, documentoInspeccion: documentoInspeccion },
-    panels: { docPanel: docPanel, capPanel: capPanel, inspPanel: inspPanel }
+    panels: { docPanel: abrirDoc, capPanel: capPanel, inspPanel: inspPanel }
   };
 })(window);
