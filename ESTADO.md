@@ -20,7 +20,11 @@ cd ../bpa-plus-test && node regression.js
 
 Una sola corrida: arranque, PIN, las cuatro vistas, CRUD de droguería, comportamiento de
 los diálogos, cronograma XLSX con meses fusionados y dedupe, y separación
-plantilla/registro en la biblioteca. Sin frameworks; termina en `OK: …` o revienta.
+plantilla/registro en la biblioteca. Sin frameworks; imprime `OK: …` o revienta.
+
+Ojo: después del `OK` el proceso **no termina solo** (algún timer de la app sigue vivo en
+jsdom). No está colgado; `node regression.js | tail` espera para siempre. Correrlo sin pipe
+o con `timeout 240 node regression.js` (sale con 124 después de haber impreso el `OK`).
 
 **Si falla una vez, es un fallo de verdad.** El harness espera con `sleep` fijos, y el del
 panel de evaluación (250 ms) perdía la carrera con la máquina cargada: fallaba 6 de 6 y
@@ -55,6 +59,13 @@ El antiguo `../RESUME.md` los describía como abiertos. Contrastados con el cód
 También estaba pendiente el escaneo de Drive que sólo reconocía archivos que **empezaran**
 con `POE`/`REGISTRO`/…: `codigoFromName` perdió el ancla `^` y ahora acepta el código en
 cualquier parte del nombre, con abreviatura de área (`POE-ALM-001`).
+
+**2026-09-28:** no leía los nombres que pone su propio `standardName`
+(`POE-ALM-001_recepcion-de-productos_V01.pdf`, `FOR-ALM-012_20260928_….xlsx`): el `\b` final
+fallaba porque el `_` es carácter de palabra. Los bordes pasaron a
+`(?<![A-Za-z0-9])` / `(?![A-Za-z0-9])` —solo el `_` cambia de lado—, así que
+«Manual de usuario 2019.pdf» sigue sin dar código. Aserciones en el harness, incluida la
+vuelta completa `codigoFromName(standardName(…))`.
 
 ---
 

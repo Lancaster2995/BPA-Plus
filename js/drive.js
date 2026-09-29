@@ -308,7 +308,8 @@
     return 'Otro';
   }
   function codigoFromName(name) {
-    var m = String(name || '').match(/\b(POE|REGISTRO|FORMATO|FOR|MANUAL|INSTRUCTIVO|INS)(?:[\s._-]+([A-Z]{2,8}))?[\s._-]+0*(\d{1,4})\b/i);
+    /* Bordes sin \b: el _ es carácter de palabra y standardName pega el código con _ al resto. */
+    var m = String(name || '').match(/(?<![A-Za-z0-9])(POE|REGISTRO|FORMATO|FOR|MANUAL|INSTRUCTIVO|INS)(?:[\s._-]+([A-Z]{2,8}))?[\s._-]+0*(\d{1,4})(?![A-Za-z0-9])/i);
     if (!m) return '';
     return m[1].toUpperCase() + (m[2] ? '-' + m[2].toUpperCase() : '') + '-' + m[3].padStart(3, '0');
   }
