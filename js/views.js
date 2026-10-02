@@ -127,10 +127,11 @@
       '<div class="meter-sub">' + (tot ? sub : 'Sin registros') + '</div></div>';
   }
 
-  function emptyState(ico, title, sub, actionHtml) {
+  /* Sin botones: el alta ya está en el encabezado (y en «Nuevo» en el celular). */
+  function emptyState(ico, title, sub) {
     return '<div class="empty">' + icon(ico, 40, 'es-ico') +
       '<span class="es-title">' + esc(title) + '</span>' +
-      '<span class="es-sub">' + esc(sub) + '</span>' + (actionHtml || '') + '</div>';
+      '<span class="es-sub">' + esc(sub) + '</span></div>';
   }
 
   function filterPills(current, list, attr) {
@@ -201,8 +202,7 @@
         { v: 'todos', l: 'Todos', c: counts.todos }, { v: 'vigente', l: 'Vigentes', c: counts.vigente },
         { v: 'por_vencer', l: 'Por vencer', c: counts.por_vencer }, { v: 'vencido', l: 'Vencidos', c: counts.vencido }
       ], 'data-fdoc') +
-      (docs.length ? body : emptyState('doc', 'Sin documentos', all.length ? 'Ningún documento coincide con el filtro.' : 'Agregá tu primer POE, formato o instructivo.',
-        all.length ? '' : '<button class="btn btn-primary" data-action="nuevo-doc">' + icon('plus', 16) + 'Nuevo documento</button>'));
+      (docs.length ? body : emptyState('doc', 'Sin documentos', all.length ? 'Ningún documento coincide con el filtro.' : 'Agregá tu primer POE, formato o instructivo.'));
   }
 
   var criterioDeDoc = D.criterioDeDoc;
@@ -473,9 +473,7 @@
         { v: 'realizada', l: 'Realizadas', c: counts.realizada }, { v: 'vencida', l: 'Vencidas', c: counts.vencida }
       ], 'data-fcap') +
       (caps.length ? '<div class="list">' + caps.map(capRow).join('') + '</div>'
-        : emptyState('cap', 'Sin capacitaciones', all.length ? 'Ninguna capacitación coincide con el filtro.' : 'Programá tu primera capacitación del año.',
-          all.length ? '' : '<button class="btn btn-primary" data-action="nueva-cap">' + icon('plus', 16) + 'Nueva capacitación</button>' +
-            '<button class="btn btn-ghost" data-action="cron-cap">' + icon('upload', 16) + 'Importar cronograma</button>'));
+        : emptyState('cap', 'Sin capacitaciones', all.length ? 'Ninguna capacitación coincide con el filtro.' : 'Programá tu primera capacitación del año.'));
   }
 
   function capRow(c) {
@@ -714,9 +712,7 @@
         { v: 'todos', l: 'Todas', c: counts.todos }, { v: 'pendientes', l: 'Pendientes', c: counts.pendientes }, { v: 'realizadas', l: 'Realizadas', c: counts.realizadas }
       ], 'data-finsp') +
       (insp.length ? '<div class="list">' + insp.map(inspRow).join('') + '</div>'
-        : emptyState('insp', 'Sin autoinspecciones', all.length ? 'Ninguna coincide con el filtro.' : 'Programá tu primera autoinspección.',
-          all.length ? '' : '<button class="btn btn-primary" data-action="programar-insp">' + icon('plus', 16) + 'Programar</button>' +
-            '<button class="btn btn-ghost" data-action="cron-insp">' + icon('upload', 16) + 'Importar cronograma</button>'));
+        : emptyState('insp', 'Sin autoinspecciones', all.length ? 'Ninguna coincide con el filtro.' : 'Programá tu primera autoinspección.'));
   }
 
   function inspRow(i) {

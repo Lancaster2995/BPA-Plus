@@ -341,8 +341,7 @@
       (rs.length ? '<div class="list">' + rs.map(row).join('') + '</div>'
         : '<div class="empty">' + icon('flag', 32) + '<span class="es-title">Sin simulacros de retiro</span>' +
           '<span class="es-sub">Cargá el producto, el lote y a quién se le distribuyó: BPA-Plus arma los diez ' +
-          'documentos del expediente.</span>' +
-          '<button class="btn btn-primary" data-action="nuevo-retiro">' + icon('plus', 16) + 'Nuevo simulacro</button></div>');
+          'documentos del expediente.</span></div>');
   }
 
   function row(r) {
