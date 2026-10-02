@@ -168,6 +168,22 @@ de procedencia por ficha ("código del nombre del archivo", "sugerido por el mod
 navegador** (Gemini Nano) con salida por esquema. Solo si el modelo ya está descargado —
 nunca dispara la descarga. Sin Chrome compatible, todo funciona igual que antes.
 
+**2026-10-02 — siglas propias.** El escaneo solo aceptaba códigos con POE/FOR/REG/INS/MAN…
+y obligaba a recodificar como `POE-…` un `PG-ALM-001`. Ahora un código es *siglas y número*
+(`isStandardCode` ya no tiene lista de prefijos) y lo que significa cada sigla vive en la
+droguería: `dg.siglas = { PG: { s: 'Programa', k: 'tipo' }, DT: { s: 'Dirección Técnica', k: 'area' } }`,
+encima de `SIGLAS_BASE` en [js/drive.js](js/drive.js). Si el lote trae siglas que nadie
+definió, antes de la revisión aparece `siglasPanel`: significado (sugerido por los nombres
+de los documentos) y si es categoría o área. Una sigla de tipo que ningún criterio nombra se
+agrega como criterio. Se ven y corrigen en *Criterios de clasificación*, y el detalle de cada
+documento muestra qué dice su código.
+
+Lo que no conviene aflojar: una sigla desconocida solo se toma como código si va en
+mayúsculas y unida con `-`/`_` (`CODIGO_LIBRE`), y sin área necesita un número de código
+(`001`, no `19` ni `2019`): así «COVID-19», «DS-014-2011» o «Manual de usuario 2019» siguen
+sin dar código. Cambiar el significado de una sigla **no** reescribe los documentos ya
+guardados: solo afecta a los próximos escaneos.
+
 ---
 
 ## Sub-programa Autoinspecciones (2026-08-30) — `autoinspecciones/`

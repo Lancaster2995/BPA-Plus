@@ -205,16 +205,7 @@
         all.length ? '' : '<button class="btn btn-primary" data-action="nuevo-doc">' + icon('plus', 16) + 'Nuevo documento</button>'));
   }
 
-  function criterioDeDoc(d, crit) {
-    var t = D.normTxt(d.tipo || '');
-    if (t) {
-      for (var i = 0; i < crit.length; i++) {
-        var c = D.normTxt(crit[i]);
-        if (c === t || c.indexOf(t) === 0 || t.indexOf(c) === 0) return crit[i];
-      }
-    }
-    return D.clasificarPorCriterio(d.codigo + ' ' + d.nombre, crit);
-  }
+  var criterioDeDoc = D.criterioDeDoc;
 
   function docRow(d, selId) {
     var e = D.edoc(d), f = D.fDias(D.dias(d.rev)), on = d.id === selId;
@@ -232,11 +223,11 @@
     var m = UI.dialog({
       title: existing ? 'Editar documento' : 'Nuevo documento',
       body:
-        '<div class="grid-2"><div class="field" id="wrap_codigo"><label>Código estándar</label><input class="inp mono" id="f_cod" value="' + esc(d.codigo) + '" placeholder="POE-ALM-001"><div class="err">Usa un código como POE-ALM-001 o FOR-ALM-011.</div></div>' +
+        '<div class="grid-2"><div class="field" id="wrap_codigo"><label>Código</label><input class="inp mono" id="f_cod" value="' + esc(d.codigo) + '" placeholder="POE-ALM-001"><div class="err">Siglas y número, como figura en el documento (ej. POE-ALM-001).</div></div>' +
         '<div class="field"><label>Versión</label><input class="inp mono" id="f_ver" type="number" min="1" value="' + esc(d.version) + '"></div></div>' +
         '<div class="field" id="wrap_nombre"><label>Nombre del documento</label><input class="inp" id="f_nom" value="' + esc(d.nombre) + '" placeholder="Recepción de productos"><div class="err">Ingresá un nombre.</div></div>' +
-        '<div class="grid-2"><div class="field"><label>Área</label><select class="inp" id="f_area">' + opts(AREAS, d.area) + '</select></div>' +
-        '<div class="field"><label>Tipo</label><select class="inp" id="f_tipo">' + opts(TIPOS, d.tipo) + '</select></div></div>' +
+        '<div class="grid-2"><div class="field"><label>Área</label><select class="inp" id="f_area">' + opts(global.BPAPLUS.drive.opciones(AREAS, 'area', d.area), d.area) + '</select></div>' +
+        '<div class="field"><label>Tipo</label><select class="inp" id="f_tipo">' + opts(global.BPAPLUS.drive.opciones(TIPOS, 'tipo', d.tipo), d.tipo) + '</select></div></div>' +
         '<div class="field"><label>Fecha de próxima revisión / vencimiento</label><input class="inp" id="f_rev" type="date" value="' + esc(d.rev) + '">' +
         '<div class="hint">El estado (vigente / por vencer / vencido) se calcula solo a partir de esta fecha.</div></div>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="f_save">Guardar</button>',
@@ -283,6 +274,7 @@
       detailRow('Área', d.area) + detailRow('Tipo', d.tipo) +
       detailRow('Próxima revisión', D.fLocal(d.rev) + ' · ' + f.txt) +
       detailRow('Clasificación', criterioDeDoc(d, store.dg().criterios || D.CRITERIOS_DEFAULT)) +
+      (global.BPAPLUS.drive.significado(d.codigo) ? detailRow('Siglas', global.BPAPLUS.drive.significado(d.codigo)) : '') +
       '<div class="section-title">Biblioteca documental</div><div class="file-list">' + files + '</div>' +
       '<button class="btn btn-primary btn-sm" data-file-upload style="margin-top:12px">' + icon('upload', 14) + (d.file ? 'Reemplazar / archivar registro' : 'Cargar archivo') + '</button>' +
       (d.driveUrl
@@ -1127,22 +1119,40 @@
   function criteriosForm() {
     var e = store.dg();
     var crit = (e.criterios || D.CRITERIOS_DEFAULT).slice();
+    var siglas = e.siglas || {}, base = global.BPAPLUS.drive.SIGLAS_BASE;
     function rowsHtml() {
       return crit.map(function (c) { return '<div class="mini-row"><input class="inp crit-inp" value="' + esc(c) + '"><button class="icon-btn" type="button" data-delc aria-label="Quitar">' + icon('x', 16) + '</button></div>'; }).join('');
+    }
+    function siglasHtml() {
+      return Object.keys(siglas).sort().map(function (sg) {
+        var k = siglas[sg].k;
+        return '<div class="mini-row sig-row" data-sigla="' + esc(sg) + '"><b class="mono" style="min-width:52px">' + esc(sg) + '</b>' +
+          '<input class="inp sig-s" value="' + esc(siglas[sg].s) + '" aria-label="Significado de ' + esc(sg) + '">' +
+          '<select class="inp sig-k" style="flex:none;width:auto" aria-label="Qué nombra ' + esc(sg) + '"><option value="tipo"' + (k === 'tipo' ? ' selected' : '') + '>Categoría</option><option value="area"' + (k === 'area' ? ' selected' : '') + '>Área</option></select>' +
+          '<button class="icon-btn" type="button" data-delc aria-label="Quitar">' + icon('x', 16) + '</button></div>';
+      }).join('') || '<div class="row-empty">Ninguna todavía: se agregan al escanear documentos con siglas que la app no conoce.</div>';
     }
     var m = UI.dialog({
       title: 'Criterios de clasificación',
       body: '<p class="dialog-note">Los documentos se agrupan automáticamente en estas categorías según su código o nombre.</p>' +
         '<div id="critList">' + rowsHtml() + '</div>' +
-        '<button class="btn btn-ghost btn-sm" id="critAdd" type="button" style="margin-top:6px">' + icon('plus', 14) + 'Agregar criterio</button>',
+        '<button class="btn btn-ghost btn-sm" id="critAdd" type="button" style="margin-top:6px">' + icon('plus', 14) + 'Agregar criterio</button>' +
+        '<div class="section-title">Siglas de los códigos</div>' +
+        '<p class="dialog-note">Ya incluidas: ' + esc(Object.keys(base).filter(function (sg) { return !siglas[sg] && D.normTxt(base[sg].s) !== D.normTxt(sg); }).map(function (sg) { return sg + ' ' + base[sg].s; }).join(' · ')) + '.</p>' +
+        '<div id="sigList">' + siglasHtml() + '</div>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="critSave">Guardar</button>',
       onMount: function (root) {
         var list = root.querySelector('#critList');
         root.querySelector('#critAdd').onclick = function () { var d = document.createElement('div'); d.innerHTML = '<div class="mini-row"><input class="inp crit-inp" value=""><button class="icon-btn" type="button" data-delc aria-label="Quitar">' + icon('x', 16) + '</button></div>'; list.appendChild(d.firstChild); };
-        list.addEventListener('click', function (ev) { var b = ev.target.closest('[data-delc]'); if (b) b.closest('.mini-row').remove(); });
+        root.addEventListener('click', function (ev) { var b = ev.target.closest('[data-delc]'); if (b) b.closest('.mini-row').remove(); });
         root.querySelector('#critSave').onclick = function () {
           var vals = Array.prototype.map.call(list.querySelectorAll('.crit-inp'), function (x) { return x.value.trim(); }).filter(Boolean);
-          store.save('droguerias', Object.assign({}, e, { criterios: vals.length ? vals : D.CRITERIOS_DEFAULT.slice() })).then(function () { m.close(); UI.note('Criterios actualizados'); });
+          var sig = {};
+          Array.prototype.forEach.call(root.querySelectorAll('.sig-row'), function (r) {
+            var s = r.querySelector('.sig-s').value.trim();
+            if (s) sig[r.dataset.sigla] = { s: s.slice(0, 60), k: r.querySelector('.sig-k').value };
+          });
+          store.save('droguerias', Object.assign({}, e, { criterios: vals.length ? vals : D.CRITERIOS_DEFAULT.slice(), siglas: sig })).then(function () { m.close(); UI.note('Criterios actualizados'); });
         };
       }
     });

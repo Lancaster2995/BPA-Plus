@@ -643,6 +643,10 @@ textarea.inp { min-height: 88px; resize: vertical; }
 .rv-group-sum::-webkit-details-marker { display: none; }
 .rv-group[open] .rv-group-sum { border-bottom: 1px solid var(--border); }
 .rv-group > .rv-list { padding: 10px; }
+.sg-row { padding: 10px 12px 0; }
+.sg-head { display: flex; gap: 10px; align-items: baseline; margin-bottom: 8px; min-width: 0; }
+.sg-head b { font-size: 14px; flex: none; }
+.sg-head small { font-size: 11.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 :root.dark .rv-badge.revisar { color: var(--navy); }
 .file-list { display: grid; gap: 7px; }
 .file-item-row { display: flex; align-items: stretch; gap: 7px; }

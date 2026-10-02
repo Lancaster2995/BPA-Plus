@@ -310,19 +310,83 @@
     if (/\bmanual\b/.test(n)) return 'Manual';
     return 'Otro';
   }
+  /* Bordes sin \b: el _ es carácter de palabra y standardName pega el código con _ al resto. */
+  var CODIGO_CONOCIDO = /(?<![A-Za-z0-9])(POE|REGISTRO|FORMATO|FOR|MANUAL|INSTRUCTIVO|INS)(?:[\s._-]+([A-Z]{2,8}))?[\s._-]+0*(\d{1,4})(?![A-Za-z0-9])/i;
+  /* Cualquier otra sigla, en mayúsculas y unida con - o _: «Manual de usuario 2019»,
+     «COVID-19» o «DS-014-2011» no pasan por códigos. */
+  var CODIGO_LIBRE = /(?<![A-Za-z0-9])([A-Z]{2,12}((?:[-_][A-Z]{2,12}){0,3}))[-_](\d{1,4})(?![A-Za-z0-9]|-\d)/g;
   function codigoFromName(name) {
-    /* Bordes sin \b: el _ es carácter de palabra y standardName pega el código con _ al resto. */
-    var m = String(name || '').match(/(?<![A-Za-z0-9])(POE|REGISTRO|FORMATO|FOR|MANUAL|INSTRUCTIVO|INS)(?:[\s._-]+([A-Z]{2,8}))?[\s._-]+0*(\d{1,4})(?![A-Za-z0-9])/i);
-    if (!m) return '';
-    return m[1].toUpperCase() + (m[2] ? '-' + m[2].toUpperCase() : '') + '-' + m[3].padStart(3, '0');
+    var s = String(name || ''), k = s.match(CODIGO_CONOCIDO);
+    var libre = Array.from(s.matchAll(CODIGO_LIBRE)).filter(function (m) {
+      return m[2] || /^0\d{2,3}$|^\d{3}$/.test(m[3]);   // sin área, el número tiene que parecer de código
+    })[0];
+    /* El que empieza antes gana: en «ALM-POE-001» el código es todo, no «POE-001». */
+    if (libre && (!k || libre.index <= k.index)) return normalizeCode(libre[1] + '-' + libre[3].replace(/^0+(?=\d)/, ''));
+    if (!k) return '';
+    return k[1].toUpperCase() + (k[2] ? '-' + k[2].toUpperCase() : '') + '-' + k[3].padStart(3, '0');
   }
   function normalizeCode(value) {
     var parts = String(value || '').toUpperCase().trim().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').split('-');
     if (parts.length && /^\d+$/.test(parts[parts.length - 1])) parts[parts.length - 1] = parts[parts.length - 1].padStart(3, '0');
     return parts.join('-');
   }
+  /* Siglas y número. Qué siglas valen no lo decide la app: lo dice la droguería. */
   function isStandardCode(value) {
-    return /^(POE|FOR|FORMATO|REG|REGISTRO|INS|INSTRUCTIVO|MAN|MANUAL|PRO|PROGRAMA|ACT|ACTA|POL)(-[A-Z]{2,8})?-\d{3,4}$/.test(normalizeCode(value));
+    return /^[A-Z]{2,12}(-[A-Z]{1,12}){0,4}-\d{3,4}$/.test(normalizeCode(value));
+  }
+
+  /* ---------------- Siglas de los códigos ----------------
+     La primera sigla de tipo dice qué es el documento y la primera de área dónde se usa.
+     La app trae las de siempre; cada droguería suma las suyas (dg.siglas) cuando el
+     escaneo encuentra una que no conoce, en vez de recodificar el documento con una que
+     no le corresponde. */
+  var SIGLAS_BASE = {
+    POE: { s: 'POE', k: 'tipo' }, FOR: { s: 'Formato', k: 'tipo' }, FORMATO: { s: 'Formato', k: 'tipo' },
+    REG: { s: 'Registro', k: 'tipo' }, REGISTRO: { s: 'Registro', k: 'tipo' },
+    INS: { s: 'Instructivo', k: 'tipo' }, INSTRUCTIVO: { s: 'Instructivo', k: 'tipo' },
+    MAN: { s: 'Manual', k: 'tipo' }, MANUAL: { s: 'Manual', k: 'tipo' }, POL: { s: 'Política', k: 'tipo' },
+    ALM: { s: 'Almacén', k: 'area' }, CAL: { s: 'Calidad', k: 'area' }
+  };
+  function dgActual() { var st = global.BPAPLUS.store; return st && st.dg ? st.dg() : null; }
+  function siglasDe(dg) {
+    if (dg === undefined) dg = dgActual();
+    return Object.assign({}, SIGLAS_BASE, dg && dg.siglas);
+  }
+  function leerCodigo(codigo, siglas) {
+    siglas = siglas || siglasDe();
+    var out = { tipo: '', area: '', nuevas: [] };
+    if (!isStandardCode(codigo)) return out;
+    normalizeCode(codigo).split('-').forEach(function (sg) {
+      if (/^\d+$/.test(sg)) return;
+      var def = siglas[sg];
+      if (!def) out.nuevas.push({ sigla: sg });
+      else if (!out[def.k]) out[def.k] = def.s;
+    });
+    /* Qué nombra una desconocida se adivina: la primera es el tipo, salvo que otra ya lo diga. */
+    out.nuevas.forEach(function (n, j) { n.k = j === 0 && !out.tipo ? 'tipo' : 'area'; });
+    return out;
+  }
+  function aplicarSiglas(d, siglas) {
+    var c = leerCodigo(d.codigo, siglas);
+    if (c.tipo) d.tipo = c.tipo;
+    if (c.area) d.area = c.area;
+    d.role = d.tipo === 'Formato' ? (d._lleno ? 'registro' : 'plantilla') : 'controlado';
+    d._nuevas = c.nuevas;
+    return d;
+  }
+  /* «PG: Programa · ALM: Almacén»: qué dice un código sin tener que saberlo de memoria. */
+  function significado(codigo, siglas) {
+    siglas = siglas || siglasDe();
+    return normalizeCode(codigo).split('-').filter(function (sg) { return siglas[sg] && D.normTxt(siglas[sg].s) !== D.normTxt(sg); })
+      .map(function (sg) { return sg + ': ' + siglas[sg].s; }).join(' · ');
+  }
+  /* Opciones de un <select>: las fijas, las que definió la droguería y la actual, con la
+     última fija («Otro») al final. Un select sin el valor guardado lo pisa al guardar. */
+  function opciones(base, k, actual, dg) {
+    var s = siglasDe(dg), out = base.slice(0, -1);
+    Object.keys(s).map(function (sg) { return s[sg].k === k ? s[sg].s : ''; }).concat(actual, base.slice(-1))
+      .forEach(function (x) { if (x && out.indexOf(x) < 0) out.push(x); });
+    return out;
   }
   function safePart(value) { return D.normTxt(value || '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 70) || 'documento'; }
   function standardName(doc, file, role, version) {
@@ -394,10 +458,7 @@
       if (!out) return base;
       if (!base.codigo && out.codigo && isStandardCode(out.codigo)) { base.codigo = normalizeCode(out.codigo); base._origen = 'ia'; }
       if (out.nombre && (!base.nombre || base._origen === 'ia')) base.nombre = String(out.nombre).slice(0, 120);
-      if (base.tipo === 'Otro' && out.tipo) {
-        base.tipo = out.tipo;
-        base.role = base.tipo === 'Formato' ? (/__BPA_FILLED__/.test(text) ? 'registro' : 'plantilla') : 'controlado';
-      }
+      if (base.tipo === 'Otro' && out.tipo) base.tipo = out.tipo;
       if (out.area && base.area === 'Almacén') base.area = String(out.area).trim().slice(0, 60);
       if (out.version > 0 && base.version === 1) base.version = out.version;
       base._ia = true;
@@ -406,7 +467,8 @@
   }
 
   /* Analiza un archivo de Drive y devuelve los campos sugeridos para un documento */
-  function analizarArchivo(file) {
+  function analizarArchivo(file, siglas) {
+    siglas = siglas || siglasDe();
     var isDocx = /wordprocessingml/.test(file.mimeType);
     var isXlsx = /spreadsheetml/.test(file.mimeType);
     var isPdf = /application\/pdf/.test(file.mimeType);
@@ -418,7 +480,7 @@
       version: 1, rev: '', area: 'Almacén', modifiedTime: file.modifiedTime || '', _file: file.localFile || null,
       _fileName: file.name, _folderName: file.folderName || '', _origen: codigo ? 'nombre' : ''
     };
-    if (!isDocx && !isXlsx && !isPdf) return Promise.resolve(base);
+    if (!isDocx && !isXlsx && !isPdf) return Promise.resolve(aplicarSiglas(base, siglas));
     var reader = binary(file).then(function (buf) {
       if (!base._file) base._file = new File([buf], file.name, { type: file.mimeType });
       if (isDocx) return textFromDocx(buf);
@@ -437,15 +499,15 @@
       }
       var fileType = tipoFromName(file.name);
       base.tipo = fileType === 'Otro' ? tipoFromName(text.slice(0, 1500)) : fileType;
-      base.role = base.tipo === 'Formato' ? (/__BPA_FILLED__/.test(text) ? 'registro' : 'plantilla') : 'controlado';
+      base._lleno = /__BPA_FILLED__/.test(text);
       var area = text.match(/(?:Área|Proceso|Unidad)\s*:?[ \t]*([^\n|]{3,60})/i);
       if (revDate) base.rev = revDate;
       if (area) base.area = area[1].trim();
       if (verM) { var vNum = parseInt(verM[1], 10); base.version = isNaN(vNum) ? 1 : vNum; }
       /* El regex resuelve la mayoría; el modelo local solo entra donde falló. */
-      if (isStandardCode(base.codigo) && base.tipo !== 'Otro') return base;
+      if (isStandardCode(base.codigo) && aplicarSiglas(base, siglas).tipo !== 'Otro') return base;
       return aiComplete(base, text);
-    }).catch(function () { return base; });
+    }).catch(function () { return base; }).then(function (d) { return aplicarSiglas(d, siglas); });
   }
 
   /* ---------------- Guardado de archivos en el Drive del usuario ----------------
@@ -1034,11 +1096,86 @@
             Promise.all(picked.map(function (f) {
               return analizarArchivo(f).then(function (d) { btn.textContent = 'Analizando ' + (++hechos) + '/' + picked.length + '…'; return d; });
             })).then(function (drafts) {
-              m.close(); reviewPanel(drafts, onImport, existingDocs);
+              m.close(); siglasPanel(drafts, function () { reviewPanel(drafts, onImport, existingDocs); });
             });
           };
         }
       });
+  }
+
+  /* ------------------------------ Siglas nuevas ------------------------------ */
+  /* Sugerencia para una sigla de tipo: la primera palabra más repetida en los nombres que
+     empieza con su misma letra («PG» → «Programa»). El nombre dice qué es un documento,
+     rara vez dónde se usa: para un área no se sugiere nada. */
+  function sugerirSigla(g) {
+    if (g.k !== 'tipo') return '';
+    var cuenta = {}, mejor = '';
+    g.docs.forEach(function (d) {
+      var w = (String(d.nombre || '').match(/^[A-Za-zÁÉÍÓÚÑáéíóúñ]{3,}/) || [''])[0];
+      if (!w || D.normTxt(w).charAt(0) !== g.sigla.charAt(0).toLowerCase()) return;
+      w = w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+      cuenta[w] = (cuenta[w] || 0) + 1;
+      if (!mejor || cuenta[w] > cuenta[mejor]) mejor = w;
+    });
+    return mejor;
+  }
+
+  /* Antes de revisar el lote: las siglas de los códigos que nadie definió todavía. Se dice
+     una vez por droguería qué significan y si son una categoría de documentos o un área;
+     lo que quede en blanco no frena nada, el documento se guarda con su código tal cual. */
+  function siglasPanel(drafts, next) {
+    var porSigla = {};
+    drafts.forEach(function (d) {
+      (d._nuevas || []).forEach(function (n) {
+        (porSigla[n.sigla] || (porSigla[n.sigla] = { sigla: n.sigla, k: n.k, docs: [] })).docs.push(d);
+      });
+    });
+    var grupos = Object.keys(porSigla).sort().map(function (k) { return porSigla[k]; });
+    if (!grupos.length) return next();
+    var m = UI.dialog({
+      title: grupos.length === 1 ? 'Una sigla nueva en los códigos' : grupos.length + ' siglas nuevas en los códigos', wide: true,
+      body:
+        '<p class="dialog-note">Estas siglas no son de las que la app ya conoce. Escribí qué significan y si nombran una categoría de documentos o un área: quedan guardadas para esta droguería. Las que dejes en blanco no se cambian; el documento se guarda con su código tal cual.</p>' +
+        '<div class="rv-list">' + grupos.map(function (g, i) {
+          var sug = sugerirSigla(g);
+          return '<div class="rv-card sg-row" data-i="' + i + '">' +
+            '<div class="sg-head"><b class="mono">' + UI.esc(g.sigla) + '</b><small>' + g.docs.length + ' documento(s) · ' +
+              UI.esc(g.docs.slice(0, 3).map(function (d) { return d.codigo + ' ' + (d.nombre || d._fileName || ''); }).join(' · ')) + '</small></div>' +
+            '<div class="grid-2">' +
+              '<div class="field"><label>Significado</label><input class="inp sg-s" value="' + UI.esc(sug) + '" placeholder="' + (g.k === 'tipo' ? 'ej. Programa' : 'ej. Dirección Técnica') + '">' +
+                (sug ? '<div class="hint">Sugerido por los nombres de los documentos.</div>' : '') + '</div>' +
+              '<div class="field"><label>Es</label><select class="inp sg-k">' +
+                '<option value="tipo"' + (g.k === 'tipo' ? ' selected' : '') + '>Categoría de documentos</option>' +
+                '<option value="area"' + (g.k === 'area' ? ' selected' : '') + '>Área</option></select></div>' +
+            '</div></div>';
+        }).join('') + '</div>',
+      footer: '<button class="btn btn-ghost" id="sg_skip">Omitir</button><button class="btn btn-primary" id="sg_save">Guardar y continuar</button>',
+      onMount: function (root) {
+        root.querySelector('#sg_skip').onclick = function () { m.close(); next(); };
+        root.querySelector('#sg_save').onclick = function () {
+          var nuevas = {};
+          Array.prototype.forEach.call(root.querySelectorAll('.sg-row'), function (r) {
+            var s = r.querySelector('.sg-s').value.trim().slice(0, 60);
+            if (s) nuevas[grupos[+r.dataset.i].sigla] = { s: s, k: r.querySelector('.sg-k').value };
+          });
+          m.close();
+          var dg = dgActual();
+          if (Object.keys(nuevas).length && dg && dg.id) {
+            /* Una categoría nueva solo si ningún criterio existente ya la nombra. */
+            var criterios = (dg.criterios || D.CRITERIOS_DEFAULT).slice();
+            Object.keys(nuevas).forEach(function (sg) {
+              var n = nuevas[sg];
+              if (n.k === 'tipo' && D.criterioDeDoc({ tipo: n.s }, criterios) === D.MISC_LABEL) criterios.push(n.s);
+            });
+            dg = Object.assign({}, dg, { siglas: Object.assign({}, dg.siglas, nuevas), criterios: criterios });
+            global.BPAPLUS.store.save('droguerias', dg).catch(function () {});   // save() ya avisa del fallo
+            var siglas = siglasDe(dg);
+            drafts.forEach(function (d) { aplicarSiglas(d, siglas); });
+          }
+          next();
+        };
+      }
+    });
   }
 
   /* ------------------------------ Revisión antes de guardar ------------------------------ */
@@ -1048,7 +1185,8 @@
 
   /* Por qué una ficha necesita ojo humano. Cadena vacía = lista para guardar. */
   function revisionPendiente(d) {
-    if (!isStandardCode(d.codigo)) return 'Sin código estándar — escribilo (ej. POE-ALM-001).';
+    if (!isStandardCode(d.codigo)) return 'Sin código — escribilo como figura en el documento (ej. POE-ALM-001).';
+    if (d._origen === 'texto' && d._nuevas && d._nuevas.length) return 'Código leído dentro del documento, con siglas que no se conocen — confirmá que sea el suyo.';
     if (!String(d.nombre || '').trim()) return 'Sin nombre — escribilo.';
     if (d._ia) return 'Completado por el modelo local del navegador — confirmá los datos.';
     return '';
@@ -1061,6 +1199,7 @@
       : 'sin código detectado'];
     if (d.rev) bits.push('fecha de revisión leída');
     if (d.version > 1) bits.push('versión ' + d.version + ' leída');
+    var sig = significado(d.codigo); if (sig) bits.push(sig);
     if (d._mergedFrom && d._mergedFrom.length > 1) bits.push('fusionado de ' + d._mergedFrom.length + ' duplicados');
     return bits.join(' · ');
   }
@@ -1105,7 +1244,7 @@
           '<div class="grid-2">' +
             '<div class="field"><label>Código</label><input class="inp mono rv-codigo" value="' + UI.esc(d.codigo) + '" placeholder="POE-ALM-001"></div>' +
             '<div class="field"><label>Tipo</label><select class="inp rv-tipo">' +
-              TYPES.map(function (t) { return '<option' + (t === d.tipo ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select></div>' +
+              opciones(TYPES, 'tipo', d.tipo).map(function (t) { return '<option' + (t === d.tipo ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select></div>' +
           '</div>' +
           '<div class="field"><label>Nombre</label><input class="inp rv-nombre" value="' + UI.esc(d.nombre) + '" placeholder="Nombre del documento"></div>' +
           '<div class="grid-2">' +
@@ -1177,7 +1316,7 @@
             invalid.open = true;
             if (invalid.scrollIntoView) invalid.scrollIntoView({ block: 'center' });
             invalid.querySelector('.rv-codigo').focus();
-            UI.note('Corrige el código: usa por ejemplo POE-ALM-001 o FOR-ALM-011.');
+            UI.note('Falta el código: siglas y número, como figura en el documento (ej. POE-ALM-001).');
             return;
           }
           m.close();
@@ -1340,6 +1479,7 @@
     connectPanel: connectPanel, importPanel: importPanel, reviewPanel: reviewPanel, cronogramaPanel: cronogramaPanel,
     analizarCronograma: analizarCronograma, analizarFilasCronograma: analizarFilasCronograma, analizarArchivo: analizarArchivo,
     codigoFromName: codigoFromName, normalizeCode: normalizeCode, isStandardCode: isStandardCode,
+    SIGLAS_BASE: SIGLAS_BASE, siglasDe: siglasDe, leerCodigo: leerCodigo, significado: significado, opciones: opciones, siglasPanel: siglasPanel,
     standardName: standardName, tipoFromName: tipoFromName, localFiles: localFiles, leerFormato: leerFormato,
     prepareUpload: appFolder, prepararUpload: appFolder, subirArchivo: subirArchivo, storeFile: storeFile, storeMaterial: storeMaterial,
     textoDeArchivo: textoDeArchivo, previewStored: previewStored, downloadStored: downloadStored,

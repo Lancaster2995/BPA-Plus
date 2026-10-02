@@ -130,6 +130,19 @@
     return MISC_LABEL;
   }
 
+  /* El tipo manda: «Programa» cae en el criterio «Programas». Si no hay uno que lo nombre,
+     se clasifica por el código y el nombre. */
+  function criterioDeDoc(d, crit) {
+    var t = normTxt(d.tipo || '');
+    if (t) {
+      for (var i = 0; i < crit.length; i++) {
+        var c = normTxt(crit[i]);
+        if (c === t || c.indexOf(t) === 0 || t.indexOf(c) === 0) return crit[i];
+      }
+    }
+    return clasificarPorCriterio((d.codigo || '') + ' ' + (d.nombre || ''), crit);
+  }
+
   function numeroEnNombre(nombre) {
     var m = (nombre || '').match(/\d+/);
     return m ? parseInt(m[0], 10) : Infinity;
@@ -582,7 +595,7 @@
     fLocal: fLocal, fLarga: fLarga, fDias: fDias,
     edoc: edoc, ecap: ecap,
     normTxt: normTxt, stemTxt: stemTxt,
-    clasificarPorCriterio: clasificarPorCriterio, numeroEnNombre: numeroEnNombre,
+    clasificarPorCriterio: clasificarPorCriterio, criterioDeDoc: criterioDeDoc, numeroEnNombre: numeroEnNombre,
     scoreCumplimiento: scoreCumplimiento, nextId: nextId, checklistOficial: checklistOficial, SEV_LABEL: SEV_LABEL,
     actaNueva: actaNueva, hallazgos: hallazgos, aplicarHallazgos: aplicarHallazgos,
     formatoActa: formatoActa, leerActa: leerActa
