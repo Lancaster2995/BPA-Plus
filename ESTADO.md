@@ -255,7 +255,7 @@ formato: subtotal de clientes, stock inmovilizado en el almacén, total recupera
 
 **2026-10-02 — archivos cargados a mano.** En el panel del simulacro, cada hoja del
 expediente tiene un botón para cargar su versión firmada o escaneada (PDF, Word, Excel,
-JPG o PNG, < 25 MB), y hay una sección «Otros archivos» para guías, fotos o el acta de
+JPG, PNG o ZIP, < 25 MB), y hay una sección «Otros archivos» para guías, fotos o el acta de
 destrucción. Suben por `drive.subirArchivo` y el registro guarda `archivos: [{doc, …meta}]`,
 donde `doc` es la `key` del documento (`fab`, `inm-0`, `resp-1`, `conc`…); la de los
 destinatarios va por posición, igual que su N° de carta. Si se quita un destinatario, sus

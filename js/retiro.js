@@ -287,14 +287,14 @@
      respuesta firmada por el cliente…) y anexos sueltos: guías, fotos, acta de destrucción.
      Suben al Drive por el único punto de subida; el registro guarda la referencia y a qué
      documento pertenece (`doc`, o 'otro'). */
-  var TIPOS = /\.(pdf|docx?|xlsx|jpe?g|png)$/i, ACCEPT = '.pdf,.doc,.docx,.xlsx,.jpg,.jpeg,.png';
+  var TIPOS = /\.(pdf|docx?|xlsx|jpe?g|png|zip)$/i, ACCEPT = '.pdf,.doc,.docx,.xlsx,.jpg,.jpeg,.png,.zip';
   function slug(s) { return D.normTxt(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60); }
 
   function adjuntar(r, key, label, files) {
     files = Array.prototype.slice.call(files || []);
     if (!files.length) return Promise.resolve(null);
     if (files.some(function (f) { return !TIPOS.test(f.name) || f.size >= 25 * 1024 * 1024; })) {
-      UI.note('Usá PDF, Word, Excel, JPG o PNG de menos de 25 MB.');
+      UI.note('Usá PDF, Word, Excel, JPG, PNG o ZIP de menos de 25 MB.');
       return Promise.resolve(null);
     }
     var dgId = store().dg().id, fallo = null;
@@ -345,7 +345,7 @@
           esc(r.lote) + '"><div class="err">Ingresá el lote.</div></div>' +
           '<div class="field"><label>Fecha del retiro</label><input class="inp" id="x_fecha" type="date" value="' + esc(r.cartaFabFecha || '') + '"></div></div>' +
         '<div class="field"><label>Archivos del expediente</label><input class="inp" id="x_files" type="file" multiple accept="' + ACCEPT + '">' +
-          '<div class="hint">PDF, Word, Excel, JPG o PNG de menos de 25 MB; podés elegir varios.' +
+          '<div class="hint">PDF, Word, Excel, JPG, PNG o ZIP de menos de 25 MB; podés elegir varios.' +
           (existing ? ' Se agregan a los que ya tiene.' : '') + '</div></div>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button>' +
         '<button class="btn btn-primary" id="x_save">' + (existing ? 'Guardar' : 'Cargar') + '</button>',
