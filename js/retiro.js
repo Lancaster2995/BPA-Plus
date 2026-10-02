@@ -287,7 +287,7 @@
      respuesta firmada por el cliente…) y anexos sueltos: guías, fotos, acta de destrucción.
      Suben al Drive por el único punto de subida; el registro guarda la referencia y a qué
      documento pertenece (`doc`, o 'otro'). */
-  var TIPOS = /\.(pdf|docx?|xlsx|jpe?g|png)$/i;
+  var TIPOS = /\.(pdf|docx?|xlsx|jpe?g|png)$/i, ACCEPT = '.pdf,.doc,.docx,.xlsx,.jpg,.jpeg,.png';
   function slug(s) { return D.normTxt(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60); }
 
   function adjuntar(r, key, label, files) {
@@ -321,9 +321,57 @@
 
   function elegir(onFiles) {
     var inp = document.createElement('input');
-    inp.type = 'file'; inp.multiple = true; inp.accept = '.pdf,.doc,.docx,.xlsx,.jpg,.jpeg,.png';
+    inp.type = 'file'; inp.multiple = true; inp.accept = ACCEPT;
     inp.onchange = function () { onFiles(inp.files); };
     inp.click();
+  }
+
+  /* Un expediente ya armado afuera (en papel, o de un retiro anterior a la app) se sube tal
+     cual: producto, lote, fecha y sus archivos, sin generar los diez documentos. */
+  function cargarForm(existing) {
+    var r = existing || {
+      id: D.nextId(), e: store().dg().id, manual: true, simulacro: true, producto: '', lote: '',
+      cartaFabFecha: D.isoHoy(), dests: [], archivos: [], createdAt: Date.now()
+    };
+    var m = UI.dialog({
+      title: existing ? 'Editar expediente cargado' : 'Cargar expediente de retiro',
+      body:
+        '<p class="dialog-note">Para un expediente que ya tenés armado: se guardan los archivos tal cual, ' +
+          'sin generar los documentos.</p>' +
+        '<div class="field"><label><input type="checkbox" id="x_sim"' + (sim(r) ? ' checked' : '') + '> Es un simulacro</label></div>' +
+        '<div class="field" id="wrap_xprod"><label>Producto</label><input class="inp" id="x_prod" value="' + esc(r.producto) +
+          '"><div class="err">Ingresá el producto.</div></div>' +
+        '<div class="grid-2"><div class="field" id="wrap_xlote"><label>Lote / serie</label><input class="inp mono" id="x_lote" value="' +
+          esc(r.lote) + '"><div class="err">Ingresá el lote.</div></div>' +
+          '<div class="field"><label>Fecha del retiro</label><input class="inp" id="x_fecha" type="date" value="' + esc(r.cartaFabFecha || '') + '"></div></div>' +
+        '<div class="field"><label>Archivos del expediente</label><input class="inp" id="x_files" type="file" multiple accept="' + ACCEPT + '">' +
+          '<div class="hint">PDF, Word, Excel, JPG o PNG de menos de 25 MB; podés elegir varios.' +
+          (existing ? ' Se agregan a los que ya tiene.' : '') + '</div></div>',
+      footer: '<button class="btn btn-ghost" data-close>Cancelar</button>' +
+        '<button class="btn btn-primary" id="x_save">' + (existing ? 'Guardar' : 'Cargar') + '</button>',
+      onMount: function (root) {
+        var btn = root.querySelector('#x_save');
+        btn.onclick = function () {
+          function v(id) { return root.querySelector(id).value.trim(); }
+          var prod = v('#x_prod'), lote = v('#x_lote'), files = root.querySelector('#x_files').files;
+          if (!prod) { root.querySelector('#wrap_xprod').classList.add('invalid'); root.querySelector('#x_prod').focus(); return; }
+          if (!lote) { root.querySelector('#wrap_xlote').classList.add('invalid'); root.querySelector('#x_lote').focus(); return; }
+          if (!existing && !files.length) { UI.note('Elegí los archivos del expediente.'); return; }
+          var obj = Object.assign({}, (existing && store().find('retiros', r.id)) || r, {
+            simulacro: root.querySelector('#x_sim').checked, producto: prod, lote: lote,
+            cartaFabFecha: v('#x_fecha') || D.isoHoy()
+          });
+          btn.disabled = true;
+          /* Uno nuevo solo se guarda si sube al menos un archivo: así no quedan expedientes vacíos. */
+          (existing ? store().save('retiros', obj) : Promise.resolve())
+            .then(function () { return files.length ? adjuntar(obj, 'otro', '', files) : obj; })
+            .then(function (upd) {
+              if (!upd) { btn.disabled = false; return; }
+              m.close(); if (!files.length) UI.note('Expediente actualizado');
+            }).catch(function () { btn.disabled = false; });
+        };
+      }
+    });
   }
 
   function imprimir(dg, r, i) { A().print(documentos(dg, r)[i].html); }
@@ -336,30 +384,35 @@
     return '' +
       '<div class="view-header"><div><div class="view-title">Retiro de mercado</div>' +
         '<div class="view-sub">' + rs.length + ' simulacro(s) · ' + esc(dg.nombre) + '</div></div>' +
-        '<div class="header-actions"><button class="btn btn-primary" data-action="nuevo-retiro">' +
+        '<div class="header-actions"><button class="btn btn-ghost" data-action="cargar-retiro">' +
+          icon('upload', 16) + 'Cargar expediente</button>' +
+          '<button class="btn btn-primary" data-action="nuevo-retiro">' +
           icon('plus', 16) + 'Nuevo simulacro</button></div></div>' +
       (rs.length ? '<div class="list">' + rs.map(row).join('') + '</div>'
         : '<div class="empty">' + icon('flag', 32) + '<span class="es-title">Sin simulacros de retiro</span>' +
           '<span class="es-sub">Cargá el producto, el lote y a quién se le distribuyó: BPA-Plus arma los diez ' +
-          'documentos del expediente.</span></div>');
+          'documentos del expediente. Si ya lo tenés armado, subilo con «Cargar expediente».</span></div>');
   }
 
   function row(r) {
+    var n = (r.archivos || []).length;
     return '<div class="row" data-retiro="' + esc(r.id) + '"><div class="row-top"><div class="chan insp"></div><div class="row-main">' +
       '<div class="row-name">' + esc(r.producto) + '</div>' +
       '<div class="row-meta"><span>Lote ' + esc(r.lote) + '</span>' +
-        '<span><b>Destinatarios</b>' + dests(r).length + '</span>' +
-        '<span><b>Recuperado</b>' + recuperado(r) + ' de ' + distribuida(r) + '</span>' +
-        ((r.archivos || []).length ? '<span><b>Archivos</b>' + r.archivos.length + '</span>' : '') + '</div>' +
-      '<div class="row-sub"><span class="row-plain">' + esc(r.fabricante) + ' · carta N° ' + esc(r.cartaFabNum || '—') +
+        (r.manual ? '' : '<span><b>Destinatarios</b>' + dests(r).length + '</span>' +
+          '<span><b>Recuperado</b>' + recuperado(r) + ' de ' + distribuida(r) + '</span>') +
+        (n ? '<span><b>Archivos</b>' + n + '</span>' : '') + '</div>' +
+      '<div class="row-sub"><span class="row-plain">' +
+        (r.manual ? 'Expediente cargado' : esc(r.fabricante) + ' · carta N° ' + esc(r.cartaFabNum || '—')) +
         ' · ' + esc(D.fLocal(r.cartaFabFecha)) + '</span></div></div>' +
       tag(sim(r) ? 'pendiente' : 'vencido', sim(r) ? 'Simulacro' : 'Retiro real') + '</div>' +
-      '<div class="row-foot"><button class="link-btn" data-retiro-print="' + esc(r.id) + '">' +
-        icon('print', 14) + ' Imprimir expediente</button></div></div>';
+      (r.manual ? '' : '<div class="row-foot"><button class="link-btn" data-retiro-print="' + esc(r.id) + '">' +
+        icon('print', 14) + ' Imprimir expediente</button></div>') + '</div>';
   }
 
+  /* Un expediente cargado (`manual`) son solo sus archivos: no genera documentos. */
   function panel(r) {
-    var dg = store().dg(), docs = documentos(dg, r), arch = r.archivos || [];
+    var dg = store().dg(), docs = r.manual ? [] : documentos(dg, r), arch = r.archivos || [];
     var keys = docs.map(function (d) { return d.key; });
     /* Un archivo cuyo documento ya no existe (se quitó un destinatario) no se esconde: pasa a «Otros». */
     function adjuntos(k) {
@@ -373,16 +426,17 @@
     }
     var otros = adjuntos('otro');
     var p = UI.panel({
-      title: 'Simulacro de retiro',
+      title: r.manual ? 'Expediente de retiro' : 'Simulacro de retiro',
       body:
         '<div class="panel-lead"><div><div class="row-code mono">Lote ' + esc(r.lote) + '</div>' +
           '<div class="panel-lead-title">' + esc(r.producto) + '</div></div>' +
           tag(sim(r) ? 'pendiente' : 'vencido', sim(r) ? 'Simulacro' : 'Retiro real') + '</div>' +
+        (r.manual ? detalle('Fecha del retiro', D.fLocal(r.cartaFabFecha)) :
         detalle('Fabricante', r.fabricante) +
         detalle('Carta del fabricante', (r.cartaFabNum || '—') + ' · ' + D.fLocal(r.cartaFabFecha)) +
         detalle('Motivo', r.motivo) + detalle('Registro sanitario', r.rs || '—') +
-        detalle('Recuperado', recuperado(r) + ' de ' + distribuida(r) + ' unidad(es) distribuida(s)') +
-        '<div class="section-title">Expediente (' + docs.length + ' documentos' +
+        detalle('Recuperado', recuperado(r) + ' de ' + distribuida(r) + ' unidad(es) distribuida(s)')) +
+        (r.manual ? '' : '<div class="section-title">Expediente (' + docs.length + ' documentos' +
           (arch.length ? ' · ' + arch.length + ' archivo(s) cargado(s)' : '') + ')</div>' +
         '<p class="dialog-note">Imprimí cada hoja y, con ' + icon('upload', 13) + ', cargá su versión firmada o escaneada.</p>' +
         '<div class="file-list">' +
@@ -393,10 +447,11 @@
               icon('upload', 16) + '</button></div>' + adjuntos(d.key);
         }).join('') + '</div>' +
         '<button class="btn btn-primary btn-sm" data-all style="margin-top:12px">' + icon('print', 14) +
-          'Imprimir los ' + docs.length + '</button>' +
-        '<div class="section-title">Otros archivos</div>' +
+          'Imprimir los ' + docs.length + '</button>') +
+        '<div class="section-title">' + (r.manual ? 'Archivos del expediente (' + arch.length + ')' : 'Otros archivos') + '</div>' +
         (otros ? '<div class="file-list">' + otros + '</div>'
-          : '<div class="row-empty">Guías, fotos, acta de destrucción u otro respaldo del retiro.</div>') +
+          : '<div class="row-empty">' + (r.manual ? 'Sin archivos cargados.'
+            : 'Guías, fotos, acta de destrucción u otro respaldo del retiro.') + '</div>') +
         '<button class="btn btn-ghost btn-sm" data-up="otro" style="margin-top:8px">' + icon('upload', 14) + 'Agregar archivo</button>',
       footer:
         '<button class="btn btn-ghost" data-edit>' + icon('edit', 16) + 'Editar</button>' +
@@ -405,7 +460,7 @@
         root.querySelectorAll('[data-doc]').forEach(function (b) {
           b.onclick = function () { imprimir(dg, r, +b.dataset.doc); };
         });
-        root.querySelector('[data-all]').onclick = function () { imprimirTodo(dg, r); };
+        if (docs.length) root.querySelector('[data-all]').onclick = function () { imprimirTodo(dg, r); };
         function reabrir(upd) { if (upd && document.body.contains(root)) { p.close(); panel(upd); } }
         root.querySelectorAll('[data-up]').forEach(function (b) {
           b.onclick = function () {
@@ -435,7 +490,9 @@
               }).catch(function () {});
           };
         });
-        root.querySelector('[data-edit]').onclick = function () { root.querySelector('[data-close]').click(); form(r); };
+        root.querySelector('[data-edit]').onclick = function () {
+          root.querySelector('[data-close]').click(); (r.manual ? cargarForm : form)(r);
+        };
         root.querySelector('[data-del]').onclick = function () {
           root.querySelector('[data-close]').click();
           store().removeWithUndo('retiros', r, 'Simulacro eliminado');
@@ -709,6 +766,6 @@
   global.BPAPLUS.retiro = {
     view: view, form: form, panel: panel, documentos: documentos,
     imprimir: imprimir, imprimirTodo: imprimirTodo, ejemplo: ejemplo, nuevo: nuevo,
-    desdeLogistics: desdeLogistics, adjuntar: adjuntar
+    desdeLogistics: desdeLogistics, adjuntar: adjuntar, cargarForm: cargarForm
   };
 })(window);

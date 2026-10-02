@@ -262,6 +262,11 @@ destinatarios va por posición, igual que su N° de carta. Si se quita un destin
 archivos no se esconden: caen en «Otros». «Quitar» solo saca la referencia; el archivo sigue
 en Drive. Como el resto de las subidas, no está probado contra Google de verdad.
 
+**Cargar expediente** (botón en el encabezado de la vista) es para uno ya armado afuera: pide
+producto, lote, fecha y los archivos, y crea un registro con `manual: true` que no genera los
+diez documentos — su panel muestra solo los archivos y «Editar» abre ese mismo diálogo. Uno
+nuevo solo se guarda si sube al menos un archivo, para que no queden expedientes vacíos.
+
 El formulario ahora ofrece **Traer de LogisticS**. Abre la app, empareja la droguería por
 RUC, sigla o razón social normalizada y deja elegir un lote; completa producto, fabricante,
 importación, factura, stock y clientes despachados. El intercambio ocurre entre pestañas,

@@ -1212,6 +1212,7 @@
         if (a === 'programar-insp') return inspForm(null);
         if (a === 'nueva-acta') return actaForm(null);
         if (a === 'nuevo-retiro') return global.BPAPLUS.retiro.form(null);
+        if (a === 'cargar-retiro') return global.BPAPLUS.retiro.cargarForm(null);
         if (a === 'cron-cap') return store.importCronograma('capacitaciones');
         if (a === 'cron-insp') return store.importCronograma('inspecciones');
         if (a === 'fmt-cap') return formatosPanel('capacitaciones');
