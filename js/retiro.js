@@ -269,16 +269,61 @@
         firmaCol(D.fLocal(r.fCierre), 'Fecha') + '</div>');
   }
 
-  /* Los diez documentos, en el orden del expediente. */
+  /* Los diez documentos, en el orden del expediente. `key` ata a cada uno el archivo
+     cargado a mano; la de los destinatarios va por posición, igual que su N° de carta. */
   function documentos(dg, r) {
-    var ds = dests(r), out = [{ label: 'Carta del fabricante', html: cartaFabricante(dg, r) }];
-    ds.forEach(function (d, i) { out.push({ label: 'Carta de inmovilización — ' + (TIPO_LABEL[d.tipo] || d.tipo), html: inmovilizacion(dg, r, d, i) }); });
-    ds.forEach(function (d, i) { out.push({ label: 'Respuesta — ' + (TIPO_LABEL[d.tipo] || d.tipo), html: respuesta(dg, r, d, i) }); });
-    ds.forEach(function (d, i) { out.push({ label: 'Registro 009 · Orden de retiro — ' + (TIPO_LABEL[d.tipo] || d.tipo), html: ordenRetiro(dg, r, d, i) }); });
-    out.push({ label: 'Registro 010 · Conciliación de productos retirados', html: conciliacion(dg, r) });
-    out.push({ label: 'Carta de comunicación a DIGEMID', html: cartaDigemid(dg, r) });
-    out.push({ label: 'Registro 011 · Revisión de la eficacia', html: revisionEficacia(dg, r) });
+    var ds = dests(r), out = [{ key: 'fab', label: 'Carta del fabricante', html: cartaFabricante(dg, r) }];
+    ds.forEach(function (d, i) { out.push({ key: 'inm-' + i, label: 'Carta de inmovilización — ' + (TIPO_LABEL[d.tipo] || d.tipo), html: inmovilizacion(dg, r, d, i) }); });
+    ds.forEach(function (d, i) { out.push({ key: 'resp-' + i, label: 'Respuesta — ' + (TIPO_LABEL[d.tipo] || d.tipo), html: respuesta(dg, r, d, i) }); });
+    ds.forEach(function (d, i) { out.push({ key: 'ord-' + i, label: 'Registro 009 · Orden de retiro — ' + (TIPO_LABEL[d.tipo] || d.tipo), html: ordenRetiro(dg, r, d, i) }); });
+    out.push({ key: 'conc', label: 'Registro 010 · Conciliación de productos retirados', html: conciliacion(dg, r) });
+    out.push({ key: 'dig', label: 'Carta de comunicación a DIGEMID', html: cartaDigemid(dg, r) });
+    out.push({ key: 'efi', label: 'Registro 011 · Revisión de la eficacia', html: revisionEficacia(dg, r) });
     return out;
+  }
+
+  /* ------------------------------ Archivos cargados a mano ------------------------------
+     La versión firmada o escaneada de cada hoja (la carta que mandó el fabricante, la
+     respuesta firmada por el cliente…) y anexos sueltos: guías, fotos, acta de destrucción.
+     Suben al Drive por el único punto de subida; el registro guarda la referencia y a qué
+     documento pertenece (`doc`, o 'otro'). */
+  var TIPOS = /\.(pdf|docx?|xlsx|jpe?g|png)$/i;
+  function slug(s) { return D.normTxt(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60); }
+
+  function adjuntar(r, key, label, files) {
+    files = Array.prototype.slice.call(files || []);
+    if (!files.length) return Promise.resolve(null);
+    if (files.some(function (f) { return !TIPOS.test(f.name) || f.size >= 25 * 1024 * 1024; })) {
+      UI.note('Usá PDF, Word, Excel, JPG o PNG de menos de 25 MB.');
+      return Promise.resolve(null);
+    }
+    var dgId = store().dg().id, fallo = null;
+    UI.note('Subiendo ' + files.length + ' archivo(s) a Google Drive…');
+    return Promise.all(files.map(function (f) {
+      var nombre = 'RETIRO_' + slug(r.lote) + '_' + slug(key === 'otro' ? f.name.replace(/\.[^.]+$/, '') : label) +
+        '.' + f.name.split('.').pop().toLowerCase();
+      return global.BPAPLUS.drive.subirArchivo('droguerias/' + dgId + '/retiros/' + r.id + '/' + key, f, nombre)
+        .then(function (meta) { return Object.assign({ doc: key }, meta); })
+        .catch(function (e) { fallo = e; return null; });
+    })).then(function (metas) {
+      metas = metas.filter(Boolean);
+      if (!metas.length) { UI.note('No se pudo subir: ' + (fallo && fallo.message || fallo)); return null; }
+      /* Lo que sí subió se guarda aunque otro haya fallado: si no, queda en Drive sin dueño. */
+      var actual = store().find('retiros', r.id) || r;
+      var upd = Object.assign({}, actual, { archivos: (actual.archivos || []).concat(metas) });
+      return store().save('retiros', upd).then(function () {
+        UI.note(metas.length + ' archivo(s) cargado(s)' +
+          (fallo ? '; ' + (files.length - metas.length) + ' no se pudo subir: ' + (fallo.message || fallo) : ''));
+        return upd;
+      });
+    });
+  }
+
+  function elegir(onFiles) {
+    var inp = document.createElement('input');
+    inp.type = 'file'; inp.multiple = true; inp.accept = '.pdf,.doc,.docx,.xlsx,.jpg,.jpeg,.png';
+    inp.onchange = function () { onFiles(inp.files); };
+    inp.click();
   }
 
   function imprimir(dg, r, i) { A().print(documentos(dg, r)[i].html); }
@@ -305,7 +350,8 @@
       '<div class="row-name">' + esc(r.producto) + '</div>' +
       '<div class="row-meta"><span>Lote ' + esc(r.lote) + '</span>' +
         '<span><b>Destinatarios</b>' + dests(r).length + '</span>' +
-        '<span><b>Recuperado</b>' + recuperado(r) + ' de ' + distribuida(r) + '</span></div>' +
+        '<span><b>Recuperado</b>' + recuperado(r) + ' de ' + distribuida(r) + '</span>' +
+        ((r.archivos || []).length ? '<span><b>Archivos</b>' + r.archivos.length + '</span>' : '') + '</div>' +
       '<div class="row-sub"><span class="row-plain">' + esc(r.fabricante) + ' · carta N° ' + esc(r.cartaFabNum || '—') +
         ' · ' + esc(D.fLocal(r.cartaFabFecha)) + '</span></div></div>' +
       tag(sim(r) ? 'pendiente' : 'vencido', sim(r) ? 'Simulacro' : 'Retiro real') + '</div>' +
@@ -314,8 +360,20 @@
   }
 
   function panel(r) {
-    var dg = store().dg(), docs = documentos(dg, r);
-    UI.panel({
+    var dg = store().dg(), docs = documentos(dg, r), arch = r.archivos || [];
+    var keys = docs.map(function (d) { return d.key; });
+    /* Un archivo cuyo documento ya no existe (se quitó un destinatario) no se esconde: pasa a «Otros». */
+    function adjuntos(k) {
+      return arch.map(function (a, i) {
+        if (k === 'otro' ? keys.indexOf(a.doc) >= 0 : a.doc !== k) return '';
+        return '<div class="file-item-row"' + (k === 'otro' ? '' : ' style="margin-left:22px"') + '>' +
+          '<button class="file-item" data-ver="' + i + '">' + icon('doc', 15) +
+          '<span><b>' + esc(a.name) + '</b><small>Vista previa</small></span></button>' +
+          '<button class="icon-btn del" data-quitar="' + i + '" aria-label="Quitar ' + esc(a.name) + '">' + icon('trash', 16) + '</button></div>';
+      }).join('');
+    }
+    var otros = adjuntos('otro');
+    var p = UI.panel({
       title: 'Simulacro de retiro',
       body:
         '<div class="panel-lead"><div><div class="row-code mono">Lote ' + esc(r.lote) + '</div>' +
@@ -325,13 +383,22 @@
         detalle('Carta del fabricante', (r.cartaFabNum || '—') + ' · ' + D.fLocal(r.cartaFabFecha)) +
         detalle('Motivo', r.motivo) + detalle('Registro sanitario', r.rs || '—') +
         detalle('Recuperado', recuperado(r) + ' de ' + distribuida(r) + ' unidad(es) distribuida(s)') +
-        '<div class="section-title">Expediente (' + docs.length + ' documentos)</div><div class="file-list">' +
+        '<div class="section-title">Expediente (' + docs.length + ' documentos' +
+          (arch.length ? ' · ' + arch.length + ' archivo(s) cargado(s)' : '') + ')</div>' +
+        '<p class="dialog-note">Imprimí cada hoja y, con ' + icon('upload', 13) + ', cargá su versión firmada o escaneada.</p>' +
+        '<div class="file-list">' +
         docs.map(function (d, i) {
-          return '<button class="file-item" data-doc="' + i + '">' + icon('print', 15) +
-            '<span><b>' + (i + 1) + '. ' + esc(d.label) + '</b></span></button>';
+          return '<div class="file-item-row"><button class="file-item" data-doc="' + i + '">' + icon('print', 15) +
+            '<span><b>' + (i + 1) + '. ' + esc(d.label) + '</b></span></button>' +
+            '<button class="icon-btn" data-up="' + d.key + '" title="Cargar archivo" aria-label="Cargar archivo de ' + esc(d.label) + '">' +
+              icon('upload', 16) + '</button></div>' + adjuntos(d.key);
         }).join('') + '</div>' +
         '<button class="btn btn-primary btn-sm" data-all style="margin-top:12px">' + icon('print', 14) +
-          'Imprimir los ' + docs.length + '</button>',
+          'Imprimir los ' + docs.length + '</button>' +
+        '<div class="section-title">Otros archivos</div>' +
+        (otros ? '<div class="file-list">' + otros + '</div>'
+          : '<div class="row-empty">Guías, fotos, acta de destrucción u otro respaldo del retiro.</div>') +
+        '<button class="btn btn-ghost btn-sm" data-up="otro" style="margin-top:8px">' + icon('upload', 14) + 'Agregar archivo</button>',
       footer:
         '<button class="btn btn-ghost" data-edit>' + icon('edit', 16) + 'Editar</button>' +
         '<button class="btn btn-danger" data-del>' + icon('trash', 16) + 'Eliminar</button>',
@@ -340,6 +407,35 @@
           b.onclick = function () { imprimir(dg, r, +b.dataset.doc); };
         });
         root.querySelector('[data-all]').onclick = function () { imprimirTodo(dg, r); };
+        function reabrir(upd) { if (upd && document.body.contains(root)) { p.close(); panel(upd); } }
+        root.querySelectorAll('[data-up]').forEach(function (b) {
+          b.onclick = function () {
+            var d = docs[keys.indexOf(b.dataset.up)];
+            elegir(function (files) {
+              adjuntar(r, b.dataset.up, d ? d.label : '', files).then(reabrir).catch(function () {});
+            });
+          };
+        });
+        root.querySelectorAll('[data-ver]').forEach(function (b) {
+          b.onclick = function () {
+            global.BPAPLUS.drive.previewStored(arch[+b.dataset.ver]).catch(function (e) { UI.note(e.message || e); });
+          };
+        });
+        root.querySelectorAll('[data-quitar]').forEach(function (b) {
+          b.onclick = function () {
+            var a = arch[+b.dataset.quitar];
+            UI.confirm({ title: 'Quitar archivo', okLabel: 'Quitar', danger: true,
+              message: '«' + a.name + '» deja de figurar en el expediente. El archivo sigue en tu Google Drive.' })
+              .then(function (ok) {
+                if (!ok) return;
+                var actual = store().find('retiros', r.id) || r;
+                var upd = Object.assign({}, actual, {
+                  archivos: (actual.archivos || []).filter(function (x) { return x.driveId !== a.driveId; })
+                });
+                return store().save('retiros', upd).then(function () { reabrir(upd); UI.note('Archivo quitado del expediente'); });
+              }).catch(function () {});
+          };
+        });
         root.querySelector('[data-edit]').onclick = function () { root.querySelector('[data-close]').click(); form(r); };
         root.querySelector('[data-del]').onclick = function () {
           root.querySelector('[data-close]').click();
@@ -614,6 +710,6 @@
   global.BPAPLUS.retiro = {
     view: view, form: form, panel: panel, documentos: documentos,
     imprimir: imprimir, imprimirTodo: imprimirTodo, ejemplo: ejemplo, nuevo: nuevo,
-    desdeLogistics: desdeLogistics
+    desdeLogistics: desdeLogistics, adjuntar: adjuntar
   };
 })(window);

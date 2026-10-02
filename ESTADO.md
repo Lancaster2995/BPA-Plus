@@ -253,6 +253,15 @@ la recibió del almacén—, y la carta a DIGEMID decía «1 de 2». Lo distribu
 campo (`distribuida`, las unidades de la importación) y el pie de la conciliación es el del
 formato: subtotal de clientes, stock inmovilizado en el almacén, total recuperado.
 
+**2026-10-02 — archivos cargados a mano.** En el panel del simulacro, cada hoja del
+expediente tiene un botón para cargar su versión firmada o escaneada (PDF, Word, Excel,
+JPG o PNG, < 25 MB), y hay una sección «Otros archivos» para guías, fotos o el acta de
+destrucción. Suben por `drive.subirArchivo` y el registro guarda `archivos: [{doc, …meta}]`,
+donde `doc` es la `key` del documento (`fab`, `inm-0`, `resp-1`, `conc`…); la de los
+destinatarios va por posición, igual que su N° de carta. Si se quita un destinatario, sus
+archivos no se esconden: caen en «Otros». «Quitar» solo saca la referencia; el archivo sigue
+en Drive. Como el resto de las subidas, no está probado contra Google de verdad.
+
 El formulario ahora ofrece **Traer de LogisticS**. Abre la app, empareja la droguería por
 RUC, sigla o razón social normalizada y deja elegir un lote; completa producto, fabricante,
 importación, factura, stock y clientes despachados. El intercambio ocurre entre pestañas,
