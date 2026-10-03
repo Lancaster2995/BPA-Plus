@@ -330,12 +330,15 @@ a { color: inherit; }
 .row-sub { margin-top: 8px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .row-side { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; padding: 12px 16px; flex: none; }
 .row-empty { color: var(--ink-3); font-size: 13px; padding: 6px 0; }
+.list > .row-empty { padding: 12px 16px; }
 .row-foot { display: flex; gap: 16px; align-items: center; padding: 0 16px 12px; flex-wrap: wrap; }
 .inspection-docs .btn { min-height: 40px; }
 .inspection-groups { display: grid; gap: 16px; margin-top: 18px; }
 .inspection-group { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; }
 .inspection-group-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
 .inspection-group-head h2 { margin: 0; font-family: var(--font-display); font-size: 17px; font-weight: 600; }
+.inspection-group-head h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.inspection-sub + .inspection-sub { margin-top: 18px; }
 .warehouse-info { max-width: 860px; }
 .warehouse-actions { display: flex; justify-content: flex-end; margin-top: 6px; }
 .warehouse-actions .btn { min-height: 40px; }

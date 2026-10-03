@@ -16,9 +16,12 @@
     { id: 'listados', titulo: 'Listados', docs: [
       ['listado-clientes', 'Lista de clientes'], ['listado-proveedores', 'Lista de proveedores'], ['listado-registros', 'Listado de registros']
     ] },
-    { id: 'resoluciones', titulo: 'Resoluciones BPA', docs: [
+    /* `grupo` junta secciones consecutivas bajo un mismo título (subcategorías). El id
+       'resoluciones' se conserva: los documentos ya cargados ahí siguen en su lugar. */
+    { id: 'resoluciones', grupo: 'Documentos emitidos', titulo: 'Resoluciones', ejemplo: 'Ej. Resolución de ampliación de rubro', docs: [
       ['autorizacion-sanitaria', 'Autorización Sanitaria'], ['certificado-bpa', 'Certificado BPA']
     ] },
+    { id: 'cartas', grupo: 'Documentos emitidos', titulo: 'Cartas', boton: 'Agregar carta', ejemplo: 'Ej. Carta N.° 015-2026', docs: [] },
     { id: 'almacen', titulo: 'Documentos del almacén', docs: [
       ['planos-almacen', 'Planos e información del almacén', ['planos-drogueria']]
     ] }
@@ -381,8 +384,8 @@
     var seccion = SECCIONES_INSPECCION.filter(function (s) { return s.id === seccionId; })[0];
     if (!seccion) return;
     var m = UI.dialog({
-      title: 'Otro documento · ' + seccion.titulo,
-      body: '<div class="field" id="wrap_nombre"><label for="ins_otro_titulo">Título del documento</label><input class="inp" id="ins_otro_titulo" placeholder="Ej. Relación de vehículos"><div class="err">Ingresa un título.</div></div>',
+      title: seccion.boton || ('Otro documento · ' + seccion.titulo),
+      body: '<div class="field" id="wrap_nombre"><label for="ins_otro_titulo">Título del documento</label><input class="inp" id="ins_otro_titulo" placeholder="' + esc(seccion.ejemplo || 'Ej. Relación de vehículos') + '"><div class="err">Ingresa un título.</div></div>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="ins_otro_save">Continuar</button>',
       onMount: function (root) {
         var input = root.querySelector('#ins_otro_titulo'); input.focus();
@@ -414,16 +417,29 @@
     var cargados = requeridos.filter(function (d) { var x = existente(d); return x && x.file; }).length;
     var conocidos = {}; requeridos.forEach(function (d) { conocidos[d[0]] = true; (d[2] || []).forEach(function (a) { conocidos[a] = true; }); });
     var legacySection = { 'ficha-ruc': 'resoluciones', 'resoluciones-bpa': 'resoluciones' };
+    function bloque(seccion, h) {
+      var otros = docs.filter(function (d) { return !conocidos[d.tipoInspeccion] && (d.seccion === seccion.id || legacySection[d.tipoInspeccion] === seccion.id); });
+      var filas = seccion.docs.map(function (def) { return fila(existente(def), def[1], def[0]); }).join('') +
+        otros.map(function (d) { return fila(d, d.nombre); }).join('');
+      return '<div class="inspection-group-head"><' + h + '>' + esc(seccion.titulo) + '</' + h + '>' +
+        '<button class="btn btn-ghost" data-ins-other="' + seccion.id + '">' + icon('plus', 16) + esc(seccion.boton || 'Otro documento') + '</button></div>' +
+        '<div class="list">' + (filas || '<div class="row-empty">Aún no hay documentos.</div>') + '</div>';
+    }
+    var grupos = [];
+    SECCIONES_INSPECCION.forEach(function (s) {
+      var g = grupos[grupos.length - 1];
+      if (s.grupo && g && g.subs && g.titulo === s.grupo) g.subs.push(s);
+      else grupos.push(s.grupo ? { titulo: s.grupo, subs: [s] } : s);
+    });
     return '<div class="inspection-docs"><div class="view-header"><div><div class="view-title">Documentos de inspección</div>' +
       '<div class="view-sub">' + cargados + ' de ' + requeridos.length + ' requeridos cargados · ' + esc(store.dg().nombre) + '</div></div></div>' +
       '<div class="progress"><div class="progress-top"><span>Expediente documental</span><strong>' + cargados + '/' + requeridos.length + '</strong></div>' +
       '<div class="progress-track"><div class="progress-fill" style="width:' + Math.round(cargados / requeridos.length * 100) + '%"></div></div></div>' +
-      '<div class="inspection-groups">' + SECCIONES_INSPECCION.map(function (seccion) {
-        var otros = docs.filter(function (d) { return !conocidos[d.tipoInspeccion] && (d.seccion === seccion.id || legacySection[d.tipoInspeccion] === seccion.id); });
-        return '<section class="inspection-group"><div class="inspection-group-head"><h2>' + esc(seccion.titulo) + '</h2>' +
-          '<button class="btn btn-ghost" data-ins-other="' + seccion.id + '">' + icon('plus', 16) + 'Otro documento</button></div>' +
-          '<div class="list">' + seccion.docs.map(function (def) { return fila(existente(def), def[1], def[0]); }).join('') +
-          otros.map(function (d) { return fila(d, d.nombre); }).join('') + '</div></section>';
+      '<div class="inspection-groups">' + grupos.map(function (g) {
+        return '<section class="inspection-group">' + (g.subs
+          ? '<div class="inspection-group-head"><h2>' + esc(g.titulo) + '</h2></div>' +
+            g.subs.map(function (s) { return '<div class="inspection-sub">' + bloque(s, 'h3') + '</div>'; }).join('')
+          : bloque(g, 'h2')) + '</section>';
       }).join('') + '</div></div>';
   }
 
