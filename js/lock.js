@@ -112,12 +112,18 @@
       buf += String(k); draw();
       if (pending) clearTimeout(pending);
       if (buf.length === max) { tryUnlock(); }
-      else if (buf.length >= 4) { pending = setTimeout(tryUnlock, 550); }
+      else if (buf.length >= 4) {
+        pending = setTimeout(tryUnlock, 550);
+        // Un PIN correcto entra al instante; los 550 ms solo esperan para marcar el error.
+        if (!creating) { var typed = buf; verify(typed).then(function (ok) { if (ok && typed === buf) tryUnlock(); }); }
+      }
     }
     el.querySelector('#lockPad').addEventListener('click', function (e) {
       var b = e.target.closest('[data-k]'); if (!b) return; press(b.dataset.k);
     });
     var onKey = function (e) {
+      // El login puede salir encima de esta pantalla: lo que se tipea en sus campos no es el PIN.
+      if (e.target.closest && e.target.closest('input, textarea')) return;
       if (/^[0-9]$/.test(e.key)) press(e.key);
       else if (e.key === 'Backspace') press('del');
       else if (e.key === 'Enter' && buf.length >= 4) tryUnlock();

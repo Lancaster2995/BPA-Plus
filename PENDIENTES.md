@@ -1,12 +1,12 @@
 # Pendientes — BPA Plus
 
-Verificado el **2026-09-28**. Estado completo: [ESTADO.md](ESTADO.md) · encargo:
+Verificado el **2026-10-03**. Estado completo: [ESTADO.md](ESTADO.md) · encargo:
 [ENCARGO-CODEX-1.md](ENCARGO-CODEX-1.md). Esto es sólo lo que queda abierto.
 
 ## Estado hoy
 
 - `main` pusheado, árbol **limpio**, y producción (`https://bpa-db.web.app/`) igual al
-  árbol: desplegado el 28/09 con el harness en OK. GitHub Pages está desactivado.
+  árbol: desplegado el 03/10 con el harness en OK. GitHub Pages está desactivado.
 - **Push no es despliegue.** Producción se publica aparte con
   `firebase deploy --only hosting --project bpa-db`, subiendo antes el `?v=` del archivo
   tocado en `index.html` y `sw.js`, y el `CACHE` de `sw.js`.
@@ -25,7 +25,8 @@ Verificado el **2026-09-28**. Estado completo: [ESTADO.md](ESTADO.md) · encargo
    un formato real y ver cómo salen título, campos y columnas. El peor caso es tipear.
 4. **Verificar en Chrome real**: (a) borrado y guardado sin conexión con sesión iniciada (modo
    avión) — cierra el reporte del 04/08; (b) el reconocimiento on-device (Chrome 138+ con el
-   modelo ya descargado).
+   modelo ya descargado); (c) con sesión, que el arranque lea de la caché de Firestore y que
+   `refresh` traiga lo del servidor (ver «Arranque y transiciones» en ESTADO.md).
 
 ## Contexto que no hay que reabrir
 

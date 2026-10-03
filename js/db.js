@@ -57,13 +57,13 @@
   function localSetMeta(k, v) { return localPut('meta', { k: k, v: v }); }
 
   function cloud() { return global.BPAPLUS.cloud; }
-  function getAll(store) { return cloud() ? cloud().all(store) : localGetAll(store); }
+  function getAll(store, cached) { return cloud() ? cloud().all(store, cached) : localGetAll(store); }
   function put(store, val) { return cloud() ? cloud().put(store, val) : localPut(store, val); }
   function del(store, id) { return cloud() ? cloud().del(store, id) : localDel(store, id); }
   function clear(store) { return cloud() ? cloud().clear(store) : localClear(store); }
   function putMany(store, vals) { return cloud() ? cloud().putMany(store, vals) : localPutMany(store, vals); }
-  function getMeta(k, def) {
-    return getAll('meta').then(function (rows) {
+  function getMeta(k, def, cached) {
+    return getAll('meta', cached).then(function (rows) {
       var row = rows.filter(function (r) { return r.k === k; })[0];
       return row ? row.v : def;
     });

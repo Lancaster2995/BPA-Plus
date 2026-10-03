@@ -6,8 +6,6 @@
    se leen por su texto, no solo por el color.
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
-
 :root {
   --bg: #F3F1EB;
   --surface: #FFFFFF;
@@ -106,8 +104,11 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
 button { cursor: pointer; touch-action: manipulation; }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 a { color: inherit; }
+/* Fundido al cambiar de sección (`route` en app.js). Lo que no cambia, como la barra lateral, queda quieto. */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .16s; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
 
 /* ------------------------------ Layout raíz ------------------------------ */

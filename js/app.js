@@ -25,14 +25,11 @@
     state: { dg: '', view: 'dashboard', qDoc: '', filtDoc: 'todos', filtCap: 'todos', filtInsp: 'todos', selDoc: '' },
     data: { droguerias: [], documentos: [], documentosInspeccion: [], capacitaciones: [], inspecciones: [], actas: [], retiros: [] },
 
-    load: function () {
-      return Promise.all([
-        DB.getAll('droguerias'), DB.getAll('documentos'), DB.getAll('documentosInspeccion'), DB.getAll('capacitaciones'),
-        DB.getAll('inspecciones'), DB.getAll('actas'), DB.getAll('retiros'), DB.getMeta('dgActiva', '')
-      ]).then(function (r) {
-        store.data.droguerias = r[0]; store.data.documentos = r[1]; store.data.documentosInspeccion = r[2]; store.data.capacitaciones = r[3];
-        store.data.inspecciones = r[4]; store.data.actas = r[5]; store.data.retiros = r[6];
-        store.state.dg = r[7] || (r[0][0] && r[0][0].id) || '';
+    load: function (cached) {
+      var kinds = Object.keys(store.data);
+      return Promise.all(kinds.map(function (k) { return DB.getAll(k, cached); }).concat(DB.getMeta('dgActiva', '', cached))).then(function (r) {
+        kinds.forEach(function (k, i) { store.data[k] = r[i]; });
+        store.state.dg = r[kinds.length] || (r[0][0] && r[0][0].id) || '';
       });
     },
 
@@ -388,9 +385,12 @@
     var h = (location.hash || '').replace(/^#\/?/, '');
     var view = NAV.filter(function (n) { return n.view === h; })[0] ? h : 'dashboard';
     store.state.view = view;
-    store.render(); store.renderChrome();
-    window.scrollTo(0, 0);
+    /* Fundido nativo entre secciones (View Transitions); sin soporte, cambio directo. Si se
+       salta (pestaña oculta, otro clic antes de terminar) el cambio se aplica igual y `ready`
+       se rechaza: no es un error. */
+    if (document.startViewTransition) document.startViewTransition(paint).ready.catch(function () {}); else paint();
   }
+  function paint() { store.render(); store.renderChrome(); window.scrollTo(0, 0); }
 
   /* ------------------------------ «Nuevo» (barra superior) ------------------------------ */
   function quickNew(anchor) {
@@ -421,8 +421,7 @@
     function start() {
       V.setStore(store);
       if (global.BPAPLUS.alerts) global.BPAPLUS.alerts.setStore(store, V);
-      var content = document.getElementById('content');
-      V.bind(content);
+      V.bind(document.getElementById('content'));
 
       document.addEventListener('keydown', function (e) {
         if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); openCmd(); }
@@ -430,17 +429,41 @@
       window.addEventListener('hashchange', route);
       window.addEventListener('online', renderChrome);
       window.addEventListener('offline', renderChrome);
-
-      DB.ensureSeed()
-        .then(function () { return store.load(); })
-        .then(function () { route(); })
-        .catch(function (err) {
-          content.innerHTML = '<div class="empty"><span class="es-title">No se pudieron cargar tus datos</span>' +
-            '<span class="es-sub">' + UI.esc(err && err.message || err) + '</span></div>';
-        });
     }
-    function unlock() { if (Lock) Lock.gate(start); else start(); }
-    if (Auth) Auth.gate(unlock); else unlock();
+    function gate(mod) { return new Promise(function (ok) { if (mod) mod.gate(ok); else ok(); }); }
+
+    /* Con el PIN ya creado, su pantalla sale al instante y Firebase (módulos, sesión y datos)
+       carga mientras se escribe: antes el PIN esperaba a Firebase y los datos esperaban al PIN.
+       Si no hay sesión, el login sale encima (z-index mayor). En un equipo sin PIN se mantiene
+       el orden cuenta → PIN, para no pedir un PIN antes de saber de quién es la cuenta. */
+    var authed = gate(Auth);
+    var unlocked = Lock && Lock.isEnabled() ? gate(Lock) : authed.then(function () { return gate(Lock); });
+    var loaded = authed.then(loadData);
+    Promise.all([loaded, unlocked.then(start)]).then(function (r) {
+      route();
+      if (r[0]) refresh();
+    }).catch(function (err) {
+      document.getElementById('content').innerHTML = '<div class="empty"><span class="es-title">No se pudieron cargar tus datos</span>' +
+        '<span class="es-sub">' + UI.esc(err && err.message || err) + '</span></div>';
+    });
+  }
+
+  /* Primero la caché local de Firestore, que responde al instante; getDocs a secas espera al
+     servidor (y sin red, a que se rinda). Sin nada en caché —equipo nuevo, otra cuenta— se va al
+     servidor como siempre: ensureSeed tiene que saber de verdad si la cuenta está vacía antes de
+     sembrar el ejemplo. Devuelve true si los datos salieron de la caché. */
+  function loadData() {
+    return store.load(true).catch(function () {}).then(function () {
+      if (store.data.droguerias.length) return true;
+      return DB.ensureSeed().then(function () { return store.load(); });
+    });
+  }
+  /* Lo que trae el servidor reemplaza a la caché; solo se repinta si algo cambió. */
+  function refresh() {
+    var before = JSON.stringify(store.data);
+    store.load().then(function () {
+      if (JSON.stringify(store.data) !== before) { store.render(); store.renderChrome(); }
+    }).catch(function () { /* sin red: queda lo de la caché, que Firestore sincroniza solo */ });
   }
 
   global.BPAPLUS = global.BPAPLUS || {};

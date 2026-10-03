@@ -62,8 +62,9 @@
     return Promise.resolve();
   }
 
-  function all(store) {
-    return api.getDocs(col(store)).then(function (snap) { return snap.docs.map(function (d) { return d.data(); }); });
+  /* `cached`: solo la caché persistente, sin esperar al servidor (ver loadData en app.js). */
+  function all(store, cached) {
+    return (cached ? api.getDocsFromCache : api.getDocs)(col(store)).then(function (snap) { return snap.docs.map(function (d) { return d.data(); }); });
   }
   function put(store, row) {
     needUser();

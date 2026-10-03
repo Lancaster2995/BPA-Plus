@@ -291,8 +291,45 @@ en JS mide ~1 ms por vista; lo lento eran los efectos, no el cálculo:
 En local (sin nube) el scroll con rueda ya funcionaba antes del cambio: **no se reprodujo la
 falla total**. Si persiste en producción, falta saber en qué pantalla.
 
-Latente, sin tocar: si la sesión de Firebase se cierra y se vuelve a abrir sin recargar,
-`auth.js` pone `started = false` y `start()` corre otra vez (listeners duplicados).
+~~Latente: si la sesión de Firebase se cierra y se vuelve a abrir sin recargar, `start()`
+corre otra vez (listeners duplicados).~~ Cerrado el 03/10: ahora `auth.js` recarga la página.
+
+## Arranque y transiciones (2026-10-03)
+
+Reporte: «el inicio tarda demasiado; la transición entre secciones debe ser fluida». El
+arranque era una cadena de esperas, cada una detrás de la anterior:
+
+- **Service worker colgado tras cada despliegue.** `activate` esperaba dentro de `waitUntil`
+  a `client.navigate()`, pero esa recarga pasa por el mismo SW, que no atiende nada hasta
+  terminar de activarse: la página y **todas** sus peticiones quedaban colgadas (reproducido
+  en Chrome: más de 5 min sin una sola petición). Como el SW interceptaba también Firestore y
+  gstatic, la nube se congelaba con ella. La recarga va ahora fuera de `waitUntil`, y en la
+  primera instalación no se recarga.
+- **SW network-first** → *stale-while-revalidate*: los archivos propios salen de la caché y se
+  actualizan por detrás. El SW ya no toca otros orígenes (Firestore, Auth, Drive, CDN).
+  El procedimiento de despliegue no cambia: subir `?v=` y `CACHE`; si se olvida `CACHE`, la
+  versión nueva llega una apertura más tarde en vez de nunca.
+- **Fuentes con `@import`** en `styles.css`: ni la página ni los scripts arrancaban hasta que
+  respondiera Google Fonts. Pasaron a un `<link>` que no bloquea en `index.html` (y en el
+  sub-programa).
+- **El PIN esperaba a Firebase y los datos al PIN.** Con PIN ya creado, la pantalla sale al
+  instante y Firebase (módulos, sesión y datos) carga mientras se escribe; si falta la sesión,
+  el login sale encima. En un equipo sin PIN sigue el orden cuenta → PIN. El teclado del PIN
+  ignora lo que se tipea en campos de texto.
+- **Un PIN correcto de 4–5 dígitos esperaba 550 ms**; ahora entra apenas se completa. El
+  temporizador solo sigue para marcar el error.
+- **Datos desde la caché de Firestore** (`getDocsFromCache`) y el servidor confirma después
+  (`refresh` en `app.js`, que solo repinta si algo cambió). `getDocs` a secas espera al servidor,
+  y sin red a que se rinda. Si la caché no tiene droguerías (equipo nuevo, otra cuenta) se
+  va al servidor como antes: `ensureSeed` necesita la verdad antes de sembrar el ejemplo.
+
+Transiciones: `route` cambia de sección con `document.startViewTransition` (fundido de 160 ms,
+nativo; lo que no cambia, como la barra lateral, queda quieto). Sin soporte, cambio directo;
+con `prefers-reduced-motion`, sin animación. Solo al navegar, no en cada render.
+
+**Sin verificar con sesión real**: la lectura desde la caché de Firestore y el `refresh`. El
+harness no tiene nube; el resto (SW, fuentes, orden PIN/login, PIN inmediato, transición) se
+probó en Chrome y tiene aserciones.
 
 ## Rediseño de la interfaz (2026-09-29)
 

@@ -58,9 +58,11 @@
       Cloud.api().onAuthStateChanged(Cloud.getAuth(), function (user) {
         currentUser = user || null;
         Cloud.setUid(user && user.uid);
-        if (!user) { started = false; showLogin(); return; }
+        if (!user) { showLogin(); return; }
         removeScreen();
-        if (!started) { started = true; next(); }
+        // La sesión se cerró y volvió a abrirse sin recargar (quizá otra cuenta): lo que hay en memoria es de la anterior.
+        if (started) return location.reload();
+        started = true; next();
       });
     }).catch(function (err) {
       showLogin();
