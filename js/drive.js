@@ -639,6 +639,34 @@
       });
     });
   }
+  /* Un documento puede tener varios archivos: `file` es el principal (el vigente, el que
+     versiona) y `anexos` el resto. Todo lo que ya lee `d.file` sigue funcionando igual. */
+  function archivos(doc) { return doc ? [doc.file].concat(doc.anexos || []).filter(Boolean) : []; }
+  function sinArchivo(doc, index) {
+    var resto = archivos(doc).filter(function (_, i) { return i !== index; });
+    return Object.assign({}, doc, { file: resto[0] || null, anexos: resto.slice(1) });
+  }
+  function storeAnexo(dgId, doc, file) {
+    var ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
+    var name = normalizeCode(doc.codigo) + '_' + safePart(file.name.replace(/\.[^.]+$/, '')) + '.' + ext;
+    return subir('droguerias/' + dgId + '/documentos/' + doc.id + '/anexos/' + Date.now() + '_' + name, file, name)
+      .then(function (meta) { return Object.assign({}, doc, { anexos: (doc.anexos || []).concat(meta) }); });
+  }
+  /* Varios archivos de una vez, uno tras otro. Los registros se apilan como siempre; si no,
+     el primero es el vigente y los demás quedan como anexos. `agregar` no reemplaza el
+     vigente: todo va a anexos (o al vigente si todavía no hay). Si uno falla, devuelve lo
+     ya subido para guardarlo en vez de dejarlo huérfano en Drive. */
+  function storeFiles(dgId, doc, files, role, version, agregar) {
+    var out = { doc: doc, subidos: 0, error: null };
+    return files.reduce(function (p, file) {
+      return p.then(function () {
+        if (out.error) return;
+        var anexo = role !== 'registro' && (agregar ? out.doc.file : out.subidos > 0);
+        return (anexo ? storeAnexo(dgId, out.doc, file) : storeFile(dgId, out.doc, file, role, version))
+          .then(function (d) { out.doc = d; out.subidos++; }, function (e) { out.error = e; });
+      });
+    }, Promise.resolve()).then(function () { return out; });
+  }
   /* Material de una capacitación (presentación, manual, lo que se usó para dictarla).
      Misma convención de rutas privadas que los documentos. */
   function storeMaterial(dgId, capId, file) {
@@ -985,28 +1013,40 @@
       });
     });
   }
-  function filePanel(doc, dgId, onSave) {
+  /* `opts.agregar` (documentos de inspección, adjuntos): suma archivos sin reemplazar el
+     vigente y sin preguntar uso ni versión. */
+  function filePanel(doc, dgId, onSave, opts) {
+    var agregar = !!(opts && opts.agregar);
     var defaultRole = doc.tipo === 'Formato' ? 'plantilla' : 'controlado';
     var m = UI.dialog({
-      title: doc.file ? 'Reemplazar archivo' : 'Cargar archivo',
-      body: '<p class="dialog-note">El reemplazo conserva la versión anterior. Los formatos llenados se archivan como registros y no sustituyen la plantilla vacía.</p>' +
-        '<div class="field"><label>PDF, Word o Excel (máximo 25 MB)</label><input class="inp" id="df_file" type="file" accept=".pdf,.doc,.docx,.xlsx" required></div>' +
-        '<div class="grid-2"><div class="field"><label>Uso del archivo</label><select class="inp" id="df_role">' +
+      title: agregar ? (doc.file ? 'Agregar archivos' : 'Cargar archivos') : (doc.file ? 'Reemplazar archivo' : 'Cargar archivo'),
+      body: (agregar ? '' : '<p class="dialog-note">El reemplazo conserva la versión anterior. Si eliges varios archivos, el primero queda como vigente y los demás como anexos. Los formatos llenados se archivan como registros y no sustituyen la plantilla vacía.</p>') +
+        '<div class="field"><label>PDF, Word o Excel (máximo 25 MB cada uno)</label><input class="inp" id="df_file" type="file" accept=".pdf,.doc,.docx,.xlsx" multiple required></div>' +
+        (agregar ? '' : '<div class="grid-2"><div class="field"><label>Uso del archivo</label><select class="inp" id="df_role">' +
           '<option value="controlado"' + (defaultRole === 'controlado' ? ' selected' : '') + '>Documento controlado</option>' +
           '<option value="plantilla"' + (defaultRole === 'plantilla' ? ' selected' : '') + '>Plantilla vacía</option>' +
           '<option value="registro">Formato llenado</option></select></div>' +
-        '<div class="field"><label>Versión</label><input class="inp mono" id="df_version" type="number" min="1" value="' + (+(doc.version || 1) + (doc.file ? 1 : 0)) + '"></div></div>',
-      footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="df_save">Subir archivo</button>',
+        '<div class="field"><label>Versión</label><input class="inp mono" id="df_version" type="number" min="1" value="' + (+(doc.version || 1) + (doc.file ? 1 : 0)) + '"></div></div>'),
+      footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="df_save">Subir</button>',
       onMount: function (root) {
         root.querySelector('#df_save').onclick = function () {
-          var file = root.querySelector('#df_file').files[0], role = root.querySelector('#df_role').value;
-          if (!file) { UI.note('Selecciona un archivo.'); return; }
-          if (!LEAF_TYPES.test(mimeFromFile(file)) || file.size >= 25 * 1024 * 1024) { UI.note('Usa PDF, DOC, DOCX o XLSX de menos de 25 MB.'); return; }
+          var files = Array.prototype.slice.call(root.querySelector('#df_file').files);
+          var role = agregar ? 'controlado' : root.querySelector('#df_role').value;
+          var version = agregar ? doc.version : +root.querySelector('#df_version').value || doc.version;
+          if (!files.length) { UI.note('Selecciona al menos un archivo.'); return; }
+          if (files.some(function (f) { return !LEAF_TYPES.test(mimeFromFile(f)) || f.size >= 25 * 1024 * 1024; })) { UI.note('Usa PDF, DOC, DOCX o XLSX de menos de 25 MB cada uno.'); return; }
           var btn = root.querySelector('#df_save'); btn.disabled = true; btn.textContent = 'Subiendo…';
-          storeFile(dgId, doc, file, role, +root.querySelector('#df_version').value || doc.version).then(function (saved) {
-            return onSave(saved);
-          }).then(function () { m.close(); UI.note(role === 'registro' ? 'Registro archivado' : 'Archivo vigente actualizado'); })
-            .catch(function (error) { btn.disabled = false; btn.textContent = 'Subir archivo'; UI.note('No se pudo subir: ' + (error.message || error)); });
+          storeFiles(dgId, doc, files, role, version, agregar).then(function (r) {
+            if (!r.subidos) throw r.error;
+            return Promise.resolve(onSave(r.doc)).then(function () {
+              m.close();
+              var n = r.subidos;
+              UI.note(r.error ? 'Se subieron ' + n + ' de ' + files.length + '. ' + (r.error.message || r.error)
+                : role === 'registro' ? (n > 1 ? n + ' registros archivados' : 'Registro archivado')
+                : agregar ? (n > 1 ? n + ' archivos cargados' : 'Archivo cargado')
+                : 'Archivo vigente actualizado' + (n > 1 ? ' · ' + (n - 1) + (n === 2 ? ' anexo' : ' anexos') : ''));
+            });
+          }).catch(function (error) { btn.disabled = false; btn.textContent = 'Subir'; UI.note('No se pudo subir: ' + (error.message || error)); });
         };
       }
     });
@@ -1335,7 +1375,7 @@
           '<p class="dialog-note">' + (esInsp
             ? 'Se leen las áreas y sus fechas programadas. Si la hoja mezcla capacitaciones y autoinspecciones, se importan ambas.'
             : 'Se leen temas, áreas y fechas. Si la hoja mezcla capacitaciones y autoinspecciones, se importan ambas.') + '</p>' +
-          '<div class="field"><label>Archivo XLSX del dispositivo</label><input class="inp" id="cr_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div>' +
+          '<div class="field"><label>Archivos XLSX del dispositivo</label><input class="inp" id="cr_file" type="file" multiple accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div>' +
           '<div class="section-title">O seleccionar desde Google Drive</div>' +
           '<div class="field"><label>Archivo XLSX (URL, ID o nombre)</label><input class="inp" id="cr_q" value="CRONOGRAMA" placeholder="REGISTRO 005 CRONOGRAMA..."></div>' +
           '<button class="btn btn-ghost btn-sm" id="cr_go" type="button">' + UI.icon('search', 14) + ' Buscar</button>' +
@@ -1360,10 +1400,13 @@
             });
           }
           root.querySelector('#cr_file').onchange = function (event) {
-            var file = localFiles(event.target.files)[0], box = root.querySelector('#cr_results');
-            if (!file) { box.innerHTML = '<div class="row-empty">Seleccioná un archivo XLSX.</div>'; return; }
-            box.innerHTML = '<div class="row-empty">Analizando ' + UI.esc(file.name) + '…</div>';
-            analizarCronograma(file, kindHint).then(function (drafts) {
+            var files = localFiles(event.target.files), box = root.querySelector('#cr_results');
+            if (!files.length) { box.innerHTML = '<div class="row-empty">Seleccioná un archivo XLSX.</div>'; return; }
+            box.innerHTML = '<div class="row-empty">Analizando ' + UI.esc(files.map(function (f) { return f.name; }).join(', ')) + '…</div>';
+            /* Varios cronogramas van a una sola revisión; reviewCronograma ya quita repetidos. */
+            Promise.all(files.map(function (file) { return analizarCronograma(file, kindHint); })).then(function (all) {
+              var drafts = { capacitaciones: [], inspecciones: [] };
+              all.forEach(function (d) { drafts.capacitaciones = drafts.capacitaciones.concat(d.capacitaciones || []); drafts.inspecciones = drafts.inspecciones.concat(d.inspecciones || []); });
               m.close(); reviewCronograma(drafts, onImport, existingCaps, existingInspecciones);
             }).catch(function (error) { box.innerHTML = '<div class="row-empty">Error: ' + UI.esc(error.message || error) + '</div>'; });
           };
@@ -1482,6 +1525,7 @@
     SIGLAS_BASE: SIGLAS_BASE, siglasDe: siglasDe, leerCodigo: leerCodigo, significado: significado, opciones: opciones, siglasPanel: siglasPanel,
     standardName: standardName, tipoFromName: tipoFromName, localFiles: localFiles, leerFormato: leerFormato,
     prepareUpload: appFolder, prepararUpload: appFolder, subirArchivo: subirArchivo, storeFile: storeFile, storeMaterial: storeMaterial,
+    storeFiles: storeFiles, archivos: archivos, sinArchivo: sinArchivo,
     textoDeArchivo: textoDeArchivo, previewStored: previewStored, downloadStored: downloadStored,
     exportarFormato: exportarFormato, exportarFormatoXlsx: exportarFormatoXlsx, exportarFormatoDocx: exportarFormatoDocx,
     camposRequeridos: camposRequeridos,

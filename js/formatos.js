@@ -343,7 +343,7 @@
       title: 'Formatos · ' + MODULOS[modulo],
       body: bodyHtml(),
       footer: '<label class="btn btn-primary" style="cursor:pointer">' + icon('upload', 16) + 'Cargar formato' +
-        '<input type="file" id="fm_file" accept=".xlsx,.docx,.pdf" hidden></label>',
+        '<input type="file" id="fm_file" accept=".xlsx,.docx,.pdf" multiple hidden></label>',
       onMount: function (root) {
         root.addEventListener('click', function (ev) {
           var b = ev.target.closest('[data-usar],[data-cfg],[data-quitar],[data-baj]'); if (!b) return;
@@ -357,10 +357,16 @@
           form(x, function (upd) { return persist(alFrente(upd, resto)); });
         });
 
+        /* Varios formatos: cada uno pasa por su configuración, uno tras otro. Cancelar uno
+           corta la fila (no hay onClose en `form`). */
         root.querySelector('#fm_file').onchange = function (ev) {
-          var file = ev.target.files[0]; if (!file) return;
+          var files = Array.prototype.slice.call(ev.target.files); if (!files.length) return;
           ev.target.value = '';
-          if (file.size >= 25 * 1024 * 1024) { UI.note('El formato debe pesar menos de 25 MB.'); return; }
+          if (files.some(function (f) { return f.size >= 25 * 1024 * 1024; })) { UI.note('Cada formato debe pesar menos de 25 MB.'); return; }
+          siguiente(files);
+        };
+        function siguiente(files) {
+          var file = files.shift(); if (!file) return;
           UI.note('Leyendo el formato…');
           global.BPAPLUS.drive.leerFormato(file).then(function (read) {
             form(parse(read, file.name, modulo), function (upd) {
@@ -370,10 +376,11 @@
                 .subirArchivo((opts.path || ('droguerias/' + dg.id + '/formatos')) + '/' + upd.id + '/' + Date.now() + '_' + file.name, file, file.name)
                 .then(function (meta) { upd.archivo = meta; })
                 .catch(function () { UI.note('La configuración se guardó; el archivo original no se pudo subir.'); });
-              return subida.then(function () { return persist(alFrente(upd, (dg.formatos || []).slice())); });
+              return subida.then(function () { return persist(alFrente(upd, (dg.formatos || []).slice())); })
+                .then(function () { setTimeout(function () { siguiente(files); }, 0); });
             });
-          }).catch(function (err) { UI.note('No se pudo leer el formato: ' + (err && err.message || err)); });
-        };
+          }).catch(function (err) { UI.note('No se pudo leer ' + file.name + ': ' + (err && err.message || err)); siguiente(files); });
+        }
       }
     });
     return p;

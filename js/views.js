@@ -259,9 +259,13 @@
 
   function docDetailHtml(d) {
     var e = D.edoc(d), f = D.fDias(D.dias(d.rev));
-    var history = d.history || [], records = d.records || [];
+    var history = d.history || [], records = d.records || [], anexos = d.anexos || [];
     var files = (d.templateMissing ? '<div class="file-warning">Falta cargar la plantilla vacía oficial.</div>' : '') +
       (d.file ? '<button class="file-item" data-file-current>' + icon('doc', 15) + '<span><b>Archivo vigente</b><small>' + esc(d.file.name) + ' · Vista previa</small></span></button>' : '<div class="row-empty">Sin archivo vigente.</div>') +
+      (anexos.length ? '<div class="section-title">Anexos (' + anexos.length + ')</div>' + anexos.map(function (file, i) {
+        return '<div class="file-item-row"><button class="file-item" data-file-anexo="' + i + '">' + icon('doc', 15) + '<span><b>Anexo</b><small>' + esc(file.name) + ' · Vista previa</small></span></button>' +
+          '<button class="icon-btn del" data-file-anexo-delete="' + i + '" aria-label="Eliminar anexo ' + esc(file.name) + '">' + icon('trash', 16) + '</button></div>';
+      }).join('') : '') +
       (history.length ? '<div class="section-title">Versiones anteriores (' + history.length + ')</div>' + history.map(function (file, i) {
         return '<div class="file-item-row"><button class="file-item" data-file-history="' + i + '">' + icon('doc', 15) + '<span><b>Versión archivada</b><small>' + esc(file.name) + ' · Vista previa</small></span></button>' +
           '<button class="icon-btn del" data-file-history-delete="' + i + '" aria-label="Eliminar versión anterior ' + esc(file.name) + '">' + icon('trash', 16) + '</button></div>';
@@ -296,18 +300,22 @@
     if (t.closest('[data-del]')) { close(); return store.removeWithUndo('documentos', d, 'Documento eliminado'); }
     if (t.closest('[data-drivelink]')) return global.BPAPLUS.drive.linkPanel(d, function (link) { store.save('documentos', Object.assign({}, d, link)); });
     if (t.closest('[data-file-current]')) return preview(d.file);
-    if ((b = t.closest('[data-file-history-delete]'))) {
-      var history = d.history || [], index = +b.dataset.fileHistoryDelete, file = history[index], button = b;
-      return UI.confirm({ title: 'Eliminar versión anterior', message: 'Se eliminará “' + file.name + '” de Google Drive. Esta acción no se puede deshacer.', okLabel: 'Eliminar', danger: true })
+    function borrar(campo, index, titulo, hecho, button) {
+      var lista = d[campo] || [], file = lista[index], cambio = {};
+      cambio[campo] = lista.filter(function (_, i) { return i !== index; });
+      return UI.confirm({ title: titulo, message: 'Se eliminará “' + file.name + '” de Google Drive. Esta acción no se puede deshacer.', okLabel: 'Eliminar', danger: true })
         .then(function (ok) {
           if (!ok) return;
           button.disabled = true;
           return global.BPAPLUS.drive.deleteStored(file)
-            .then(function () { return store.save('documentos', Object.assign({}, d, { history: history.filter(function (_, i) { return i !== index; }) })); })
-            .then(function () { leave(); UI.note('Versión anterior eliminada'); })
+            .then(function () { return store.save('documentos', Object.assign({}, d, cambio)); })
+            .then(function () { leave(); UI.note(hecho); })
             .catch(function (error) { button.disabled = false; UI.note(error.message || error); });
         });
     }
+    if ((b = t.closest('[data-file-history-delete]'))) return borrar('history', +b.dataset.fileHistoryDelete, 'Eliminar versión anterior', 'Versión anterior eliminada', b);
+    if ((b = t.closest('[data-file-anexo-delete]'))) return borrar('anexos', +b.dataset.fileAnexoDelete, 'Eliminar anexo', 'Anexo eliminado', b);
+    if ((b = t.closest('[data-file-anexo]'))) return preview(d.anexos[+b.dataset.fileAnexo]);
     if ((b = t.closest('[data-file-history]'))) return preview(d.history[+b.dataset.fileHistory]);
     if ((b = t.closest('[data-file-record]'))) return preview(d.records[+b.dataset.fileRecord]);
     if (t.closest('[data-file-upload]')) { leave(); return global.BPAPLUS.drive.filePanel(d, store.dg().id, function (saved) { return store.save('documentos', saved); }); }
@@ -353,7 +361,20 @@
       existentes.filter(function (d) { return d.tipoInspeccion === tipo; })[0];
     if (!doc && !def) return;
     doc = doc || { id: D.nextId(), e: store.dg().id, tipoInspeccion: def[0], codigo: 'INS-DOC-' + String(Date.now()).slice(-6), nombre: def[1], tipo: 'Otro', version: 1 };
-    global.BPAPLUS.drive.filePanel(doc, store.dg().id, function (saved) { return store.save('documentosInspeccion', saved); });
+    cargarInspeccion(doc);
+  }
+  function cargarInspeccion(doc) {
+    global.BPAPLUS.drive.filePanel(doc, store.dg().id, function (saved) { return store.save('documentosInspeccion', saved); }, { agregar: true });
+  }
+  /* Quita un archivo; si era el último, se va el documento entero (vuelve a «Pendiente»). */
+  function quitarArchivoInspeccion(d, index) {
+    if (global.BPAPLUS.drive.archivos(d).length <= 1) return store.removeWithUndo('documentosInspeccion', d, 'Archivo eliminado');
+    store.save('documentosInspeccion', global.BPAPLUS.drive.sinArchivo(d, index)).then(function () {
+      UI.note('Archivo eliminado', { actionLabel: 'Deshacer', onAction: function () { store.save('documentosInspeccion', d); } });
+    });
+  }
+  function previewInspeccion(d, index) {
+    global.BPAPLUS.drive.previewStored(global.BPAPLUS.drive.archivos(d)[index]).catch(function (err) { UI.note(err.message || err); });
   }
 
   function otroDocumentoInspeccion(seccionId) {
@@ -369,7 +390,7 @@
           var titulo = input.value.trim();
           if (!titulo) { root.querySelector('#wrap_nombre').classList.add('invalid'); input.focus(); return; }
           var doc = { id: D.nextId(), e: store.dg().id, tipoInspeccion: 'otro-' + D.nextId(), seccion: seccion.id, nombre: titulo, codigo: 'INS-OTR-' + String(Date.now()).slice(-6), tipo: 'Otro', version: 1 };
-          m.close(); global.BPAPLUS.drive.filePanel(doc, store.dg().id, function (saved) { return store.save('documentosInspeccion', saved); });
+          m.close(); cargarInspeccion(doc);
         };
       }
     });
@@ -379,13 +400,15 @@
     var docs = store.byDg('documentosInspeccion');
     function existente(def) { return docs.filter(function (d) { return d.tipoInspeccion === def[0] || (def[2] || []).indexOf(d.tipoInspeccion) >= 0; })[0]; }
     function fila(d, titulo, tipo) {
-      var loaded = d && d.file;
+      var lista = global.BPAPLUS.drive.archivos(d), n = lista.length;
       return '<div class="row"><div class="row-top" style="cursor:default"><div class="chan insp"></div><div class="row-main">' +
-        '<div class="row-name">' + esc(titulo) + '</div><div class="row-meta">' + (loaded ? esc(d.file.name) : 'PDF, Word o Excel · máximo 25 MB') + '</div></div>' +
-        '<div class="row-side">' + tag(loaded ? 'vigente' : 'pendiente', loaded ? 'Cargado' : 'Pendiente') + '</div></div>' +
-        '<div class="row-foot">' + (loaded ? '<button class="btn btn-ghost btn-sm" data-ins-preview="' + d.id + '">' + icon('doc', 14) + 'Vista previa</button>' : '') +
-        '<button class="btn btn-primary btn-sm" data-ins-upload="' + (tipo || d.tipoInspeccion) + '">' + icon('upload', 14) + (loaded ? 'Reemplazar' : 'Cargar') + '</button>' +
-        (loaded ? '<button class="btn btn-danger btn-sm" data-ins-delete="' + d.id + '">' + icon('trash', 14) + 'Eliminar</button>' : '') + '</div></div>';
+        '<div class="row-name">' + esc(titulo) + '</div><div class="row-meta">' + (n ? n + (n === 1 ? ' archivo' : ' archivos') : 'PDF, Word o Excel · máximo 25 MB') + '</div></div>' +
+        '<div class="row-side">' + tag(n ? 'vigente' : 'pendiente', n ? 'Cargado' : 'Pendiente') + '</div></div>' +
+        (n ? '<div class="file-list">' + lista.map(function (f, i) {
+          return '<div class="file-item-row"><button class="file-item" data-ins-preview="' + d.id + '" data-i="' + i + '">' + icon('doc', 15) + '<span><small>' + esc(f.name) + ' · Vista previa</small></span></button>' +
+            '<button class="icon-btn del" data-ins-delete="' + d.id + '" data-i="' + i + '" aria-label="Eliminar ' + esc(f.name) + '">' + icon('trash', 16) + '</button></div>';
+        }).join('') + '</div>' : '') +
+        '<div class="row-foot"><button class="btn btn-primary btn-sm" data-ins-upload="' + (tipo || d.tipoInspeccion) + '">' + icon('upload', 14) + (n ? 'Agregar archivos' : 'Cargar') + '</button></div></div>';
     }
     var requeridos = []; SECCIONES_INSPECCION.forEach(function (s) { requeridos = requeridos.concat(s.docs); });
     var cargados = requeridos.filter(function (d) { var x = existente(d); return x && x.file; }).length;
@@ -514,9 +537,9 @@
         '<div class="field"><label>Frecuencia</label><select class="inp" id="c_frec">' + opts(FRECS, c.frec) + '</select></div></div>' +
         '<div class="field"><label>Fecha programada</label><input class="inp" id="c_fecha" type="date" value="' + esc(c.fecha) + '"></div>' +
         '<div class="field"><label>Material de la capacitación</label>' +
-          '<input class="inp" id="c_material" type="file" accept=".pdf,.docx,.xlsx,.pptx">' +
+          '<input class="inp" id="c_material" type="file" accept=".pdf,.docx,.xlsx,.pptx" multiple>' +
           '<div class="hint">' + ((c.materiales || []).length ? (c.materiales.length + ' archivo(s) ya cargado(s). ') : '') +
-            'PDF, Word, Excel o PowerPoint de menos de 25 MB.</div></div>' +
+            'PDF, Word, Excel o PowerPoint de menos de 25 MB cada uno.</div></div>' +
         '<div id="c_format_fields"></div>' +
         '<div class="field"><label>Participantes</label>' +
         (guardados.length ? '<div class="mini-row"><select class="inp" id="c_known"><option value="">Seleccionar participante guardado…</option>' + guardados.map(function (p, i) { return '<option value="' + i + '">' + esc(p.nombre) + (p.cargo ? ' · ' + esc(p.cargo) : '') + '</option>'; }).join('') + '</select>' +
@@ -566,13 +589,13 @@
             materiales: (existing && existing.materiales) || [], datosFormato: Object.assign({}, c.datosFormato || {})
           });
           root.querySelectorAll('.c-format-field').forEach(function (input) { obj.datosFormato[input.dataset.formatKey] = input.value.trim(); });
-          var mat = root.querySelector('#c_material').files[0];
-          if (mat && mat.size >= 25 * 1024 * 1024) { UI.note('El material debe pesar menos de 25 MB.'); return; }
+          var mats = Array.prototype.slice.call(root.querySelector('#c_material').files);
+          if (mats.some(function (f) { return f.size >= 25 * 1024 * 1024; })) { UI.note('Cada material debe pesar menos de 25 MB.'); return; }
           var btn = root.querySelector('#c_save'); btn.disabled = true;
-          var subida = mat
-            ? global.BPAPLUS.drive.storeMaterial(store.dg().id, obj.id, mat)
-                .then(function (meta) { obj.materiales = obj.materiales.concat(meta); })
-            : Promise.resolve();
+          var subida = mats.reduce(function (p, mat) {
+            return p.then(function () { return global.BPAPLUS.drive.storeMaterial(store.dg().id, obj.id, mat); })
+              .then(function (meta) { obj.materiales = obj.materiales.concat(meta); });
+          }, Promise.resolve());
           subida.then(function () { return store.save('capacitaciones', obj); })
             .then(function () { m.close(); UI.note(existing ? 'Capacitación actualizada' : 'Capacitación agregada'); })
             .catch(function (err) { btn.disabled = false; UI.note('No se pudo subir el material: ' + (err && err.message || err)); });
@@ -765,6 +788,7 @@
   function inspPanel(i) {
     var r = !!i.real;
     var archivos = store.byDg('documentosInspeccion').filter(function (d) { return d.inspeccionId === i.id && d.file; });
+    var total = archivos.reduce(function (n, d) { return n + global.BPAPLUS.drive.archivos(d).length; }, 0);
     var actasVinculadas = store.byDg('actas').filter(function (a) { return a.inspeccionId === i.id; });
     UI.panel({
       title: 'Autoinspección',
@@ -773,8 +797,11 @@
         detailRow('Programada', D.fLocal(i.prog)) +
         (r ? detailRow('Realizada', D.fLocal(i.real)) + detailRow('Hallazgos abiertos', String(i.hall || 0)) : '') +
         (r && i.result ? '<div class="section-title">Resultado</div><p class="panel-text">' + esc(i.result) + '</p>' : '') +
-        (r ? '<div class="section-title">Archivos (' + archivos.length + ')</div>' + (archivos.length ? '<div class="file-list">' + archivos.map(function (d) {
-          return '<div class="file-item"><button class="link-btn" data-ai-preview="' + d.id + '">' + icon('doc', 16) + esc(d.nombre) + '</button><button class="icon-btn del" data-ai-delete="' + d.id + '" aria-label="Eliminar">' + icon('trash', 16) + '</button></div>';
+        (r ? '<div class="section-title">Archivos (' + total + ')</div>' + (total ? '<div class="file-list">' + archivos.map(function (d) {
+          var lista = global.BPAPLUS.drive.archivos(d);
+          return lista.map(function (f, j) {
+            return '<div class="file-item"><button class="link-btn" data-ai-preview="' + d.id + '" data-i="' + j + '">' + icon('doc', 16) + esc(d.nombre) + (lista.length > 1 ? ' · ' + esc(f.name) : '') + '</button><button class="icon-btn del" data-ai-delete="' + d.id + '" data-i="' + j + '" aria-label="Eliminar">' + icon('trash', 16) + '</button></div>';
+          }).join('');
         }).join('') + '</div>' : '<div class="row-empty">Sin archivos adjuntos.</div>') +
         '<div class="section-title">Actas vinculadas (' + actasVinculadas.length + ')</div>' + (actasVinculadas.length ? '<div class="file-list">' + actasVinculadas.map(function (a) {
           return '<button class="file-item" data-ai-acta="' + a.id + '">' + icon('insp', 16) + '<span><b>Acta N.° ' + esc(a.numActa || '—') + '</b><small>' + esc(D.fLocal(a.fecha)) + '</small></span></button>';
@@ -786,8 +813,8 @@
       onMount: function (root) {
         var ce = root.querySelector('[data-close-ins]'); if (ce) ce.onclick = function () { root.querySelector('[data-close]').click(); inspCloseForm(i); };
         var addFile = root.querySelector('[data-add-ai-file]'); if (addFile) addFile.onclick = function () { root.querySelector('[data-close]').click(); archivoAutoinspeccion(i); };
-        root.querySelectorAll('[data-ai-preview]').forEach(function (button) { button.onclick = function () { global.BPAPLUS.drive.previewStored(store.find('documentosInspeccion', button.dataset.aiPreview).file).catch(function (e) { UI.note(e.message || e); }); }; });
-        root.querySelectorAll('[data-ai-delete]').forEach(function (button) { button.onclick = function () { var d = store.find('documentosInspeccion', button.dataset.aiDelete); root.querySelector('[data-close]').click(); store.removeWithUndo('documentosInspeccion', d, 'Archivo eliminado'); }; });
+        root.querySelectorAll('[data-ai-preview]').forEach(function (button) { button.onclick = function () { previewInspeccion(store.find('documentosInspeccion', button.dataset.aiPreview), +button.dataset.i); }; });
+        root.querySelectorAll('[data-ai-delete]').forEach(function (button) { button.onclick = function () { var d = store.find('documentosInspeccion', button.dataset.aiDelete); root.querySelector('[data-close]').click(); quitarArchivoInspeccion(d, +button.dataset.i); }; });
         root.querySelectorAll('[data-ai-acta]').forEach(function (button) { button.onclick = function () { root.querySelector('[data-close]').click(); actaForm(store.find('actas', button.dataset.aiActa)); }; });
         root.querySelector('[data-edit]').onclick = function () { root.querySelector('[data-close]').click(); inspForm(i); };
         root.querySelector('[data-del]').onclick = function () { root.querySelector('[data-close]').click(); store.removeWithUndo('inspecciones', i, 'Autoinspección eliminada'); };
@@ -1192,7 +1219,7 @@
         root.querySelector('#ai_continue').onclick = function () {
           var title = input.value.trim(); if (!title) { root.querySelector('#wrap_ai_title').classList.add('invalid'); return; }
           var doc = { id: D.nextId(), e: store.dg().id, inspeccionId: i.id, tipoInspeccion: 'autoinspeccion-' + i.id + '-' + D.nextId(), nombre: title, codigo: 'INS-ADJ-' + String(Date.now()).slice(-6), tipo: 'Otro', version: 1 };
-          m.close(); global.BPAPLUS.drive.filePanel(doc, store.dg().id, function (saved) { return store.save('documentosInspeccion', saved); });
+          m.close(); cargarInspeccion(doc);
         };
       }
     });
@@ -1242,8 +1269,8 @@
       var dr = t.closest('[data-doc]'); if (dr) return abrirDoc(store.find('documentos', dr.dataset.doc));
       var io = t.closest('[data-ins-other]'); if (io) return otroDocumentoInspeccion(io.dataset.insOther);
       var iu = t.closest('[data-ins-upload]'); if (iu) return documentoInspeccion(iu.dataset.insUpload);
-      var idl = t.closest('[data-ins-preview]'); if (idl) return global.BPAPLUS.drive.previewStored(store.find('documentosInspeccion', idl.dataset.insPreview).file).catch(function (err) { UI.note(err.message || err); });
-      var ide = t.closest('[data-ins-delete]'); if (ide) return store.removeWithUndo('documentosInspeccion', store.find('documentosInspeccion', ide.dataset.insDelete), 'Documento de inspección eliminado');
+      var idl = t.closest('[data-ins-preview]'); if (idl) return previewInspeccion(store.find('documentosInspeccion', idl.dataset.insPreview), +idl.dataset.i);
+      var ide = t.closest('[data-ins-delete]'); if (ide) return quitarArchivoInspeccion(store.find('documentosInspeccion', ide.dataset.insDelete), +ide.dataset.i);
       var cr = t.closest('[data-cap]'); if (cr) return capPanel(store.find('capacitaciones', cr.dataset.cap));
       var ir = t.closest('[data-insp]'); if (ir) return inspPanel(store.find('inspecciones', ir.dataset.insp));
       var ar = t.closest('[data-acta]'); if (ar) return actaForm(store.find('actas', ar.dataset.acta));
