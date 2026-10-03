@@ -3,10 +3,10 @@
    Service worker network-first: actualiza en línea y usa caché sin conexión
    que se visitó al menos una vez servida por http(s).
    ========================================================================== */
-var CACHE = 'bpa-plus-v57';
+var CACHE = 'bpa-plus-v58';
 var ASSETS = [
-  './', './index.html', './styles.css?v=44', './manifest.json',
-  './js/config.js', './js/cloud.js', './js/auth.js', './js/domain.js', './js/db.js?v=33', './js/ui.js?v=2', './js/formatos.js?v=48', './js/actas.js?v=47', './js/retiro.js?v=40', './js/views.js?v=54', './js/lock.js?v=2', './js/drive.js?v=50', './js/alerts.js', './js/app.js?v=37',
+  './', './index.html', './styles.css?v=45', './manifest.json',
+  './js/config.js', './js/cloud.js', './js/auth.js', './js/domain.js', './js/db.js?v=33', './js/ui.js?v=2', './js/formatos.js?v=48', './js/actas.js?v=47', './js/retiro.js?v=40', './js/views.js?v=55', './js/lock.js?v=2', './js/drive.js?v=50', './js/alerts.js', './js/app.js?v=37',
   './autoinspecciones/index.html', './autoinspecciones/main.js',
   './icons/icon-44.png?v=4', './icons/icon-192.png?v=4', './icons/icon-512.png?v=4', './icons/apple-touch-icon.png?v=4'
 ];
