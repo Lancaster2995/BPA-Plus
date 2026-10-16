@@ -14,9 +14,9 @@
     { view: 'dashboard', label: 'Inicio', short: 'Inicio', icon: 'home' },
     { view: 'documentos', label: 'Documentos', short: 'Documentos', icon: 'doc', group: 'Cumplimiento' },
     { view: 'capacitaciones', label: 'Capacitaciones', short: 'Capacitac.', icon: 'cap', group: 'Cumplimiento' },
-    { view: 'autoinspecciones', label: 'Autoinspecciones', short: 'Inspecc.', icon: 'clipboard', group: 'Cumplimiento' },
+    { view: 'autoinspecciones', label: 'Autoinspecciones', short: 'Inspecc.', icon: 'checkbox', group: 'Cumplimiento' },
     { view: 'retiros', label: 'Retiro de mercado', icon: 'flag', group: 'Cumplimiento', bottom: false },
-    { view: 'informacion-almacen', label: 'Información del almacén', icon: 'building', group: 'Almacén', bottom: false },
+    { view: 'informacion-almacen', label: 'Información del almacén', side: 'Almacén', icon: 'warehouse', group: 'Almacén', bottom: false },
     { view: 'documentos-inspeccion', label: 'Documentos de inspección', icon: 'folder', group: 'Almacén', bottom: false }
   ];
 
@@ -99,6 +99,7 @@
       if (wasSearch) { var s = document.getElementById('qDoc'); if (s) { s.focus(); try { s.setSelectionRange(caret, caret); } catch (e) {} } }
     },
     renderChrome: renderChrome,
+    quickNew: quickNew,
     exportData: exportData,
     importCronograma: importCronograma
   };
@@ -108,63 +109,58 @@
     var docs = store.byDg('documentos'), caps = store.byDg('capacitaciones'), insp = store.byDg('inspecciones');
     return {
       documentos: docs.filter(function (d) { return D.edoc(d) === 'vencido'; }).length,
-      capacitaciones: caps.filter(function (c) { var e = D.ecap(c); return e === 'vencida' || e === 'pendiente'; }).length,
+      capacitaciones: caps.filter(function (c) { return D.ecap(c) === 'vencida'; }).length,
       autoinspecciones: insp.reduce(function (a, i) { return a + (i.real ? (i.hall || 0) : 0); }, 0) + insp.filter(function (i) { return !i.real && D.dias(i.prog) < 0; }).length
     };
   }
 
-  function syncChip() {
-    if (!global.BPAPLUS.cloud) return '<div class="sync">' + UI.icon('check', 15) + '<span>Guardado en este equipo</span></div>';
-    return navigator.onLine
-      ? '<div class="sync">' + UI.icon('cloud', 15) + '<span>Conectado · se sincroniza solo</span></div>'
-      : '<div class="sync off">' + UI.icon('cloudoff', 15) + '<span>Sin conexión · se envía al volver</span></div>';
+  /* Iniciales de la cuenta para el avatar: del nombre si lo hay, si no las dos primeras letras
+     del correo. Sin sesión (modo local) queda el ícono de usuario. */
+  function initials() {
+    var Auth = global.BPAPLUS.auth, u = Auth && Auth.current(), s = u && (u.displayName || u.email) || '';
+    var w = s.split('@')[0].split(/[\s._-]+/).filter(Boolean);
+    return !w.length ? '' : (w.length > 1 ? w[0].charAt(0) + w[1].charAt(0) : w[0].slice(0, 2)).toUpperCase();
   }
 
   function renderChrome() {
     var dg = store.dg(), counts = navCounts(), v = store.state.view;
     var alertN = global.BPAPLUS.alerts ? global.BPAPLUS.alerts.count() : 0;
-    var cur = NAV.filter(function (n) { return n.view === v; })[0] || NAV[0];
     var esc = UI.esc;
     function badge(c) { return c ? '<span class="ni-badge">' + c + '</span>' : ''; }
     function item(n) {
       var on = v === n.view;
       return '<button class="nav-item' + (on ? ' active' : '') + '" data-nav="' + n.view + '"' + (on ? ' aria-current="page"' : '') + '>' +
-        UI.icon(n.icon, 18, 'ni-ico') + '<span>' + n.label + '</span>' + badge(counts[n.view]) + '</button>';
-    }
-    function group(name) {
-      return '<div class="nav-label">' + name + '</div>' + NAV.filter(function (n) { return n.group === name; }).map(item).join('');
+        UI.icon(n.icon, 32, 'ni-ico') + '<span>' + (n.side || n.label) + '</span>' + badge(counts[n.view]) + '</button>';
     }
     var avatar = '<span class="ws-av">' + esc(dg.init || '?') + '</span>';
+    /* El estado de sincronización ya no ocupa la barra lateral: va en el título de la cuenta y,
+       solo sin conexión, como un punto sobre el avatar. */
+    var offline = global.BPAPLUS.cloud && !navigator.onLine;
+    var syncTxt = !global.BPAPLUS.cloud ? 'Guardado en este equipo' : offline ? 'Sin conexión · se envía al volver' : 'Conectado · se sincroniza solo';
+    var me = initials(), meAv = me ? esc(me) : UI.icon('user', 18);
 
     var side = document.getElementById('sidebar');
     if (side) side.innerHTML =
-      '<button class="ws" id="dgSwitch" aria-label="Cambiar droguería">' + avatar +
-        '<span class="ws-txt"><span class="ws-name">' + esc(dg.nombre) + '</span><span class="ws-ruc mono">' + (dg.ruc ? 'RUC ' + esc(dg.ruc) : 'Sin RUC') + '</span></span>' +
-        UI.icon('updown', 16, 'ws-chev') + '</button>' +
-      '<button class="side-search" id="cmdOpen">' + UI.icon('search', 16) + '<span>Buscar o ejecutar…</span><kbd class="mono">Ctrl K</kbd></button>' +
-      '<nav class="nav" aria-label="Principal">' + item(NAV[0]) +
-        '<button class="nav-item" id="alertBell">' + UI.icon('bell', 18, 'ni-ico') + '<span>Alertas</span>' + badge(alertN) + '</button>' +
-        group('Cumplimiento') + group('Almacén') +
-        '<div class="nav-label">Herramientas</div>' +
-        '<button class="nav-item" id="driveImport">' + UI.icon('folder', 18, 'ni-ico') + '<span>Escanear carpeta BPA</span></button>' +
-        '<button class="nav-item" id="cronImport">' + UI.icon('calendar', 18, 'ni-ico') + '<span>Importar cronograma</span></button>' +
+      '<button class="ws" id="dgSwitch" aria-label="Cambiar droguería"><img class="ws-logo" src="icons/icon-192.png?v=5" alt="">' +
+        '<span class="ws-txt"><span class="ws-name">' + esc(dg.nombre) + '</span><span class="ws-ruc">' + (dg.ruc ? 'RUC ' + esc(dg.ruc) : 'Sin RUC') + '</span></span></button>' +
+      '<nav class="nav" aria-label="Principal">' +
+        NAV.filter(function (n) { return n.group !== 'Almacén'; }).map(item).join('') + '<hr class="nav-sep">' +
+        NAV.filter(function (n) { return n.group === 'Almacén'; }).map(item).join('') +
       '</nav>' +
-      '<div class="side-foot">' + syncChip() +
-        '<button class="account" id="accountBtn"><span class="acc-av">' + UI.icon('user', 16) + '</span>' +
-          '<span class="acc-txt"><b>Mi cuenta</b><small>PIN, tema, respaldo, salir</small></span>' + UI.icon('sliders', 16, 'acc-ico') + '</button>' +
-      '</div>';
+      '<button class="account" id="accountBtn" title="' + syncTxt + '"><span class="acc-av' + (offline ? ' off' : '') + '">' + meAv + '</span>' +
+        '<span class="acc-txt">Mi cuenta</span>' + UI.icon('right', 20, 'acc-ico') + '</button>';
 
-    /* Una sola barra superior: en escritorio muestra dónde estás; en el celular, la droguería.
-       «Nuevo» reemplaza al botón flotante, que tapaba el final de cada lista. En escritorio solo
-       aparece en Inicio: las demás vistas ya traen su propio botón de alta en el encabezado. */
+    /* Una sola barra superior: buscador y cuenta en escritorio; en el celular, la droguería.
+       «Nuevo» es solo del celular: en escritorio cada vista trae su alta en el encabezado. */
     var top = document.getElementById('topbar');
     if (top) top.innerHTML =
       '<button class="tb-dg" id="dgSwitchM" aria-label="Cambiar droguería">' + avatar + '<span class="tb-dg-name">' + esc(dg.nombre) + '</span>' + UI.icon('chevron', 14) + '</button>' +
-      '<nav class="crumbs" aria-label="Ubicación"><span>' + esc(dg.nombre) + '</span>' + (cur.group ? '<i>/</i><span>' + cur.group + '</span>' : '') + '<i>/</i><b>' + cur.label + '</b></nav>' +
+      '<button class="tb-search" id="cmdOpen">' + UI.icon('search', 22) + '<span>Buscar documentos, registros o guías…</span><kbd>Ctrl</kbd><kbd>K</kbd></button>' +
       '<span class="tb-grow"></span>' +
       '<button class="icon-btn only-mobile" id="cmdOpenM" aria-label="Buscar">' + UI.icon('search', 20) + '</button>' +
-      '<button class="icon-btn" id="alertBellM" aria-label="Alertas' + (alertN ? ' (' + alertN + ')' : '') + '">' + UI.icon('bell', 20) + (alertN ? '<span class="bell-badge">' + alertN + '</span>' : '') + '</button>' +
-      '<button class="btn btn-primary tb-new' + (v === 'dashboard' ? '' : ' only-mobile') + '" id="newBtn" aria-label="Nuevo"' + (v === 'informacion-almacen' ? ' hidden' : '') + '>' +
+      '<button class="icon-btn tb-bell" id="alertBellM" aria-label="Alertas' + (alertN ? ' (' + alertN + ')' : '') + '">' + UI.icon('bell', 30) + (alertN ? '<span class="bell-badge">' + alertN + '</span>' : '') + '</button>' +
+      '<button class="tb-user" id="accountBtnTop" aria-label="Mi cuenta" title="' + syncTxt + '"><span class="acc-av' + (offline ? ' off' : '') + '">' + meAv + '</span>' + UI.icon('chevron', 20) + '</button>' +
+      '<button class="btn btn-primary tb-new only-mobile" id="newBtn" aria-label="Nuevo"' + (v === 'informacion-almacen' ? ' hidden' : '') + '>' +
         UI.icon('plus', 16) + '<span>Nuevo</span></button>';
 
     var bn = document.getElementById('bottomNav');
@@ -185,19 +181,14 @@
     on('dgSwitch', function () { V.open.dgSwitcher(); });
     on('dgSwitchM', function () { V.open.dgSwitcher(); });
     on('cmdOpen', openCmd); on('cmdOpenM', openCmd);
-    on('alertBell', openAlerts); on('alertBellM', openAlerts);
-    on('driveImport', driveImport);
-    on('cronImport', function () { importCronograma(); });
-    on('accountBtn', function () { UI.actionsheet(accountOptions(), this); });
+    on('alertBellM', openAlerts);
+    /* Las herramientas viven en el menú de la cuenta: así siguen a mano desde cualquier vista. */
+    function cuenta() { UI.actionsheet(toolOptions().concat({ sep: true }, accountOptions()), this); }
+    on('accountBtn', cuenta); on('accountBtnTop', cuenta);
     on('moreBtn', function () {
       UI.actionsheet(NAV.filter(function (n) { return n.bottom === false; }).map(function (n) {
         return { label: n.label, icon: n.icon, onClick: function () { store.go(n.view); } };
-      }).concat([
-        { sep: true },
-        { label: 'Escanear carpeta BPA', icon: 'folder', onClick: driveImport },
-        { label: 'Importar cronograma', icon: 'calendar', onClick: function () { importCronograma(); } },
-        { sep: true }
-      ], accountOptions()), this);
+      }).concat({ sep: true }, toolOptions(), { sep: true }, accountOptions()), this);
     });
     on('newBtn', function () { quickNew(this); });
   }
@@ -206,6 +197,12 @@
   function logout() {
     var Auth = global.BPAPLUS.auth;
     if (Auth) Auth.signOut().then(function () { location.reload(); }); else location.reload();
+  }
+  function toolOptions() {
+    return [
+      { label: 'Escanear carpeta BPA', icon: 'folder', onClick: driveImport },
+      { label: 'Importar cronograma', icon: 'calendar', onClick: function () { importCronograma(); } }
+    ];
   }
   function accountOptions() {
     return [
@@ -287,7 +284,7 @@
   function applyTheme(t) {
     document.documentElement.classList.toggle('dark', t === 'dark');
     var meta = document.getElementById('themeColor');
-    if (meta) meta.content = t === 'dark' ? '#0F151C' : '#F3F1EB';
+    if (meta) meta.content = t === 'dark' ? '#0F151C' : '#EAF1F7';
     try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
   }
   function toggleTheme() { applyTheme(isDark() ? 'light' : 'dark'); renderChrome(); }

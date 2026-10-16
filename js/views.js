@@ -67,67 +67,88 @@
           btn: '<button class="btn btn-ghost btn-sm" type="button">Ver</button>' };
       }));
 
+    /* `ico: 'flag'` marca los registros del retiro de mercado, como en la barra lateral.
+       ponytail: se reconoce por el nombre; si hace falta exactitud, un campo propio en el documento. */
     var proximos = []
-      .concat(docs.map(function (d) { return { tipo: d.tipo || 'Documento', codigo: d.codigo, nombre: d.nombre, fecha: d.rev }; }))
-      .concat(caps.filter(function (c) { return D.ecap(c) === 'pendiente'; }).map(function (c) { return { tipo: 'Capacitación', nombre: c.tema, fecha: c.fecha }; }))
-      .concat(insp.filter(function (i) { return !i.real; }).map(function (i) { return { tipo: 'Autoinspección', nombre: i.area, fecha: i.prog }; }))
+      .concat(docs.map(function (d) {
+        return { tipo: d.tipo || 'Documento', codigo: d.codigo, nombre: d.nombre, fecha: d.rev, attr: 'data-doc="' + d.id + '"',
+          ico: D.normTxt(d.nombre).indexOf('retiro') >= 0 ? 'flag' : 'doc' };
+      }))
+      .concat(caps.filter(function (c) { return D.ecap(c) === 'pendiente'; }).map(function (c) { return { tipo: 'Capacitación', nombre: c.tema, fecha: c.fecha, attr: 'data-cap="' + c.id + '"', ico: 'cap' }; }))
+      .concat(insp.filter(function (i) { return !i.real; }).map(function (i) { return { tipo: 'Autoinspección', nombre: i.area, fecha: i.prog, attr: 'data-insp="' + i.id + '"', ico: 'checkbox' }; }))
       .filter(function (e) { return D.dias(e.fecha) >= 0 && isFinite(D.dias(e.fecha)); })
-      .sort(function (a, b) { return D.dias(a.fecha) - D.dias(b.fecha); })
-      .slice(0, 6);
+      .sort(function (a, b) { return D.dias(a.fecha) - D.dias(b.fecha); });
+    var verTodos = store.state.verProx, PROX = 5;
 
-    var C = 2 * Math.PI * 46, off = C * (1 - sc.score / 100);
+    var C = 2 * Math.PI * 70, off = C * (1 - sc.score / 100);
 
     return '' +
-      '<div class="view-header"><div>' +
-        '<div class="view-title">Inicio</div>' +
-        '<div class="view-sub">' + (todo.length ? todo.length + (todo.length === 1 ? ' asunto requiere' : ' asuntos requieren') + ' tu atención' : 'Todo al día') + ' · ' + esc(store.dg().nombre) + '</div>' +
+      '<div class="view-header home-head"><div>' +
+        '<h1 class="view-title">Inicio</h1>' +
+        '<div class="view-sub">' + esc(store.dg().nombre) + '</div>' +
       '</div>' +
-      '<button class="btn btn-ghost btn-sm" data-action="export">' + icon('download', 16) + 'Exportar respaldo</button>' +
+      '<div class="split-btn">' +
+        '<button class="btn btn-primary" type="button" data-action="nuevo-doc">' + icon('plus', 22) + 'Nuevo documento</button>' +
+        '<button class="btn btn-primary" type="button" data-action="nuevo-menu" aria-label="Otras altas">' + icon('chevron', 20) + '</button>' +
+      '</div>' +
       '</div>' +
 
       '<div class="home">' +
         '<section class="card score-card">' +
-          '<div class="card-head"><h2 class="card-title">Cumplimiento BPA</h2><span class="chip ' + sc.cls + '">' + esc(sc.msg) + '</span></div>' +
+          '<div class="card-head"><h2 class="card-title">Cumplimiento BPA</h2><span class="chip ' + sc.cls + '">' + esc(sc.msg) + '</span>' +
+            '<span class="grow"></span><button class="card-go" type="button" data-goto="documentos" aria-label="Ver documentos">' + icon('right', 22) + '</button></div>' +
           '<div class="score-body">' +
-            '<div class="ring"><svg viewBox="0 0 112 112" aria-hidden="true"><circle class="ring-bg" cx="56" cy="56" r="46"></circle>' +
-              '<circle class="ring-fg ' + sc.cls + '" cx="56" cy="56" r="46" stroke-dasharray="' + C + '" stroke-dashoffset="' + off + '"></circle></svg>' +
+            '<div class="ring"><svg viewBox="0 0 168 168" aria-hidden="true">' +
+              /* El SVG gira -90° (el trazo arranca arriba): este degradado, de arriba-derecha a abajo-izquierda, se ve claro arriba-izquierda y oscuro abajo-derecha. */
+              '<defs><linearGradient id="ringGrad" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2C8BBF"/><stop offset="1" stop-color="#13456B"/></linearGradient></defs>' +
+              '<circle class="ring-bg" cx="84" cy="84" r="70"></circle>' +
+              '<circle class="ring-fg ' + sc.cls + '" cx="84" cy="84" r="70" stroke-dasharray="' + C + '" stroke-dashoffset="' + off + '"></circle></svg>' +
               '<div class="ring-num"><b>' + sc.score + '%</b><span>al día</span></div></div>' +
             '<div class="meters">' +
-              meter('Documentos', sc.docsOK, sc.docsTot, dVenc.length + ' vencido(s) · ' + dPV + ' por vencer') +
-              meter('Capacitaciones', sc.capsOK, sc.capsTot, cVenc.length + ' vencida(s) · ' + cPend + ' programada(s)') +
-              meter('Autoinspecciones', sc.inspOK, sc.inspTot, hall + ' hallazgo(s) abierto(s) · ' + iAtras.length + ' atrasada(s)') +
+              meter('doc', 'Documentos', sc.docsOK, sc.docsTot, dVenc.length + ' vencido(s) · ' + dPV + ' por vencer') +
+              meter('cap', 'Capacitaciones', sc.capsOK, sc.capsTot, cVenc.length + ' vencida(s) · ' + cPend + ' programada(s)') +
+              meter('checkbox', 'Autoinspecciones', sc.inspOK, sc.inspTot, hall + ' hallazgo(s) abierto(s) · ' + iAtras.length + ' atrasada(s)') +
             '</div>' +
           '</div>' +
         '</section>' +
 
         '<section class="card todo-card">' +
-          '<div class="card-head"><h2 class="card-title">Requiere atención</h2>' + (todo.length ? '<span class="chip bad">' + todo.length + '</span>' : '') +
-            '<span class="grow"></span><button class="link-btn" type="button" data-action="alertas">Ver alertas</button></div>' +
+          '<div class="card-head"><h2 class="card-title">Atención</h2>' + (todo.length ? '<span class="chip bad">' + todo.length + '</span>' : '') +
+            '<span class="grow"></span><button class="card-go" type="button" data-action="alertas" aria-label="Ver alertas">' + icon('right', 22) + '</button></div>' +
           (todo.length ? todo.slice(0, 6).map(function (t) {
-            return '<div class="todo-row" ' + t.attr + '><span class="todo-ico ' + t.tone + '">' + icon(t.ico, 16) + '</span>' +
+            return '<div class="todo-row" ' + t.attr + '><span class="todo-ico ' + t.tone + '">' + icon(t.ico, 18) + '</span>' +
               '<span class="todo-txt"><span class="todo-tipo">' + t.tipo + '</span><span class="todo-name">' + esc(t.nombre) + '</span></span>' +
               (t.due || '<span class="days late">' + D.fDias(t.dias).txt + '</span>') + t.btn + '</div>';
-          }).join('') : '<div class="todo-empty">' + icon('check', 20) + '<span>Nada vencido ni atrasado en esta droguería.</span></div>') +
+          }).join('') : '<div class="todo-empty"><span class="todo-ok">' + icon('check', 24) + '</span><span>Nada vencido ni atrasado<br>en esta droguería.</span></div>') +
         '</section>' +
 
         '<section class="card next-card">' +
-          '<div class="card-head"><h2 class="card-title">Próximos vencimientos</h2></div>' +
-          (proximos.length ? '<div class="next-grid">' + proximos.map(function (e) {
-            var n = D.dias(e.fecha), iso = String(e.fecha);
-            return '<div class="next-item"><span class="date-tile"><small>' + MES_CORTO[+iso.slice(5, 7) - 1] + '</small><b>' + iso.slice(8, 10) + '</b></span>' +
-              '<span class="todo-txt"><span class="todo-tipo">' + esc(e.tipo) + (e.codigo ? ' · <span class="mono">' + esc(e.codigo) + '</span>' : '') + ' · ' + (n === 0 ? 'hoy' : 'en ' + n + ' día' + (n === 1 ? '' : 's')) + '</span>' +
-              '<span class="todo-name">' + esc(e.nombre) + '</span></span></div>';
-          }).join('') + '</div>' : emptyState('check', 'Sin vencimientos próximos', 'No hay fechas pendientes para esta droguería.')) +
+          '<div class="card-head">' + icon('calendar', 26, 'card-ico') + '<h2 class="card-title">Próximos vencimientos</h2><span class="grow"></span>' +
+            (proximos.length > PROX ? '<button class="link-btn more-btn" type="button" data-action="ver-proximos">' + (verTodos ? 'Ver menos' : 'Ver todos') + icon('right', 18) + '</button>' : '') + '</div>' +
+          (proximos.length ? '<div class="due" role="table" aria-label="Próximos vencimientos">' +
+            '<div class="due-row due-head" role="row"><span role="columnheader">Fecha</span><span role="columnheader">Tipo</span><span role="columnheader">Código / Registro</span>' +
+              '<span role="columnheader">Documento / Actividad</span><span role="columnheader">Tiempo restante</span><span></span></div>' +
+            proximos.slice(0, verTodos ? proximos.length : PROX).map(function (e) {
+              var n = D.dias(e.fecha), iso = String(e.fecha);
+              return '<div class="due-row" role="row" ' + e.attr + '>' +
+                '<span class="due-date" role="cell"><span class="date-tile"><small>' + MES_CORTO[+iso.slice(5, 7) - 1] + '</small><b>' + iso.slice(8, 10) + '</b></span></span>' +
+                '<span class="due-tipo" role="cell"><span class="due-ico ' + e.ico + '">' + icon(e.ico, e.ico === 'flag' ? 30 : 28) + '</span><span>' + esc(e.tipo) + '</span></span>' +
+                '<span class="due-txt due-code" role="cell"><span>' + (e.codigo ? esc(e.codigo) : '-') + '</span></span>' +
+                '<span class="due-txt due-name" role="cell"><span>' + esc(e.nombre) + '</span></span>' +
+                '<span class="due-left" role="cell"><span class="due-pill' + (n <= D.VENTANA_POR_VENCER ? ' soon' : '') + '">' + (n === 0 ? 'hoy' : 'en ' + n + ' día' + (n === 1 ? '' : 's')) + '</span></span>' +
+                '<span class="due-chev">' + icon('right', 20) + '</span></div>';
+            }).join('') + '</div>' : emptyState('check', 'Sin vencimientos próximos', 'No hay fechas pendientes para esta droguería.')) +
         '</section>' +
       '</div>';
   }
 
-  function meter(label, ok, tot, sub) {
+  /* El desglose (vencidos, por vencer…) queda en el título: la fila muestra solo la cifra. */
+  function meter(ico, label, ok, tot, sub) {
     var pct = tot ? Math.round(ok / tot * 100) : 100;
     var cls = pct >= 80 ? 'good' : pct >= 50 ? 'warn' : 'bad';
-    return '<div class="meter"><div class="meter-top"><span>' + label + '</span><span class="mono">' + (tot ? ok + '/' + tot : '—') + '</span></div>' +
-      '<div class="meter-track"><div class="meter-fill ' + cls + '" style="width:' + pct + '%"></div></div>' +
-      '<div class="meter-sub">' + (tot ? sub : 'Sin registros') + '</div></div>';
+    return '<div class="meter"' + (tot ? ' title="' + esc(sub) + '"' : '') + '><span class="meter-ico">' + icon(ico, 28) + '</span>' +
+      '<div class="meter-main"><div class="meter-top"><span>' + label + '</span><span>' + (tot ? ok + ' / ' + tot : '—') + '</span></div>' +
+      '<div class="meter-track"><div class="meter-fill ' + cls + '" style="width:' + pct + '%"></div></div></div></div>';
   }
 
   /* Sin botones: el alta ya está en el encabezado (y en «Nuevo» en el celular). */
@@ -1251,6 +1272,8 @@
       if (act) {
         var a = act.dataset.action;
         if (a === 'nuevo-doc') return docForm(null);
+        if (a === 'nuevo-menu') return store.quickNew(act);
+        if (a === 'ver-proximos') { store.state.verProx = !store.state.verProx; return store.render(); }
         if (a === 'nueva-cap') return capForm(null);
         if (a === 'programar-insp') return inspForm(null);
         if (a === 'nueva-acta') return actaForm(null);
