@@ -21,7 +21,7 @@
     screen = document.createElement('div'); screen.className = 'authscreen';
     screen.innerHTML = '<form class="auth-card" id="authForm">' +
       '<img class="auth-logo" src="icons/icon-192.png?v=5" alt="">' +
-      '<h1>BPA-Plus</h1><p class="auth-lead">Tus registros BPA, sincronizados y protegidos.</p>' +
+      '<h1>BPA Plus</h1><p class="auth-lead">Tus registros BPA, sincronizados y protegidos.</p>' +
       '<label>Correo electrónico<input class="auth-input" id="authEmail" type="email" autocomplete="email" required></label>' +
       '<label>Contraseña<input class="auth-input" id="authPassword" type="password" autocomplete="current-password" minlength="6" required></label>' +
       '<div class="auth-error" id="authError" role="alert"></div>' +

@@ -1,6 +1,6 @@
 {
-  "name": "BPA-Plus — Gestión de Buenas Prácticas de Almacenamiento",
-  "short_name": "BPA-Plus",
+  "name": "BPA Plus",
+  "short_name": "BPA Plus",
   "description": "Documentos, capacitaciones y autoinspecciones bajo Buenas Prácticas de Almacenamiento. Aplicación personal, 100% local y sin conexión.",
   "start_url": "./index.html",
   "scope": "./",

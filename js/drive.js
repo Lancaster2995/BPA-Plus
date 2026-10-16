@@ -163,10 +163,16 @@
       return out;
     });
   }
-  function textFromPdf(buf) {
+  /* pdf.js 4 ignora `disableWorker` y sin `workerSrc` rechaza todo PDF: la lectura salía
+     vacía sin avisar. Ojo: el worker se queda con el buffer que recibe (queda vacío acá). */
+  function pdfDoc(buf) {
     return import(PDF_SRC).then(function (pdfjs) {
-      return pdfjs.getDocument({ data: new Uint8Array(buf), disableWorker: true }).promise;
-    }).then(function (pdf) {
+      if (!pdfjs.GlobalWorkerOptions.workerSrc) pdfjs.GlobalWorkerOptions.workerSrc = PDF_SRC.replace('pdf.min.mjs', 'pdf.worker.min.mjs');
+      return pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
+    });
+  }
+  function textFromPdf(buf) {
+    return pdfDoc(buf).then(function (pdf) {
       var pages = [];
       for (var i = 1; i <= pdf.numPages; i++) pages.push(pdf.getPage(i).then(function (page) {
         return page.getTextContent().then(function (content) { return content.items.map(function (item) { return item.str; }).join(' '); });
@@ -689,6 +695,27 @@
       return '';
     }).catch(function () { return ''; });
   }
+  /* Material para generar la evaluación. Un PDF corto viaja entero (Claude lee tablas,
+     imágenes y escaneos que la extracción de texto pierde); el resto, como texto. Los
+     topes de páginas y de tamaño son topes de costo por evaluación. */
+  var PDF_EVAL_MAX_PAGINAS = 30, PDF_EVAL_MAX_BYTES = 10 * 1024 * 1024;
+  function materialEvaluacion(meta) {
+    var n = (meta && (meta.name || meta.originalName) || '').toLowerCase();
+    if (!meta || !meta.driveId || !/\.pdf$/.test(n)) return textoDeArchivo(meta).then(function (t) { return { material: t }; });
+    return downloadBinary(meta.driveId).then(function (buf) {
+      var copia = buf.slice(0); // pdf.js puede quedarse con el buffer que recibe
+      if (buf.byteLength > PDF_EVAL_MAX_BYTES) return textFromPdf(copia).then(function (t) { return { material: t }; });
+      return pdfDoc(buf).then(function (pdf) {
+        if (pdf.numPages > PDF_EVAL_MAX_PAGINAS) return textFromPdf(copia).then(function (t) { return { material: t }; });
+        return new Promise(function (resolve, reject) {
+          var fr = new FileReader();
+          fr.onload = function () { resolve({ pdf: String(fr.result).split(',')[1] || '' }); };
+          fr.onerror = reject;
+          fr.readAsDataURL(new Blob([copia], { type: 'application/pdf' }));
+        });
+      });
+    }).catch(function () { return { material: '' }; });
+  }
   function downloadStored(meta) {
     if (!meta || !meta.driveId) return Promise.reject(new Error('El archivo no está disponible.'));
     return downloadBinary(meta.driveId).then(function (buf) {
@@ -715,7 +742,11 @@
       ws['!ref'] = XLSX.utils.encode_range(range);
     }
     function fill(ws, doc) {
-      (layout.campos || []).forEach(function (field) { if (field.key) setCell(ws, field.row, field.col, doc.valores[field.key]); });
+      (layout.campos || []).forEach(function (field) {
+        if (!field.key) return;
+        var v = doc.valores[field.key];
+        setCell(ws, field.row, field.col, field.enCelda ? field.label + ': ' + (v == null ? '' : v) : v);
+      });
       var start = (+layout.filaTabla || 0) + 1;
       (doc.filas || []).forEach(function (row, i) {
         (layout.columnas || []).forEach(function (col, j) {
@@ -888,11 +919,15 @@
       function fillField(container, field) {
         var label = norm(field.label), current = norm(text(container));
         if (!label || current.indexOf(label) !== 0) return false;
-        var original = String(field.label).replace(/[:\s]+$/, '');
+        var own = text(container).match(/^\s*([^:]+):/);
+        var original = own && norm(own[1]) === label ? own[1].trim() : String(field.label).replace(/[:\s]+$/, '');
         setText(container, original + ': ' + (values[field.key] == null ? '' : values[field.key]));
         return true;
       }
-      (fmt.campos || []).filter(function (field) { return field.label && field.key; }).forEach(function (field) {
+      var campos = (fmt.campos || []).filter(function (field) { return field.label && field.key; });
+      // Formatos cargados antes de leer «TEMA: valor de ejemplo» no tienen el campo y el tema del modelo quedaba fijo.
+      if (!campos.some(function (field) { return field.key === 'tema'; })) campos.push({ label: 'Tema', key: 'tema' });
+      campos.forEach(function (field) {
         var filled = false;
         rows.slice(0, header).some(function (row) {
           return direct(row, 'tc').some(function (cell) { if (fillField(cell, field)) { filled = true; return true; } return false; });
@@ -965,6 +1000,28 @@
         });
       })).then(function () { return outer.generateAsync({ type: 'blob', compression: 'DEFLATE' }); })
         .then(function (blob) { download(blob, nombre + '.zip'); return true; });
+    });
+  }
+
+  /* ZIP de archivos guardados (`entradas` = [{ path, meta }]). La autorización va primero y una
+     sola vez: con las descargas en paralelo cada una abriría su propia ventana de Google.
+     Un archivo que ya no está en Drive no frena a los demás; se devuelve cuántos faltaron.
+     ponytail: todo se arma en memoria; con expedientes de cientos de MB, pasar a un ZIP por streaming. */
+  function descargarZip(entradas, nombre) {
+    var faltan = 0;
+    return ensureAuth().then(function () { return loadScript(JSZIP_SRC); }).then(function () {
+      var zip = new JSZip();
+      return Promise.all(entradas.map(function (e) {
+        return downloadBinary(e.meta.driveId).then(function (buf) { zip.file(e.path, buf); }, function () { faltan++; });
+      })).then(function () {
+        if (faltan === entradas.length) throw new Error('No se pudo descargar ningún archivo de Drive.');
+        return zip.generateAsync({ type: 'blob' });
+      });
+    }).then(function (blob) {
+      var url = URL.createObjectURL(blob), a = document.createElement('a');
+      a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      return faltan;
     });
   }
 
@@ -1526,7 +1583,7 @@
     standardName: standardName, tipoFromName: tipoFromName, localFiles: localFiles, leerFormato: leerFormato,
     prepareUpload: appFolder, prepararUpload: appFolder, subirArchivo: subirArchivo, storeFile: storeFile, storeMaterial: storeMaterial,
     storeFiles: storeFiles, archivos: archivos, sinArchivo: sinArchivo,
-    textoDeArchivo: textoDeArchivo, previewStored: previewStored, downloadStored: downloadStored,
+    textoDeArchivo: textoDeArchivo, materialEvaluacion: materialEvaluacion, previewStored: previewStored, downloadStored: downloadStored, descargarZip: descargarZip,
     exportarFormato: exportarFormato, exportarFormatoXlsx: exportarFormatoXlsx, exportarFormatoDocx: exportarFormatoDocx,
     camposRequeridos: camposRequeridos,
     deleteStored: deleteStored, filePanel: filePanel,

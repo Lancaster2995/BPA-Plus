@@ -26,9 +26,12 @@ const ORIGENES = [
   'http://127.0.0.1:8080'
 ];
 
-/* Tope por usuario y día. Una sesión robada no puede vaciar la cuenta: a
-   ~$0.08 por evaluación, el peor día posible cuesta menos de dos dólares. */
+/* Tope por usuario y día. Una sesión robada no puede vaciar la cuenta: con
+   texto, ~$0.06 por evaluación; con un PDF del tope (30 páginas, lo filtra el
+   cliente), ~$0.40. El peor día posible cuesta menos de diez dólares. */
 const LIMITE_DIARIO = 20;
+/* ~10 MB de PDF en base64. Además de costo, el límite de memoria del worker. */
+const PDF_MAX_BASE64 = 14000000;
 
 const SISTEMA =
   'Sos especialista en Buenas Prácticas de Almacenamiento (BPA) de productos farmacéuticos en el Perú, ' +
@@ -38,8 +41,8 @@ const SISTEMA =
   'Escribís en español peruano, claro y directo. Las cuatro alternativas deben ser plausibles: ' +
   'las incorrectas son errores que la gente comete de verdad, no rellenos absurdos.';
 
-/* Salida garantizada por el esquema: `strict: true` obliga a que la respuesta
-   valide exacto, así el cliente nunca recibe un JSON a medias. */
+/* Salida estructurada (`output_config.format`): la respuesta valida exacto contra
+   este esquema, así el cliente nunca recibe un JSON a medias. */
 const ESQUEMA = {
   type: 'object',
   properties: {
@@ -169,15 +172,23 @@ async function generarEvaluacion(datos, uid, env) {
   /* El material lo extrae el cliente (ya sabe leer PDF/Word/Excel para el
      escaneo de documentos); acá solo se recorta. */
   const material = String(datos.material || '').trim().slice(0, 12000);
+  /* Un PDF corto llega entero: Claude lo lee con tablas, imágenes y páginas escaneadas,
+     que la extracción de texto del cliente pierde. */
+  const pdf = typeof datos.pdf === 'string' ? datos.pdf : '';
+  if (pdf && (pdf.length > PDF_MAX_BASE64 || !/^[A-Za-z0-9+/]+={0,2}$/.test(pdf))) {
+    throw new ErrorHttp(400, 'El PDF del material no es válido o es demasiado grande.');
+  }
 
   await consumirCupo(env.CUPO, uid);
 
   const entrada =
     'Tema de la capacitación: ' + tema + '\n' +
     (area ? 'Área dirigida: ' + area + '\n' : '') +
-    (material
-      ? '\nMaterial que se dictó (extracto):\n"""\n' + material + '\n"""\n\nBasá las preguntas en este material.'
-      : '\nNo hay material adjunto: basá las preguntas en la normativa BPA peruana aplicable al tema.') +
+    (pdf
+      ? '\nEl PDF adjunto es el material que se dictó. Basá las preguntas en este material.'
+      : material
+        ? '\nMaterial que se dictó (extracto):\n"""\n' + material + '\n"""\n\nBasá las preguntas en este material.'
+        : '\nNo hay material adjunto: basá las preguntas en la normativa BPA peruana aplicable al tema.') +
     '\n\nRedactá exactamente 5 preguntas de alternativa múltiple, cada una con 4 opciones y una sola correcta.';
 
   /* Sin el SDK de Anthropic a propósito: una sola llamada no justifica empaquetar
@@ -187,33 +198,42 @@ async function generarEvaluacion(datos, uid, env) {
     headers: {
       'x-api-key': env.ANTHROPIC_API_KEY,
       'anthropic-version': '2023-06-01',
+      // Si Claude Opus 5.5 rechaza el pedido, la API lo reintenta sola con el modelo que corresponda.
+      'anthropic-beta': 'server-side-fallback-2026-07-01',
       'content-type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'claude-opus-5',
+      model: 'claude-opus-5-5',
       max_tokens: 16000,
-      output_config: { effort: 'low' },
+      fallbacks: 'default',
+      // Explícito: el default de este modelo es 'medium' y cinco preguntas no lo necesitan.
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: ESQUEMA } },
       system: SISTEMA,
-      tools: [{
-        name: 'entregar_evaluacion',
-        description: 'Entrega las 5 preguntas de la evaluación de la capacitación.',
-        strict: true,
-        input_schema: ESQUEMA
-      }],
-      tool_choice: { type: 'tool', name: 'entregar_evaluacion' },
-      messages: [{ role: 'user', content: entrada }]
+      messages: [{
+        role: 'user',
+        content: pdf
+          ? [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf } }, { type: 'text', text: entrada }]
+          : entrada
+      }]
     })
   });
 
   if (!res.ok) {
+    console.error('Anthropic ' + res.status + ': ' + (await res.text()).slice(0, 500));
     if (res.status === 429) throw new ErrorHttp(429, 'La API está saturada. Probá en un minuto.');
     if (res.status === 401) throw new ErrorHttp(500, 'La clave de API no es válida. Revisá el secreto ANTHROPIC_API_KEY.');
+    if (res.status === 400 && pdf) throw new ErrorHttp(400, 'La API no pudo leer el PDF del material (¿protegido con contraseña?).');
     throw new ErrorHttp(502, 'No se pudo generar la evaluación (Anthropic respondió ' + res.status + ').');
   }
 
   const respuesta = await res.json();
-  const bloque = (respuesta.content || []).find((b) => b.type === 'tool_use');
-  const preguntas = ((bloque && bloque.input && bloque.input.preguntas) || []).filter((p) =>
+  if (respuesta.stop_reason === 'refusal') {
+    throw new ErrorHttp(422, 'El modelo no quiso generar esta evaluación. Revisá el tema o el material.');
+  }
+  const texto = (respuesta.content || []).find((b) => b.type === 'text');
+  let salida = null;
+  try { salida = JSON.parse(texto && texto.text); } catch (e) { /* lo ataja el chequeo de abajo */ }
+  const preguntas = ((salida && salida.preguntas) || []).filter((p) =>
     p && typeof p.enunciado === 'string' && Array.isArray(p.opciones) &&
     p.opciones.length === 4 && p.correcta >= 0 && p.correcta <= 3);
   if (preguntas.length < 5) throw new ErrorHttp(502, 'El modelo devolvió una evaluación incompleta. Intentá de nuevo.');
@@ -221,7 +241,7 @@ async function generarEvaluacion(datos, uid, env) {
   return {
     preguntas: preguntas.slice(0, 5),
     generadoEl: Date.now(),
-    conMaterial: !!material,
+    conMaterial: !!(material || pdf),
     uso: { entrada: respuesta.usage.input_tokens, salida: respuesta.usage.output_tokens }
   };
 }

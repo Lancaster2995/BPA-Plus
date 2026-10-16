@@ -304,7 +304,7 @@
       var reader = new FileReader();
       reader.onload = function () {
         var data; try { data = JSON.parse(reader.result); } catch (e) { UI.note('Archivo inválido'); return; }
-        if (!data || (data.app !== 'bpa-plus' && data.app !== 'bpa-beast')) { UI.note('No es un respaldo de BPA-Plus'); return; }
+        if (!data || (data.app !== 'bpa-plus' && data.app !== 'bpa-beast')) { UI.note('No es un respaldo de BPA Plus'); return; }
         UI.confirm({ title: 'Importar respaldo', message: 'Se reemplazarán todos los datos actuales por los del archivo. ¿Continuar?', okLabel: 'Importar', danger: true })
           .then(function (ok) {
             if (!ok) return;

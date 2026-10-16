@@ -390,12 +390,21 @@
   function cargarInspeccion(doc) {
     global.BPAPLUS.drive.filePanel(doc, store.dg().id, function (saved) { return store.save('documentosInspeccion', saved); }, { agregar: true });
   }
-  /* Quita un archivo; si era el último, se va el documento entero (vuelve a «Pendiente»). */
+  /* Quita un archivo; si era el último, se va el documento entero (vuelve a «Pendiente»).
+     Pide confirmación dos veces: el expediente de inspección no se rehace fácil. */
   function quitarArchivoInspeccion(d, index) {
-    if (global.BPAPLUS.drive.archivos(d).length <= 1) return store.removeWithUndo('documentosInspeccion', d, 'Archivo eliminado');
-    store.save('documentosInspeccion', global.BPAPLUS.drive.sinArchivo(d, index)).then(function () {
-      UI.note('Archivo eliminado', { actionLabel: 'Deshacer', onAction: function () { store.save('documentosInspeccion', d); } });
-    });
+    var file = global.BPAPLUS.drive.archivos(d)[index] || {};
+    return UI.confirm({ title: 'Eliminar archivo', message: '¿Eliminar “' + (file.name || 'archivo') + '” de ' + (d.nombre || 'este documento') + '?', okLabel: 'Eliminar', danger: true })
+      .then(function (ok) {
+        return ok && UI.confirm({ title: 'Confirmar eliminación', message: 'Segunda confirmación: “' + (file.name || 'archivo') + '” se quitará del expediente. ¿Seguro que quieres eliminarlo?', okLabel: 'Sí, eliminar', danger: true });
+      })
+      .then(function (ok) {
+        if (!ok) return;
+        if (global.BPAPLUS.drive.archivos(d).length <= 1) return store.removeWithUndo('documentosInspeccion', d, 'Archivo eliminado');
+        return store.save('documentosInspeccion', global.BPAPLUS.drive.sinArchivo(d, index)).then(function () {
+          UI.note('Archivo eliminado', { actionLabel: 'Deshacer', onAction: function () { store.save('documentosInspeccion', d); } });
+        });
+      });
   }
   function previewInspeccion(d, index) {
     global.BPAPLUS.drive.previewStored(global.BPAPLUS.drive.archivos(d)[index]).catch(function (err) { UI.note(err.message || err); });
@@ -420,9 +429,48 @@
     });
   }
 
+  /* Documentos de una sección en el orden de la pantalla: los requeridos y después los agregados.
+     Lo usan la vista y el ZIP, para que la carpeta descargada se vea igual que la app. */
+  var LEGACY_SECCION = { 'ficha-ruc': 'resoluciones', 'resoluciones-bpa': 'resoluciones' };
+  function existenteInspeccion(docs, def) { return docs.filter(function (d) { return d.tipoInspeccion === def[0] || (def[2] || []).indexOf(d.tipoInspeccion) >= 0; })[0]; }
+  function docsSeccion(seccion, docs) {
+    var conocidos = {};
+    SECCIONES_INSPECCION.forEach(function (s) { s.docs.forEach(function (def) { conocidos[def[0]] = true; (def[2] || []).forEach(function (a) { conocidos[a] = true; }); }); });
+    return seccion.docs.map(function (def) { return { d: existenteInspeccion(docs, def), titulo: def[1], tipo: def[0] }; })
+      .concat(docs.filter(function (d) { return !conocidos[d.tipoInspeccion] && (d.seccion === seccion.id || LEGACY_SECCION[d.tipoInspeccion] === seccion.id); })
+        .map(function (d) { return { d: d, titulo: d.nombre }; }));
+  }
+
+  /* Todo el expediente en un ZIP: una carpeta por categoría (numerada como en la app) y cada
+     archivo renombrado con el título del documento. */
+  function descargarInspeccionZip(button) {
+    function limpio(s) { return String(s || '').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim(); }
+    var docs = store.byDg('documentosInspeccion'), entradas = [], grupo = 0, previo = null;
+    SECCIONES_INSPECCION.forEach(function (s) {
+      if (!s.grupo || s.grupo !== previo) grupo++;
+      previo = s.grupo || null;
+      var carpeta = grupo + '. ' + (s.grupo ? limpio(s.grupo) + '/' : '') + limpio(s.titulo), n = 0;
+      docsSeccion(s, docs).forEach(function (x) {
+        var lista = global.BPAPLUS.drive.archivos(x.d);
+        if (lista.length) n++;
+        lista.forEach(function (f, j) {
+          var ext = (String(f.name || f.originalName || '').match(/\.[a-z0-9]{1,5}$/i) || [''])[0].toLowerCase();
+          entradas.push({ path: carpeta + '/' + limpio(String(n).padStart(2, '0') + ' ' + x.titulo + (j ? ' (' + (j + 1) + ')' : '')) + ext, meta: f });
+        });
+      });
+    });
+    if (!entradas.length) return UI.note('Todavía no hay archivos cargados.');
+    button.disabled = true;
+    UI.note('Preparando el ZIP…');
+    return global.BPAPLUS.drive.descargarZip(entradas, limpio('Documentos de inspección - ' + store.dg().nombre + ' - ' + D.isoHoy()) + '.zip')
+      .then(function (faltan) { UI.note(faltan ? 'ZIP descargado; ' + faltan + ' archivo(s) no se pudieron incluir.' : 'ZIP descargado'); })
+      .catch(function (err) { UI.note(err.message || err); })
+      .then(function () { button.disabled = false; });
+  }
+
   function vDocumentosInspeccion() {
     var docs = store.byDg('documentosInspeccion');
-    function existente(def) { return docs.filter(function (d) { return d.tipoInspeccion === def[0] || (def[2] || []).indexOf(d.tipoInspeccion) >= 0; })[0]; }
+    function existente(def) { return existenteInspeccion(docs, def); }
     function fila(d, titulo, tipo) {
       var lista = global.BPAPLUS.drive.archivos(d), n = lista.length;
       return '<div class="row"><div class="row-top" style="cursor:default"><div class="chan insp"></div><div class="row-main">' +
@@ -436,12 +484,8 @@
     }
     var requeridos = []; SECCIONES_INSPECCION.forEach(function (s) { requeridos = requeridos.concat(s.docs); });
     var cargados = requeridos.filter(function (d) { var x = existente(d); return x && x.file; }).length;
-    var conocidos = {}; requeridos.forEach(function (d) { conocidos[d[0]] = true; (d[2] || []).forEach(function (a) { conocidos[a] = true; }); });
-    var legacySection = { 'ficha-ruc': 'resoluciones', 'resoluciones-bpa': 'resoluciones' };
     function bloque(seccion, h) {
-      var otros = docs.filter(function (d) { return !conocidos[d.tipoInspeccion] && (d.seccion === seccion.id || legacySection[d.tipoInspeccion] === seccion.id); });
-      var filas = seccion.docs.map(function (def) { return fila(existente(def), def[1], def[0]); }).join('') +
-        otros.map(function (d) { return fila(d, d.nombre); }).join('');
+      var filas = docsSeccion(seccion, docs).map(function (x) { return fila(x.d, x.titulo, x.tipo); }).join('');
       return '<div class="inspection-group-head"><' + h + '>' + esc(seccion.titulo) + '</' + h + '>' +
         '<button class="btn btn-ghost" data-ins-other="' + seccion.id + '">' + icon('plus', 16) + esc(seccion.boton || 'Otro documento') + '</button></div>' +
         '<div class="list">' + (filas || '<div class="row-empty">Aún no hay documentos.</div>') + '</div>';
@@ -453,7 +497,8 @@
       else grupos.push(s.grupo ? { titulo: s.grupo, subs: [s] } : s);
     });
     return '<div class="inspection-docs"><div class="view-header"><div><div class="view-title">Documentos de inspección</div>' +
-      '<div class="view-sub">' + cargados + ' de ' + requeridos.length + ' requeridos cargados · ' + esc(store.dg().nombre) + '</div></div></div>' +
+      '<div class="view-sub">' + cargados + ' de ' + requeridos.length + ' requeridos cargados · ' + esc(store.dg().nombre) + '</div></div>' +
+      '<button class="btn btn-ghost" data-ins-zip>' + icon('download', 16) + 'Descargar todo (ZIP)</button></div>' +
       '<div class="progress"><div class="progress-top"><span>Expediente documental</span><strong>' + cargados + '/' + requeridos.length + '</strong></div>' +
       '<div class="progress-track"><div class="progress-fill" style="width:' + Math.round(cargados / requeridos.length * 100) + '%"></div></div></div>' +
       '<div class="inspection-groups">' + grupos.map(function (g) {
@@ -719,10 +764,10 @@
           var btn = root.querySelector('[data-gen]'), box = root.querySelector('#ev_body');
           btn.disabled = true; btn.textContent = 'Leyendo el material…';
           var mats = c.materiales || [];
-          var texto = mats.length ? global.BPAPLUS.drive.textoDeArchivo(mats[mats.length - 1]) : Promise.resolve('');
-          texto.then(function (material) {
+          var leido = mats.length ? global.BPAPLUS.drive.materialEvaluacion(mats[mats.length - 1]) : Promise.resolve({});
+          leido.then(function (mat) {
             btn.textContent = 'Redactando las preguntas…';
-            return global.BPAPLUS.cloud.callFn('generarEvaluacion', { tema: c.tema, area: c.area, material: material });
+            return global.BPAPLUS.cloud.callFn('generarEvaluacion', { tema: c.tema, area: c.area, material: mat.material || '', pdf: mat.pdf });
           }).then(function (ev) {
             box.innerHTML = preguntasHtml(ev);
             return store.save('capacitaciones', Object.assign({}, c, { evaluacion: ev }));
@@ -1310,6 +1355,7 @@
       var iu = t.closest('[data-ins-upload]'); if (iu) return documentoInspeccion(iu.dataset.insUpload);
       var idl = t.closest('[data-ins-preview]'); if (idl) return previewInspeccion(store.find('documentosInspeccion', idl.dataset.insPreview), +idl.dataset.i);
       var ide = t.closest('[data-ins-delete]'); if (ide) return quitarArchivoInspeccion(store.find('documentosInspeccion', ide.dataset.insDelete), +ide.dataset.i);
+      var iz = t.closest('[data-ins-zip]'); if (iz) return descargarInspeccionZip(iz);
       var cr = t.closest('[data-cap]'); if (cr) return capPanel(store.find('capacitaciones', cr.dataset.cap));
       var ir = t.closest('[data-insp]'); if (ir) return inspPanel(store.find('inspecciones', ir.dataset.insp));
       var ar = t.closest('[data-acta]'); if (ar) return actaForm(store.find('actas', ar.dataset.acta));

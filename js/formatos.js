@@ -150,17 +150,24 @@
 
     // Campos: lo que arriba de la tabla parece una etiqueta («Tema:», «Fecha:»).
     var campos = [], vistos = {};
-    function addCampo(label, row, valueCol) {
+    function addCampo(label, row, valueCol, enCelda) {
       label = String(label).replace(/[:\s]+$/, '').trim();
       var k = norm(label);
       if (!k || label.length > 44 || vistos[k]) return;
       vistos[k] = 1;
-      campos.push({ label: label, key: guess(label, ALIAS_CAMPO), row: row, col: valueCol });
+      var campo = { label: label, key: guess(label, ALIAS_CAMPO), row: row, col: valueCol };
+      if (enCelda) campo.enCelda = true;
+      campos.push(campo);
     }
     var limite = head >= 0 ? head : Math.min(rows.length, 15);
     for (var r = 0; r < limite; r++) celdasPos(rows[r]).forEach(function (c) {
       // Un texto largo que menciona «capacitación» es el título, no una etiqueta.
       if (/:\s*$/.test(c.label) || (norm(c.label).length <= 24 && guess(c.label, ALIAS_CAMPO))) addCampo(c.label, r, c.endCol + 1);
+      else {
+        // «TEMA: BUENAS PRÁCTICAS…»: el modelo trae un valor de ejemplo en la misma celda; se reemplaza ahí.
+        var pre = c.label.match(/^([^:]{2,24}):\s*\S/);
+        if (pre && guess(pre[1], ALIAS_CAMPO)) addCampo(pre[1], r, c.col, true);
+      }
     });
     if (!campos.length) (text.match(/[^\n:]{3,44}:/g) || []).slice(0, 10).forEach(addCampo);
 
@@ -313,7 +320,7 @@
     function bodyHtml() {
       var list = (dg.formatos || []).filter(function (x) { return x.modulo === modulo; });
       return '<p class="dialog-note">Cargá el formato en blanco que usa ' + esc(opts.nombre || dg.nombre) + ' (XLSX, DOCX o PDF). ' +
-        'BPA-Plus lee su título, sus campos y sus columnas; desde entonces las actas de ' + esc(MODULOS[modulo].toLowerCase()) +
+        'BPA Plus lee su título, sus campos y sus columnas; desde entonces las actas de ' + esc(MODULOS[modulo].toLowerCase()) +
         ' se imprimen con ese formato ya llenado.</p>' +
         (list.length ? list.map(function (x, i) {
           return '<div class="row"><div class="row-top"><div class="chan cap"></div><div class="row-main">' +
@@ -327,7 +334,7 @@
               (x.archivo ? '<button class="link-btn" data-baj="' + esc(x.id) + '">' + icon('doc', 14) + ' Vista previa</button>' : '') +
               '<button class="link-btn" data-quitar="' + esc(x.id) + '">' + icon('trash', 14) + ' Quitar</button>' +
             '</div></div>';
-        }).join('') : '<div class="row-empty">Sin formato propio: se imprime el acta genérica de BPA-Plus.</div>');
+        }).join('') : '<div class="row-empty">Sin formato propio: se imprime el acta genérica de BPA Plus.</div>');
     }
 
     function persist(listaNueva) {

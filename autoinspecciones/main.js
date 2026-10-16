@@ -39,7 +39,7 @@
     return '<div class="view-header"><div><div class="view-title">Autoinspecciones</div>' +
       '<div class="view-sub">Sub-programa · acta de inspección al almacén (REGISTRO_004)</div></div></div>' + pend +
       '<div class="section-title">Empezar</div>' +
-      '<div class="subprog"><div class="subprog-txt">Cargá el <b>formato</b> que descargaste desde BPA-Plus (Autoinspecciones → Sub-programa → Formato). Trae los datos de la droguería y su checklist. También sirve para retomar un acta ya descargada.</div>' +
+      '<div class="subprog"><div class="subprog-txt">Cargá el <b>formato</b> que descargaste desde BPA Plus (Autoinspecciones → Sub-programa → Formato). Trae los datos de la droguería y su checklist. También sirve para retomar un acta ya descargada.</div>' +
         '<button class="btn btn-primary" data-a="cargar">' + icon('upload', 16) + 'Cargar formato o acta</button></div>' +
       '<div class="subprog" style="margin-top:8px"><div class="subprog-txt">¿No tenés el archivo a mano? Empezá con el formato oficial en blanco y escribí los datos del almacén a mano.</div>' +
         '<button class="btn btn-ghost" data-a="blanco">Formato oficial en blanco</button></div>' +
@@ -142,7 +142,7 @@
       var h = D.aplicarHallazgos(acta);
       guardar();
       UI.download(nombreArchivo(), D.formatoActa(dg, acta));
-      UI.note('Acta descargada — ' + h.evaluados + ' de ' + h.total + ' ítems. Cargala en BPA-Plus.');
+      UI.note('Acta descargada — ' + h.evaluados + ' de ' + h.total + ' ítems. Cargala en BPA Plus.');
     }
   };
 

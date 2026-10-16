@@ -573,7 +573,7 @@
   /* Viene de un archivo: se valida y se limpia antes de tocar nada. Tira Error con
      el motivo para que quien llame lo muestre tal cual. */
   function leerActa(obj) {
-    if (!obj || obj.app !== FORMATO_APP || obj.tipo !== FORMATO_TIPO) throw new Error('No es un formato de acta de BPA-Plus.');
+    if (!obj || obj.app !== FORMATO_APP || obj.tipo !== FORMATO_TIPO) throw new Error('No es un formato de acta de BPA Plus.');
     if (!obj.acta || !Array.isArray(obj.acta.checklist) || !obj.acta.checklist.length) throw new Error('El archivo no trae el checklist del acta.');
     var dg = obj.drogueria || {};
     var acta = Object.assign(actaNueva(dg), obj.acta, { id: nextId(), e: dg.id || '' });
