@@ -483,6 +483,9 @@ body { background: linear-gradient(180deg, #ECF3F9 0%, #E7EFF7 100%) fixed var(-
 .row-plain { font-size: 12.5px; color: var(--ink-2); }
 .row-sub { margin-top: 8px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .row-side { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; padding: 12px 16px; flex: none; }
+/* Capacitaciones y autoinspecciones ponen el estado directo en la fila, sin .row-side: sin este
+   margen quedaba pegado al borde y la tarjeta lo recortaba. */
+.row-top > .tag, .row-top > .days { flex: none; margin: 0 16px 0 12px; }
 .row-empty { color: var(--ink-3); font-size: 13px; padding: 6px 0; }
 .list > .row-empty { padding: 12px 16px; }
 .row-foot { display: flex; gap: 16px; align-items: center; padding: 0 16px 12px; flex-wrap: wrap; }
