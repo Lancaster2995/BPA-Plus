@@ -134,14 +134,21 @@ body { background: linear-gradient(180deg, #ECF3F9 0%, #E7EFF7 100%) fixed var(-
   position: sticky; top: 0; z-index: 20;
   background: color-mix(in srgb, var(--bg) 80%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
 }
-.content { flex: 1; padding: 8px 24px 48px; width: 100%; max-width: 1640px; }
+.content { flex: 1; width: 100%; margin: 0 auto; padding: 30px 24px 48px; }
+/* Columna centrada con los mismos cortes que el boceto (container de Tailwind). */
+@media (min-width: 640px) { .content { max-width: 640px; } }
+@media (min-width: 768px) { .content { max-width: 768px; } }
+@media (min-width: 1024px) { .content { max-width: 1024px; } }
+@media (min-width: 1280px) { .content { max-width: 1280px; } }
+@media (min-width: 1536px) { .content { max-width: 1536px; } }
 .nav-scrim { display: none; }
 
-@media (min-width: 921px) {
+@media (min-width: 1280px) {
   .only-mobile { display: none !important; }
 }
-/* En el celular la barra lateral es un cajón que entra desde la izquierda con el botón de menú. */
-@media (max-width: 920px) {
+/* Por debajo de 1280 px, como en el boceto, la barra lateral es un cajón que entra desde la
+   izquierda con el botón de menú, y el logo ocupa el lugar del buscador. */
+@media (max-width: 1279px) {
   .sidebar {
     position: fixed; left: 0; top: 0; bottom: 0; z-index: 31; width: min(286px, 86vw);
     transform: translateX(-100%); transition: transform .18s cubic-bezier(.2,.7,.3,1);
@@ -149,9 +156,11 @@ body { background: linear-gradient(180deg, #ECF3F9 0%, #E7EFF7 100%) fixed var(-
   body.nav-open .sidebar { transform: none; box-shadow: var(--shadow-2); }
   .nav-scrim { display: block; position: fixed; inset: 0; z-index: 30; background: rgba(9,13,20,.5); opacity: 0; pointer-events: none; transition: opacity .15s; }
   body.nav-open .nav-scrim { opacity: 1; pointer-events: auto; }
-  .topbar { height: 64px; padding: 0 10px; }
   .topbar .tb-search, .topbar .tb-grow { display: none; }
-  .content { padding: 8px 16px 48px; }
+}
+@media (max-width: 560px) {
+  .topbar { height: 64px; padding: 0 10px; }
+  .content { padding: 24px 16px 48px; }
 }
 
 /* ------------------------------ Barra lateral ------------------------------ */
@@ -543,7 +552,6 @@ textarea.inp { min-height: 88px; resize: vertical; }
 
 /* ------------------------------ Notas (toasts) ------------------------------ */
 .note-stack { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); z-index: 60; display: flex; flex-direction: column; gap: 8px; align-items: center; width: 100%; padding: 0 16px; }
-@media (max-width: 920px) { .note-stack { bottom: 88px; } }
 .note {
   display: flex; align-items: center; gap: 12px; background: var(--navy); color: var(--navy-ink); font-size: 13px; font-weight: 500;
   padding: 11px 16px; border-radius: 11px; box-shadow: var(--shadow-2); transition: opacity .2s; max-width: 420px;

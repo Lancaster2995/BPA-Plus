@@ -4,9 +4,9 @@
    de la caché y se actualizan por detrás para la próxima apertura. Un despliegue
    cambia CACHE, el SW nuevo precarga todo y recarga las ventanas abiertas.
    ========================================================================== */
-var CACHE = 'bpa-plus-v67';
+var CACHE = 'bpa-plus-v68';
 var ASSETS = [
-  './', './index.html', './styles.css?v=50', './manifest.json',
+  './', './index.html', './styles.css?v=51', './manifest.json',
   './js/config.js', './js/cloud.js', './js/auth.js', './js/domain.js', './js/db.js?v=34', './js/ui.js?v=4', './js/formatos.js?v=50', './js/actas.js?v=47', './js/retiro.js?v=43', './js/views.js?v=59', './js/lock.js?v=4', './js/drive.js?v=53', './js/alerts.js', './js/app.js?v=42',
   './autoinspecciones/index.html', './autoinspecciones/main.js',
   './icons/icon-44.png?v=5', './icons/icon-192.png?v=5', './icons/icon-512.png?v=5', './icons/icon-maskable-512.png?v=5', './icons/apple-touch-icon.png?v=5'
