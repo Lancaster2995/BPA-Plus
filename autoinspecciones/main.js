@@ -36,7 +36,7 @@
         '<button class="btn btn-primary" data-a="seguir">Continuar</button>' +
         '<button class="btn btn-danger" data-a="tirar">Descartar</button></div>';
     }
-    return '<div class="view-header"><div><div class="view-title">Autoinspecciones</div>' +
+    return '<div class="view-header"><div>' + BACK + '<div class="view-title">Autoinspecciones</div>' +
       '<div class="view-sub">Sub-programa · acta de inspección al almacén (REGISTRO_004)</div></div></div>' + pend +
       '<div class="section-title">Empezar</div>' +
       '<div class="subprog"><div class="subprog-txt">Cargá el <b>formato</b> que descargaste desde BPA Plus (Autoinspecciones → Sub-programa → Formato). Trae los datos de la droguería y su checklist. También sirve para retomar un acta ya descargada.</div>' +
@@ -84,9 +84,12 @@
       (h.completada ? ' · acta completa' : '');
   }
 
+  /* Vuelve a la app (el sub-programa se abre en otra pestaña); el borrador queda guardado en el dispositivo. */
+  var BACK = '<a class="back-link" href="../index.html#/dashboard">' + icon('left', 16) + 'Panel principal</a>';
+
   function actaHtml() {
     var h = D.hallazgos(acta);
-    return '<div class="view-header"><div><div class="view-title">Acta de inspección</div>' +
+    return '<div class="view-header"><div>' + BACK + '<div class="view-title">Acta de inspección</div>' +
       '<div class="view-sub">' + esc(dg.nombre || 'Sin droguería') + (dg.ruc ? ' · RUC ' + esc(dg.ruc) : '') + '</div></div>' +
       '<div class="header-actions"><button class="btn btn-ghost" data-a="salir">Cambiar formato</button></div></div>' +
       '<div class="progress" style="margin-bottom:18px"><div class="progress-top"><span>Ítems evaluados</span>' +

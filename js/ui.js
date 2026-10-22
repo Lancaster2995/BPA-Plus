@@ -47,6 +47,7 @@
     cloud: '<path d="M17.5 19H7a5 5 0 1 1 1-9.9A6 6 0 0 1 19.5 11 4 4 0 0 1 17.5 19z"/><path d="m9.5 13.5 2 2 3.5-3.5"/>',
     cloudoff: '<path d="M17.5 19H7a5 5 0 1 1 1-9.9A6 6 0 0 1 19.5 11 4 4 0 0 1 17.5 19z"/><path d="M3 3l18 18"/>',
     right: '<path d="m9 6 6 6-6 6"/>',
+    left: '<path d="m15 6-6 6 6 6"/>',
     logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>'
   };
   function icon(name, size, cls) {

@@ -96,6 +96,9 @@
       var active = document.activeElement, wasSearch = active && active.id === 'qDoc';
       var caret = wasSearch ? active.selectionStart : null;
       el.innerHTML = V.render(store.state.view);
+      /* Fuera del Panorama, cada vista lleva arriba del título un atajo de vuelta al panel principal. */
+      var head = store.state.view !== 'dashboard' && el.querySelector('.view-header > div');
+      if (head) head.insertAdjacentHTML('afterbegin', '<a class="back-link" href="#/dashboard">' + UI.icon('left', 16) + 'Panel principal</a>');
       if (wasSearch) { var s = document.getElementById('qDoc'); if (s) { s.focus(); try { s.setSelectionRange(caret, caret); } catch (e) {} } }
     },
     renderChrome: renderChrome,
