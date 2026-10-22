@@ -156,7 +156,7 @@
     var release = trap(dw);
     function close() {
       release(); bd.classList.remove('show'); dw.classList.remove('show');
-      setTimeout(function () { bd.remove(); dw.remove(); }, 220);
+      setTimeout(function () { bd.remove(); dw.remove(); }, 180);
       openStack = openStack.filter(function (x) { return x !== api; });
       if (opts.onClose) opts.onClose();
     }
@@ -191,7 +191,7 @@
       sh.style.top = Math.max(8, below ? r.bottom + 6 : r.top - 6 - h) + 'px';
       sh.style.left = Math.max(8, r.left + w > global.innerWidth - 8 ? r.right - w : r.left) + 'px';
     }
-    function close() { bd.classList.remove('show'); sh.classList.remove('show'); setTimeout(function () { bd.remove(); sh.remove(); }, 220); }
+    function close() { bd.classList.remove('show'); sh.classList.remove('show'); setTimeout(function () { bd.remove(); sh.remove(); }, 180); }
     bd.addEventListener('click', close);
     sh.addEventListener('click', function (e) {
       var b = e.target.closest('[data-i]'); if (!b) return;
