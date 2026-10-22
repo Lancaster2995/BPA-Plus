@@ -142,10 +142,8 @@
        En el celular el buscador cede su lugar al botón de menú y al logo. */
     var top = document.getElementById('topbar');
     if (top) top.innerHTML =
-      '<button class="icon-btn only-mobile" id="menuBtn" aria-label="Menú">' + UI.icon('menu', 22) + '</button>' +
-      '<span class="tb-logo only-mobile">BPA<b>Plus</b></span>' +
-      '<button class="tb-search" id="cmdOpen">' + UI.icon('search', 18) + '<span>Buscar documentos, registros o guías…</span></button>' +
-      '<span class="tb-grow"></span>' +
+      '<button class="icon-btn" id="menuBtn" aria-label="Menú">' + UI.icon('menu', 22) + '</button>' +
+      '<span class="tb-logo">BPA<b>Plus</b></span>' +
       '<button class="icon-btn" id="themeBtn" aria-label="' + (isDark() ? 'Tema claro' : 'Tema oscuro') + '">' + UI.icon(isDark() ? 'sun' : 'moon', 20) + '</button>' +
       '<button class="btn btn-primary tb-new" id="newBtn"' + (v === 'informacion-almacen' ? ' hidden' : '') + '>' +
         UI.icon('plus', 16) + '<span>Nuevo</span></button>' +
@@ -160,7 +158,6 @@
   function wireChrome() {
     document.querySelectorAll('[data-nav]').forEach(function (b) { b.onclick = function () { navOpen(false); store.go(b.dataset.nav); }; });
     on('dgSwitch', function () { V.open.dgSwitcher(); });
-    on('cmdOpen', openCmd);
     on('alertBellM', openAlerts);
     on('themeBtn', toggleTheme);
     on('menuBtn', function () { navOpen(true); });

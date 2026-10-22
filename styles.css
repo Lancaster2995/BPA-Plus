@@ -141,23 +141,16 @@ body { background: linear-gradient(180deg, #ECF3F9 0%, #E7EFF7 100%) fixed var(-
 @media (min-width: 1024px) { .content { max-width: 1024px; } }
 @media (min-width: 1280px) { .content { max-width: 1280px; } }
 @media (min-width: 1536px) { .content { max-width: 1536px; } }
-.nav-scrim { display: none; }
 
-@media (min-width: 1280px) {
-  .only-mobile { display: none !important; }
+/* Como en el boceto, la barra lateral es siempre un cajón que entra desde la izquierda con el
+   botón de menú; arriba quedan ☰, el logo al centro y las acciones. */
+.sidebar {
+  position: fixed; left: 0; top: 0; bottom: 0; z-index: 31; width: min(286px, 86vw);
+  transform: translateX(-100%); transition: transform .18s cubic-bezier(.2,.7,.3,1);
 }
-/* Por debajo de 1280 px, como en el boceto, la barra lateral es un cajón que entra desde la
-   izquierda con el botón de menú, y el logo ocupa el lugar del buscador. */
-@media (max-width: 1279px) {
-  .sidebar {
-    position: fixed; left: 0; top: 0; bottom: 0; z-index: 31; width: min(286px, 86vw);
-    transform: translateX(-100%); transition: transform .18s cubic-bezier(.2,.7,.3,1);
-  }
-  body.nav-open .sidebar { transform: none; box-shadow: var(--shadow-2); }
-  .nav-scrim { display: block; position: fixed; inset: 0; z-index: 30; background: rgba(9,13,20,.5); opacity: 0; pointer-events: none; transition: opacity .15s; }
-  body.nav-open .nav-scrim { opacity: 1; pointer-events: auto; }
-  .topbar .tb-search, .topbar .tb-grow { display: none; }
-}
+body.nav-open .sidebar { transform: none; box-shadow: var(--shadow-2); }
+.nav-scrim { display: block; position: fixed; inset: 0; z-index: 30; background: rgba(9,13,20,.5); opacity: 0; pointer-events: none; transition: opacity .15s; }
+body.nav-open .nav-scrim { opacity: 1; pointer-events: auto; }
 @media (max-width: 560px) {
   .topbar { height: 64px; padding: 0 10px; }
   .content { padding: 24px 16px 48px; }
@@ -191,17 +184,8 @@ body { background: linear-gradient(180deg, #ECF3F9 0%, #E7EFF7 100%) fixed var(-
 .ni-ico { flex: none; stroke-width: 1.5; }
 
 /* ------------------------------ Barra superior ------------------------------ */
-.tb-grow { flex: 1; }
 .tb-logo { flex: 1; text-align: center; font-size: 24px; font-weight: 700; color: var(--primary); }
 .tb-logo b { color: var(--ink); }
-.tb-search {
-  flex: 0 1 448px; min-width: 0; height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 12px;
-  border: 1px solid var(--border-strong); background: transparent; border-radius: 12px;
-  color: var(--ink-3); font-size: 14px; text-align: left; transition: border-color .15s, background-color .15s;
-}
-.tb-search svg { color: var(--ink); flex: none; }
-.tb-search:hover { background: var(--surface); }
-.tb-search span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .icon-btn {
   position: relative; /* ancla el .bell-badge: sin esto se iba a la esquina de la barra y desbordaba en horizontal */
   width: 40px; height: 40px; border-radius: 999px; background: transparent; border: none; color: var(--ink);
