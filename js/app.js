@@ -8,21 +8,21 @@
   'use strict';
   var D = global.BPAPLUS.domain, DB = global.BPAPLUS.db, UI = global.BPAPLUS.ui, V = global.BPAPLUS.views;
 
-  /* `group` arma las secciones de la barra lateral; `bottom: false` manda la vista al menú
-     «Más» del celular, que así conserva cinco destinos en la barra inferior. */
+  /* `group` arma las secciones de la barra lateral, cada una con su encabezado. En el celular
+     la misma barra se abre como cajón desde el botón de menú. */
   var NAV = [
-    { view: 'dashboard', label: 'Inicio', short: 'Inicio', icon: 'home' },
-    { view: 'documentos', label: 'Documentos', short: 'Documentos', icon: 'doc', group: 'Cumplimiento' },
-    { view: 'capacitaciones', label: 'Capacitaciones', short: 'Capacitac.', icon: 'cap', group: 'Cumplimiento' },
-    { view: 'autoinspecciones', label: 'Autoinspecciones', short: 'Inspecc.', icon: 'checkbox', group: 'Cumplimiento' },
-    { view: 'retiros', label: 'Retiro de mercado', icon: 'flag', group: 'Cumplimiento', bottom: false },
-    { view: 'informacion-almacen', label: 'Información del almacén', side: 'Almacén', icon: 'warehouse', group: 'Almacén', bottom: false },
-    { view: 'documentos-inspeccion', label: 'Documentos de inspección', icon: 'folder', group: 'Almacén', bottom: false }
+    { view: 'dashboard', label: 'Panorama', icon: 'dashboard', group: 'Inicio' },
+    { view: 'documentos', label: 'Documentos', icon: 'doc', group: 'Cumplimiento' },
+    { view: 'capacitaciones', label: 'Capacitaciones', icon: 'cap', group: 'Cumplimiento' },
+    { view: 'autoinspecciones', label: 'Autoinspecciones', icon: 'checkbox', group: 'Cumplimiento' },
+    { view: 'retiros', label: 'Retiro de mercado', icon: 'undo', group: 'Cumplimiento' },
+    { view: 'informacion-almacen', label: 'Información del almacén', icon: 'building', group: 'Almacén' },
+    { view: 'documentos-inspeccion', label: 'Documentos de inspección', icon: 'folder', group: 'Almacén' }
   ];
 
   /* ------------------------------ Store ------------------------------ */
   var store = {
-    state: { dg: '', view: 'dashboard', qDoc: '', filtDoc: 'todos', filtCap: 'todos', filtInsp: 'todos', selDoc: '' },
+    state: { dg: '', view: 'dashboard', qDoc: '', filtDoc: 'todos', filtCap: 'todos', filtInsp: 'todos' },
     data: { droguerias: [], documentos: [], documentosInspeccion: [], capacitaciones: [], inspecciones: [], actas: [], retiros: [] },
 
     load: function (cached) {
@@ -70,7 +70,7 @@
 
     setDg: function (id) {
       store.state.dg = id; DB.setMeta('dgActiva', id);
-      store.state.qDoc = ''; store.state.filtDoc = 'todos'; store.state.filtCap = 'todos'; store.state.filtInsp = 'todos'; store.state.selDoc = '';
+      store.state.qDoc = ''; store.state.filtDoc = 'todos'; store.state.filtCap = 'todos'; store.state.filtInsp = 'todos';
       store.render(); store.renderChrome();
     },
     deleteDg: function (id) {
@@ -105,15 +105,6 @@
   };
 
   /* ------------------------------ Chrome ------------------------------ */
-  function navCounts() {
-    var docs = store.byDg('documentos'), caps = store.byDg('capacitaciones'), insp = store.byDg('inspecciones');
-    return {
-      documentos: docs.filter(function (d) { return D.edoc(d) === 'vencido'; }).length,
-      capacitaciones: caps.filter(function (c) { return D.ecap(c) === 'vencida'; }).length,
-      autoinspecciones: insp.reduce(function (a, i) { return a + (i.real ? (i.hall || 0) : 0); }, 0) + insp.filter(function (i) { return !i.real && D.dias(i.prog) < 0; }).length
-    };
-  }
-
   /* Iniciales de la cuenta para el avatar: del nombre si lo hay, si no las dos primeras letras
      del correo. Sin sesión (modo local) queda el ícono de usuario. */
   function initials() {
@@ -123,18 +114,18 @@
   }
 
   function renderChrome() {
-    var dg = store.dg(), counts = navCounts(), v = store.state.view;
+    var dg = store.dg(), v = store.state.view;
     var alertN = global.BPAPLUS.alerts ? global.BPAPLUS.alerts.count() : 0;
     var esc = UI.esc;
-    function badge(c) { return c ? '<span class="ni-badge">' + c + '</span>' : ''; }
     function item(n) {
       var on = v === n.view;
       return '<button class="nav-item' + (on ? ' active' : '') + '" data-nav="' + n.view + '"' + (on ? ' aria-current="page"' : '') + '>' +
-        UI.icon(n.icon, 32, 'ni-ico') + '<span>' + (n.side || n.label) + '</span>' + badge(counts[n.view]) + '</button>';
+        UI.icon(n.icon, 21, 'ni-ico') + '<span>' + n.label + '</span></button>';
     }
-    var avatar = '<span class="ws-av">' + esc(dg.init || '?') + '</span>';
-    /* El estado de sincronización ya no ocupa la barra lateral: va en el título de la cuenta y,
-       solo sin conexión, como un punto sobre el avatar. */
+    var grupos = [];
+    NAV.forEach(function (n) { if (grupos.indexOf(n.group) < 0) grupos.push(n.group); });
+    /* El estado de sincronización va en el título de la cuenta y, solo sin conexión, como un
+       punto sobre el avatar. */
     var offline = global.BPAPLUS.cloud && !navigator.onLine;
     var syncTxt = !global.BPAPLUS.cloud ? 'Guardado en este equipo' : offline ? 'Sin conexión · se envía al volver' : 'Conectado · se sincroniza solo';
     var me = initials(), meAv = me ? esc(me) : UI.icon('user', 18);
@@ -143,53 +134,39 @@
     if (side) side.innerHTML =
       '<button class="ws" id="dgSwitch" aria-label="Cambiar droguería"><img class="ws-logo" src="icons/icon-192.png?v=5" alt="">' +
         '<span class="ws-txt"><span class="ws-name">' + esc(dg.nombre) + '</span><span class="ws-ruc">' + (dg.ruc ? 'RUC ' + esc(dg.ruc) : 'Sin RUC') + '</span></span></button>' +
-      '<nav class="nav" aria-label="Principal">' +
-        NAV.filter(function (n) { return n.group !== 'Almacén'; }).map(item).join('') + '<hr class="nav-sep">' +
-        NAV.filter(function (n) { return n.group === 'Almacén'; }).map(item).join('') +
-      '</nav>' +
-      '<button class="account" id="accountBtn" title="' + syncTxt + '"><span class="acc-av' + (offline ? ' off' : '') + '">' + meAv + '</span>' +
-        '<span class="acc-txt">Mi cuenta</span>' + UI.icon('right', 20, 'acc-ico') + '</button>';
+      '<nav class="nav" aria-label="Principal">' + grupos.map(function (g) {
+        return '<div class="nav-head">' + esc(g) + '</div>' + NAV.filter(function (n) { return n.group === g; }).map(item).join('');
+      }).join('') + '</nav>';
 
-    /* Una sola barra superior: buscador y cuenta en escritorio; en el celular, la droguería.
-       «Nuevo» es solo del celular: en escritorio cada vista trae su alta en el encabezado. */
+    /* Una sola barra superior: buscador, tema, «Nuevo» (el alta de la vista), alertas y cuenta.
+       En el celular el buscador cede su lugar al botón de menú y al logo. */
     var top = document.getElementById('topbar');
     if (top) top.innerHTML =
-      '<button class="tb-dg" id="dgSwitchM" aria-label="Cambiar droguería">' + avatar + '<span class="tb-dg-name">' + esc(dg.nombre) + '</span>' + UI.icon('chevron', 14) + '</button>' +
-      '<button class="tb-search" id="cmdOpen">' + UI.icon('search', 22) + '<span>Buscar documentos, registros o guías…</span><kbd>Ctrl</kbd><kbd>K</kbd></button>' +
+      '<button class="icon-btn only-mobile" id="menuBtn" aria-label="Menú">' + UI.icon('menu', 22) + '</button>' +
+      '<span class="tb-logo only-mobile">BPA<b>Plus</b></span>' +
+      '<button class="tb-search" id="cmdOpen">' + UI.icon('search', 18) + '<span>Buscar documentos, registros o guías…</span></button>' +
       '<span class="tb-grow"></span>' +
-      '<button class="icon-btn only-mobile" id="cmdOpenM" aria-label="Buscar">' + UI.icon('search', 20) + '</button>' +
-      '<button class="icon-btn tb-bell" id="alertBellM" aria-label="Alertas' + (alertN ? ' (' + alertN + ')' : '') + '">' + UI.icon('bell', 30) + (alertN ? '<span class="bell-badge">' + alertN + '</span>' : '') + '</button>' +
-      '<button class="tb-user" id="accountBtnTop" aria-label="Mi cuenta" title="' + syncTxt + '"><span class="acc-av' + (offline ? ' off' : '') + '">' + meAv + '</span>' + UI.icon('chevron', 20) + '</button>' +
-      '<button class="btn btn-primary tb-new only-mobile" id="newBtn" aria-label="Nuevo"' + (v === 'informacion-almacen' ? ' hidden' : '') + '>' +
-        UI.icon('plus', 16) + '<span>Nuevo</span></button>';
-
-    var bn = document.getElementById('bottomNav');
-    var enMas = NAV.some(function (n) { return n.bottom === false && n.view === v; });
-    if (bn) bn.innerHTML = '<div class="bn-inner">' + NAV.filter(function (n) { return n.bottom !== false; }).map(function (n) {
-      var c = counts[n.view] || 0;
-      return '<button class="bn-item' + (v === n.view ? ' active' : '') + '" data-nav="' + n.view + '">' +
-        '<span class="bn-ico">' + UI.icon(n.icon, 20) + '</span><span>' + n.short + '</span>' + (c ? '<span class="bn-badge">' + c + '</span>' : '') + '</button>';
-    }).join('') +
-      '<button class="bn-item' + (enMas ? ' active' : '') + '" id="moreBtn"><span class="bn-ico">' + UI.icon('menu', 20) + '</span><span>Más</span></button></div>';
+      '<button class="icon-btn" id="themeBtn" aria-label="' + (isDark() ? 'Tema claro' : 'Tema oscuro') + '">' + UI.icon(isDark() ? 'sun' : 'moon', 20) + '</button>' +
+      '<button class="btn btn-primary tb-new" id="newBtn"' + (v === 'informacion-almacen' ? ' hidden' : '') + '>' +
+        UI.icon('plus', 16) + '<span>Nuevo</span></button>' +
+      '<button class="icon-btn tb-bell" id="alertBellM" aria-label="Alertas' + (alertN ? ' (' + alertN + ')' : '') + '">' + UI.icon('bell', 22) + (alertN ? '<span class="bell-badge">' + alertN + '</span>' : '') + '</button>' +
+      '<button class="tb-user" id="accountBtn" aria-label="Mi cuenta" title="' + syncTxt + '"><span class="acc-av' + (offline ? ' off' : '') + '">' + meAv + '</span>' + UI.icon('chevron', 16) + '</button>';
 
     wireChrome();
   }
 
   function on(id, fn) { var el = document.getElementById(id); if (el) el.onclick = fn; }
+  function navOpen(open) { document.body.classList.toggle('nav-open', open); }
   function wireChrome() {
-    document.querySelectorAll('[data-nav]').forEach(function (b) { b.onclick = function () { store.go(b.dataset.nav); }; });
+    document.querySelectorAll('[data-nav]').forEach(function (b) { b.onclick = function () { navOpen(false); store.go(b.dataset.nav); }; });
     on('dgSwitch', function () { V.open.dgSwitcher(); });
-    on('dgSwitchM', function () { V.open.dgSwitcher(); });
-    on('cmdOpen', openCmd); on('cmdOpenM', openCmd);
+    on('cmdOpen', openCmd);
     on('alertBellM', openAlerts);
+    on('themeBtn', toggleTheme);
+    on('menuBtn', function () { navOpen(true); });
+    on('navScrim', function () { navOpen(false); });
     /* Las herramientas viven en el menú de la cuenta: así siguen a mano desde cualquier vista. */
-    function cuenta() { UI.actionsheet(toolOptions().concat({ sep: true }, accountOptions()), this); }
-    on('accountBtn', cuenta); on('accountBtnTop', cuenta);
-    on('moreBtn', function () {
-      UI.actionsheet(NAV.filter(function (n) { return n.bottom === false; }).map(function (n) {
-        return { label: n.label, icon: n.icon, onClick: function () { store.go(n.view); } };
-      }).concat({ sep: true }, toolOptions(), { sep: true }, accountOptions()), this);
-    });
+    on('accountBtn', function () { UI.actionsheet(toolOptions().concat({ sep: true }, accountOptions()), this); });
     on('newBtn', function () { quickNew(this); });
   }
 

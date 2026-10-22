@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
-  <link rel="stylesheet" href="styles.css?v=49">
+  <link rel="stylesheet" href="styles.css?v=50">
   <!-- Fuentes sin bloquear: con `@import` en el CSS, ni la página ni los scripts arrancaban hasta que respondiera Google. -->
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
@@ -30,8 +30,8 @@
     </div>
   </div>
 
-  <!-- Chrome móvil -->
-  <nav class="bottom-nav" id="bottomNav" aria-label="Navegación"></nav>
+  <!-- Fondo del cajón lateral en el celular -->
+  <div class="nav-scrim" id="navScrim"></div>
 
   <!-- Área de impresión de actas -->
   <div id="printArea" class="print-only" aria-hidden="true"></div>
@@ -45,12 +45,12 @@
   <script src="js/ui.js?v=4"></script>
   <script src="js/formatos.js?v=50"></script>
   <script src="js/actas.js?v=47"></script>
-  <script src="js/retiro.js?v=42"></script>
-  <script src="js/views.js?v=58"></script>
+  <script src="js/retiro.js?v=43"></script>
+  <script src="js/views.js?v=59"></script>
   <script src="js/lock.js?v=4"></script>
   <script src="js/drive.js?v=53"></script>
   <script src="js/alerts.js"></script>
-  <script src="js/app.js?v=41"></script>
+  <script src="js/app.js?v=42"></script>
 
   <script>
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

@@ -381,7 +381,7 @@
   function view() {
     var S = store(), dg = S.dg(), rs = S.byDg('retiros').slice();
     rs.sort(function (a, b) { return String(b.cartaFabFecha).localeCompare(String(a.cartaFabFecha)); });
-    return '' +
+    return '<section class="box">' +
       '<div class="view-header"><div><div class="view-title">Retiro de mercado</div>' +
         '<div class="view-sub">' + rs.length + ' simulacro(s) · ' + esc(dg.nombre) + '</div></div>' +
         '<div class="header-actions"><button class="btn btn-ghost" data-action="cargar-retiro">' +
@@ -391,7 +391,8 @@
       (rs.length ? '<div class="list">' + rs.map(row).join('') + '</div>'
         : '<div class="empty">' + icon('flag', 32) + '<span class="es-title">Sin simulacros de retiro</span>' +
           '<span class="es-sub">Cargá el producto, el lote y a quién se le distribuyó: BPA Plus arma los diez ' +
-          'documentos del expediente. Si ya lo tenés armado, subilo con «Cargar expediente».</span></div>');
+          'documentos del expediente. Si ya lo tenés armado, subilo con «Cargar expediente».</span></div>') +
+      '</section>';
   }
 
   function row(r) {

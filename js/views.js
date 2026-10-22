@@ -32,123 +32,74 @@
   /* ===================================================================== *
    *  PANORAMA (dashboard)
    * ===================================================================== */
-  var MES_CORTO = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-
-  /* Inicio: primero lo que hay que hacer, cada cosa con el botón que la resuelve. El panorama
-     anterior mostraba las mismas cifras dos veces (faro y tarjetas) sin decir qué hacer. */
+  /* Panorama: el anillo de cumplimiento, «Qué hacer ahora» (lo urgente primero, después lo
+     que vence pronto y lo próximo en agenda) y un acceso a cada módulo. Cada fila abre su registro. */
   function vDashboard() {
     var docs = store.byDg('documentos'), caps = store.byDg('capacitaciones'), insp = store.byDg('inspecciones');
+    var retiros = store.byDg('retiros');
     var sc = D.scoreCumplimiento(docs, caps, insp);
-    var dVenc = docs.filter(function (d) { return D.edoc(d) === 'vencido'; });
-    var dPV = docs.filter(function (d) { return D.edoc(d) === 'por_vencer'; }).length;
-    var cVenc = caps.filter(function (c) { return D.ecap(c) === 'vencida'; });
-    var cPend = caps.filter(function (c) { return D.ecap(c) === 'pendiente'; }).length;
-    var iAtras = insp.filter(function (i) { return !i.real && D.dias(i.prog) < 0; });
-    var iHall = insp.filter(function (i) { return i.real && (i.hall || 0) > 0; });
-    var hall = iHall.reduce(function (a, i) { return a + i.hall; }, 0);
+    function porFecha(campo) { return function (a, b) { return D.dias(a[campo]) - D.dias(b[campo]); }; }
+    function fila(attr, titulo, sub, nivel) { return { attr: attr, titulo: titulo, sub: sub, nivel: nivel }; }
 
-    var todo = []
-      .concat(dVenc.map(function (d) {
-        return { dias: D.dias(d.rev), ico: 'doc', tone: 'doc', attr: 'data-doc="' + d.id + '"', nombre: d.nombre,
-          tipo: 'Documento · <span class="mono">' + esc(d.codigo) + '</span>', btn: '<button class="btn btn-ghost btn-sm" type="button">Revisar</button>' };
+    var urgente = []
+      .concat(docs.filter(function (d) { return D.edoc(d) === 'vencido'; }).sort(porFecha('rev')).map(function (d) {
+        return fila('data-doc="' + d.id + '"', d.codigo + ' vencido', d.nombre + ' · revisión vencida el ' + D.fLocal(d.rev), 'urgente');
       }))
-      .concat(cVenc.map(function (c) {
-        return { dias: D.dias(c.fecha), ico: 'cap', tone: 'cap', attr: 'data-cap="' + c.id + '"', nombre: c.tema,
-          tipo: 'Capacitación' + (c.area ? ' · ' + esc(c.area) : ''), btn: '<button class="btn btn-ghost btn-sm" type="button">Registrar</button>' };
+      .concat(caps.filter(function (c) { return D.ecap(c) === 'vencida'; }).sort(porFecha('fecha')).map(function (c) {
+        return fila('data-cap="' + c.id + '"', 'Capacitación «' + c.tema + '»', 'Fecha pasada sin realizar · ' + D.fLocal(c.fecha), 'urgente');
       }))
-      .concat(iAtras.map(function (i) {
-        return { dias: D.dias(i.prog), ico: 'clipboard', tone: 'insp', attr: 'data-insp="' + i.id + '"', nombre: i.area,
-          tipo: 'Autoinspección · programada ' + esc(D.fLocal(i.prog)), btn: '<button class="btn btn-primary btn-sm" type="button" data-action="nueva-acta">Iniciar acta</button>' };
+      .concat(insp.filter(function (i) { return !i.real && D.dias(i.prog) < 0; }).sort(porFecha('prog')).map(function (i) {
+        return fila('data-insp="' + i.id + '"', 'Autoinspección atrasada · ' + i.area, 'Programada para el ' + D.fLocal(i.prog), 'urgente');
       }))
-      .sort(function (a, b) { return a.dias - b.dias; })
-      .concat(iHall.map(function (i) {
-        return { ico: 'alert', tone: 'bad', attr: 'data-insp="' + i.id + '"', nombre: i.hall + ' hallazgo(s) abierto(s) en ' + i.area,
-          tipo: 'Hallazgos · inspección del ' + esc(D.fLocal(i.real)), due: '<span class="days soon">Sin cerrar</span>',
-          btn: '<button class="btn btn-ghost btn-sm" type="button">Ver</button>' };
+      .concat(insp.filter(function (i) { return i.real && (i.hall || 0) > 0; }).map(function (i) {
+        return fila('data-insp="' + i.id + '"', i.hall + ' hallazgo' + (i.hall > 1 ? 's' : '') + ' sin cerrar', i.area + ' · inspección del ' + D.fLocal(i.real), 'urgente');
       }));
+    var pronto = docs.filter(function (d) { return D.edoc(d) === 'por_vencer'; }).sort(porFecha('rev')).map(function (d) {
+      return fila('data-doc="' + d.id + '"', d.codigo + ' por vencer', 'Revisión el ' + D.fLocal(d.rev), 'pronto');
+    });
+    var proxInsp = insp.filter(function (i) { return !i.real && D.dias(i.prog) >= 0; }).sort(porFecha('prog'))[0];
+    var proxCap = caps.filter(function (c) { return D.ecap(c) === 'pendiente'; }).sort(porFecha('fecha'))[0];
+    var agenda = []
+      .concat(proxInsp ? [fila('data-insp="' + proxInsp.id + '"', 'Autoinspección programada', proxInsp.area + ' · ' + D.fLocal(proxInsp.prog), 'agenda')] : [])
+      .concat(proxCap ? [fila('data-cap="' + proxCap.id + '"', 'Capacitación «' + proxCap.tema + '»', D.fLocal(proxCap.fecha), 'agenda')] : []);
+    var todo = urgente.concat(pronto, agenda), MAX = 6;
+    var NIVEL = { urgente: ['vencido', 'Urgente'], pronto: ['por_vencer', 'Pronto'], agenda: ['agenda', 'Agenda'] };
 
-    /* `ico: 'flag'` marca los registros del retiro de mercado, como en la barra lateral.
-       ponytail: se reconoce por el nombre; si hace falta exactitud, un campo propio en el documento. */
-    var proximos = []
-      .concat(docs.map(function (d) {
-        return { tipo: d.tipo || 'Documento', codigo: d.codigo, nombre: d.nombre, fecha: d.rev, attr: 'data-doc="' + d.id + '"',
-          ico: D.normTxt(d.nombre).indexOf('retiro') >= 0 ? 'flag' : 'doc' };
-      }))
-      .concat(caps.filter(function (c) { return D.ecap(c) === 'pendiente'; }).map(function (c) { return { tipo: 'Capacitación', nombre: c.tema, fecha: c.fecha, attr: 'data-cap="' + c.id + '"', ico: 'cap' }; }))
-      .concat(insp.filter(function (i) { return !i.real; }).map(function (i) { return { tipo: 'Autoinspección', nombre: i.area, fecha: i.prog, attr: 'data-insp="' + i.id + '"', ico: 'checkbox' }; }))
-      .filter(function (e) { return D.dias(e.fecha) >= 0 && isFinite(D.dias(e.fecha)); })
-      .sort(function (a, b) { return D.dias(a.fecha) - D.dias(b.fecha); });
-    var verTodos = store.state.verProx, PROX = 5;
-
-    var C = 2 * Math.PI * 70, off = C * (1 - sc.score / 100);
+    var real = caps.filter(function (c) { return D.ecap(c) === 'realizada'; }).length;
+    var ultima = insp.filter(function (i) { return i.real; }).sort(function (a, b) { return String(b.real).localeCompare(String(a.real)); })[0];
+    var accesos = [
+      ['documentos', 'doc', 'Documentos', docs.length + ' controlado' + (docs.length === 1 ? '' : 's')],
+      ['capacitaciones', 'cap', 'Capacitaciones', real + ' de ' + caps.length + ' realizadas'],
+      ['autoinspecciones', 'checkbox', 'Autoinspecciones', ultima ? 'Última: ' + D.fLocal(ultima.real) : 'Sin realizar'],
+      ['retiros', 'undo', 'Retiro de mercado', retiros.length + ' simulacro' + (retiros.length === 1 ? '' : 's')]
+    ];
 
     return '' +
-      '<div class="view-header home-head"><div>' +
-        '<h1 class="view-title">Inicio</h1>' +
-        '<div class="view-sub">' + esc(store.dg().nombre) + '</div>' +
-      '</div>' +
-      '<div class="split-btn">' +
-        '<button class="btn btn-primary" type="button" data-action="nuevo-doc">' + icon('plus', 22) + 'Nuevo documento</button>' +
-        '<button class="btn btn-primary" type="button" data-action="nuevo-menu" aria-label="Otras altas">' + icon('chevron', 20) + '</button>' +
-      '</div>' +
-      '</div>' +
-
-      '<div class="home">' +
-        '<section class="card score-card">' +
-          '<div class="card-head"><h2 class="card-title">Cumplimiento BPA</h2><span class="chip ' + sc.cls + '">' + esc(sc.msg) + '</span>' +
-            '<span class="grow"></span><button class="card-go" type="button" data-goto="documentos" aria-label="Ver documentos">' + icon('right', 22) + '</button></div>' +
-          '<div class="score-body">' +
-            '<div class="ring"><svg viewBox="0 0 168 168" aria-hidden="true">' +
-              /* El SVG gira -90° (el trazo arranca arriba): este degradado, de arriba-derecha a abajo-izquierda, se ve claro arriba-izquierda y oscuro abajo-derecha. */
-              '<defs><linearGradient id="ringGrad" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2C8BBF"/><stop offset="1" stop-color="#13456B"/></linearGradient></defs>' +
-              '<circle class="ring-bg" cx="84" cy="84" r="70"></circle>' +
-              '<circle class="ring-fg ' + sc.cls + '" cx="84" cy="84" r="70" stroke-dasharray="' + C + '" stroke-dashoffset="' + off + '"></circle></svg>' +
-              '<div class="ring-num"><b>' + sc.score + '%</b><span>al día</span></div></div>' +
-            '<div class="meters">' +
-              meter('doc', 'Documentos', sc.docsOK, sc.docsTot, dVenc.length + ' vencido(s) · ' + dPV + ' por vencer') +
-              meter('cap', 'Capacitaciones', sc.capsOK, sc.capsTot, cVenc.length + ' vencida(s) · ' + cPend + ' programada(s)') +
-              meter('checkbox', 'Autoinspecciones', sc.inspOK, sc.inspTot, hall + ' hallazgo(s) abierto(s) · ' + iAtras.length + ' atrasada(s)') +
-            '</div>' +
-          '</div>' +
+      '<div class="view-header"><div><h1 class="view-title">Panorama</h1>' +
+        '<div class="view-sub">' + esc(store.dg().nombre) + ' · cumplimiento BPA</div></div></div>' +
+      '<div class="pano">' +
+        '<section class="box pano-score">' +
+          '<p class="pano-label">Cumplimiento</p>' +
+          '<div class="pano-ring"><svg viewBox="0 0 36 36" aria-hidden="true">' +
+            '<circle cx="18" cy="18" r="15.9" class="pr-bg"></circle>' +
+            '<circle cx="18" cy="18" r="15.9" class="pr-fg" stroke-dasharray="' + sc.score + ' 100"></circle></svg>' +
+            '<b>' + sc.score + '%</b></div>' +
+          '<p class="pano-cap">Documentos, capacitaciones e inspecciones al día</p>' +
         '</section>' +
-
-        '<section class="card todo-card">' +
-          '<div class="card-head"><h2 class="card-title">Atención</h2>' + (todo.length ? '<span class="chip bad">' + todo.length + '</span>' : '') +
-            '<span class="grow"></span><button class="card-go" type="button" data-action="alertas" aria-label="Ver alertas">' + icon('right', 22) + '</button></div>' +
-          (todo.length ? todo.slice(0, 6).map(function (t) {
-            return '<div class="todo-row" ' + t.attr + '><span class="todo-ico ' + t.tone + '">' + icon(t.ico, 18) + '</span>' +
-              '<span class="todo-txt"><span class="todo-tipo">' + t.tipo + '</span><span class="todo-name">' + esc(t.nombre) + '</span></span>' +
-              (t.due || '<span class="days late">' + D.fDias(t.dias).txt + '</span>') + t.btn + '</div>';
-          }).join('') : '<div class="todo-empty"><span class="todo-ok">' + icon('check', 24) + '</span><span>Nada vencido ni atrasado<br>en esta droguería.</span></div>') +
+        '<section class="box pano-todo">' +
+          '<div class="pano-todo-head"><h2>Qué hacer ahora</h2>' +
+            (todo.length > MAX ? '<button class="link-btn" type="button" data-action="alertas">Ver todo (' + todo.length + ')</button>' : '') + '</div>' +
+          (todo.length ? '<ul class="pano-list">' + todo.slice(0, MAX).map(function (t) {
+            return '<li class="todo-row" ' + t.attr + ' role="button" tabindex="0"><span class="todo-txt"><b>' + esc(t.titulo) + '</b><span>' + esc(t.sub) + '</span></span>' +
+              tag(NIVEL[t.nivel][0], NIVEL[t.nivel][1]) + '</li>';
+          }).join('') + '</ul>'
+            : '<div class="todo-empty"><span class="todo-ok">' + icon('check', 22) + '</span><span>Nada vencido ni atrasado en esta droguería.</span></div>') +
         '</section>' +
-
-        '<section class="card next-card">' +
-          '<div class="card-head">' + icon('calendar', 26, 'card-ico') + '<h2 class="card-title">Próximos vencimientos</h2><span class="grow"></span>' +
-            (proximos.length > PROX ? '<button class="link-btn more-btn" type="button" data-action="ver-proximos">' + (verTodos ? 'Ver menos' : 'Ver todos') + icon('right', 18) + '</button>' : '') + '</div>' +
-          (proximos.length ? '<div class="due" role="table" aria-label="Próximos vencimientos">' +
-            '<div class="due-row due-head" role="row"><span role="columnheader">Fecha</span><span role="columnheader">Tipo</span><span role="columnheader">Código / Registro</span>' +
-              '<span role="columnheader">Documento / Actividad</span><span role="columnheader">Tiempo restante</span><span></span></div>' +
-            proximos.slice(0, verTodos ? proximos.length : PROX).map(function (e) {
-              var n = D.dias(e.fecha), iso = String(e.fecha);
-              return '<div class="due-row" role="row" ' + e.attr + '>' +
-                '<span class="due-date" role="cell"><span class="date-tile"><small>' + MES_CORTO[+iso.slice(5, 7) - 1] + '</small><b>' + iso.slice(8, 10) + '</b></span></span>' +
-                '<span class="due-tipo" role="cell"><span class="due-ico ' + e.ico + '">' + icon(e.ico, e.ico === 'flag' ? 30 : 28) + '</span><span>' + esc(e.tipo) + '</span></span>' +
-                '<span class="due-txt due-code" role="cell"><span>' + (e.codigo ? esc(e.codigo) : '-') + '</span></span>' +
-                '<span class="due-txt due-name" role="cell"><span>' + esc(e.nombre) + '</span></span>' +
-                '<span class="due-left" role="cell"><span class="due-pill' + (n <= D.VENTANA_POR_VENCER ? ' soon' : '') + '">' + (n === 0 ? 'hoy' : 'en ' + n + ' día' + (n === 1 ? '' : 's')) + '</span></span>' +
-                '<span class="due-chev">' + icon('right', 20) + '</span></div>';
-            }).join('') + '</div>' : emptyState('check', 'Sin vencimientos próximos', 'No hay fechas pendientes para esta droguería.')) +
-        '</section>' +
+        accesos.map(function (a) {
+          return '<button class="box pano-tile" type="button" data-goto="' + a[0] + '">' + icon(a[1], 26) +
+            '<span><b>' + a[2] + '</b><small>' + esc(a[3]) + '</small></span></button>';
+        }).join('') +
       '</div>';
-  }
-
-  /* El desglose (vencidos, por vencer…) queda en el título: la fila muestra solo la cifra. */
-  function meter(ico, label, ok, tot, sub) {
-    var pct = tot ? Math.round(ok / tot * 100) : 100;
-    var cls = pct >= 80 ? 'good' : pct >= 50 ? 'warn' : 'bad';
-    return '<div class="meter"' + (tot ? ' title="' + esc(sub) + '"' : '') + '><span class="meter-ico">' + icon(ico, 28) + '</span>' +
-      '<div class="meter-main"><div class="meter-top"><span>' + label + '</span><span>' + (tot ? ok + ' / ' + tot : '—') + '</span></div>' +
-      '<div class="meter-track"><div class="meter-fill ' + cls + '" style="width:' + pct + '%"></div></div></div></div>';
   }
 
   /* Sin botones: el alta ya está en el encabezado (y en «Nuevo» en el celular). */
@@ -193,53 +144,39 @@
       vencido: all.filter(function (d) { return D.edoc(d) === 'vencido'; }).length
     };
 
-    /* Vista dividida: el documento seleccionado se abre en una columna al costado y la lista
-       sigue a la vista. Sin selección (o en pantalla angosta), la lista ocupa todo el ancho. */
-    var sel = vistaDividida() && S.selDoc ? store.byDg('documentos').filter(function (d) { return d.id === S.selDoc; })[0] : null;
-    var selId = sel ? sel.id : '';
-
     var body = cats.map(function (cat) {
       var lista = grupos[cat]; if (!lista || !lista.length) return '';
-      return '<div class="section-title" style="margin-top:18px">' + esc(cat) + ' <span class="section-count">· ' + lista.length + '</span></div>' +
-        '<div class="list">' + lista.map(function (d) { return docRow(d, selId); }).join('') + '</div>';
+      return '<div class="section-title">' + esc(cat) + ' <span class="section-count">· ' + lista.length + '</span></div>' +
+        '<div class="tbl-wrap"><table class="tbl tbl-docs"><thead><tr><th>Código</th><th>Nombre</th><th>Versión</th><th>Área</th><th>Próx. revisión</th><th>Estado</th></tr></thead>' +
+        '<tbody>' + lista.map(docRow).join('') + '</tbody></table></div>';
     }).join('');
 
-    var lista = listaDocumentos(S, all, docs, counts, body);
-    if (!sel) return lista;
-    return '<div class="split"><div class="split-main">' + lista + '</div>' +
-      '<aside class="doc-detail" data-doc-detail="' + sel.id + '" aria-label="Detalle del documento">' +
-        '<div class="panel-head"><div class="dialog-title">Documento</div>' +
-          '<button class="icon-btn" data-detail-close aria-label="Cerrar detalle">' + icon('x', 18) + '</button></div>' +
-        '<div class="panel-body">' + docDetailHtml(sel) + '</div>' +
-        '<div class="panel-foot">' + DOC_FOOTER + '</div>' +
-      '</aside></div>';
+    return listaDocumentos(S, all, docs, counts, body);
   }
 
   function listaDocumentos(S, all, docs, counts, body) {
-    return '' +
+    return '<section class="box">' +
       '<div class="view-header"><div><div class="view-title">Documentos</div>' +
         '<div class="view-sub">' + all.length + ' documento(s) · ' + esc(store.dg().nombre) + '</div></div>' +
-        '<button class="btn btn-primary" data-action="nuevo-doc">' + icon('plus', 16) + 'Nuevo</button></div>' +
+        '<div class="header-actions"><button class="btn btn-ghost" data-action="criterios">' + icon('settings', 16) + 'Criterios</button>' +
+        '<button class="btn btn-primary" data-action="nuevo-doc">' + icon('plus', 16) + 'Nuevo</button></div></div>' +
       '<div class="toolbar"><div class="search-input">' + icon('search', 16) +
         '<input type="text" id="qDoc" placeholder="Buscar por código, nombre o área…" value="' + esc(S.qDoc) + '" aria-label="Buscar documentos"></div></div>' +
       filterPills(S.filtDoc, [
         { v: 'todos', l: 'Todos', c: counts.todos }, { v: 'vigente', l: 'Vigentes', c: counts.vigente },
         { v: 'por_vencer', l: 'Por vencer', c: counts.por_vencer }, { v: 'vencido', l: 'Vencidos', c: counts.vencido }
       ], 'data-fdoc') +
-      (docs.length ? body : emptyState('doc', 'Sin documentos', all.length ? 'Ningún documento coincide con el filtro.' : 'Agregá tu primer POE, formato o instructivo.'));
+      (docs.length ? body : emptyState('doc', 'Sin documentos', all.length ? 'Ningún documento coincide con el filtro.' : 'Agregá tu primer POE, formato o instructivo.')) +
+      '</section>';
   }
 
   var criterioDeDoc = D.criterioDeDoc;
 
-  function docRow(d, selId) {
-    var e = D.edoc(d), f = D.fDias(D.dias(d.rev)), on = d.id === selId;
-    return '<div class="row' + (on ? ' selected' : '') + '" data-doc="' + d.id + '" tabindex="0" role="button"' + (on ? ' aria-current="true"' : '') + '>' +
-      '<div class="row-top"><div class="chan doc"></div><div class="row-main">' +
-      '<div class="row-code mono">' + esc(d.codigo) + ' · v' + esc(d.version) + '</div>' +
-      '<div class="row-name">' + esc(d.nombre) + '</div>' +
-      '<div class="row-meta"><span><b>Área</b>' + esc(d.area) + '</span><span><b>Tipo</b>' + esc(d.tipo) + '</span>' +
-      '<span><b>Rev.</b>' + esc(D.fLocal(d.rev)) + '</span></div></div>' +
-      '<div class="row-side">' + tag(e) + '<span class="days ' + f.cls + '">' + f.txt + '</span></div></div></div>';
+  function docRow(d) {
+    return '<tr class="doc-tr" data-doc="' + d.id + '" tabindex="0" role="button">' +
+      '<td class="mono">' + esc(d.codigo) + '</td><td class="strong">' + esc(d.nombre) + '</td>' +
+      '<td class="num">' + esc(String(d.version || 1).padStart(2, '0')) + '</td><td>' + esc(d.area) + '</td>' +
+      '<td class="num">' + esc(D.fLocal(d.rev)) + '</td><td>' + tag(D.edoc(d)) + '</td></tr>';
   }
 
   function docForm(existing) {
@@ -275,12 +212,6 @@
     });
   }
 
-  /* El detalle de un documento vive en dos contenedores: una columna junto a la lista (vista
-     dividida, pantallas anchas) o el panel lateral (pantallas angostas). El HTML y los clics
-     son uno solo; cambia solo dónde se monta. */
-  var VISTA_DIVIDIDA = '(min-width: 1200px)';
-  function vistaDividida() { return !!(global.matchMedia && global.matchMedia(VISTA_DIVIDIDA).matches); }
-
   function docDetailHtml(d) {
     var e = D.edoc(d), f = D.fDias(D.dias(d.rev));
     var history = d.history || [], records = d.records || [], anexos = d.anexos || [];
@@ -312,15 +243,13 @@
   var DOC_FOOTER = '<button class="btn btn-ghost" data-edit>' + icon('edit', 16) + 'Editar</button>' +
     '<button class="btn btn-danger" data-del>' + icon('trash', 16) + 'Eliminar</button>';
 
-  /* `close` cierra el contenedor. En la vista dividida (`split`) el detalle se queda abierto al
-     editar o cargar un archivo: el render que sigue al guardado ya lo muestra actualizado. */
-  function docDetailClick(e, d, close, split) {
+  /* `close` cierra el panel del detalle. */
+  function docDetailClick(e, d, close) {
     var t = e.target, b;
-    function leave() { if (!split) close(); }
     function preview(file) { global.BPAPLUS.drive.previewStored(file).catch(function (error) { UI.note(error.message || error); }); }
     if (!d) return;
     if (t.closest('[data-detail-close]')) return close();
-    if (t.closest('[data-edit]')) { leave(); return docForm(d); }
+    if (t.closest('[data-edit]')) { close(); return docForm(d); }
     if (t.closest('[data-del]')) { close(); return store.removeWithUndo('documentos', d, 'Documento eliminado'); }
     if (t.closest('[data-drivelink]')) return global.BPAPLUS.drive.linkPanel(d, function (link) { store.save('documentos', Object.assign({}, d, link)); });
     if (t.closest('[data-file-current]')) return preview(d.file);
@@ -333,7 +262,7 @@
           button.disabled = true;
           return global.BPAPLUS.drive.deleteStored(file)
             .then(function () { return store.save('documentos', Object.assign({}, d, cambio)); })
-            .then(function () { leave(); UI.note(hecho); })
+            .then(function () { close(); UI.note(hecho); })
             .catch(function (error) { button.disabled = false; UI.note(error.message || error); });
         });
     }
@@ -342,25 +271,19 @@
     if ((b = t.closest('[data-file-anexo]'))) return preview(d.anexos[+b.dataset.fileAnexo]);
     if ((b = t.closest('[data-file-history]'))) return preview(d.history[+b.dataset.fileHistory]);
     if ((b = t.closest('[data-file-record]'))) return preview(d.records[+b.dataset.fileRecord]);
-    if (t.closest('[data-file-upload]')) { leave(); return global.BPAPLUS.drive.filePanel(d, store.dg().id, function (saved) { return store.save('documentos', saved); }); }
+    if (t.closest('[data-file-upload]')) { close(); return global.BPAPLUS.drive.filePanel(d, store.dg().id, function (saved) { return store.save('documentos', saved); }); }
   }
 
   function docPanel(d) {
     var p = UI.panel({
       title: 'Documento', body: docDetailHtml(d), footer: DOC_FOOTER,
-      onMount: function (root) { root.addEventListener('click', function (e) { docDetailClick(e, d, function () { p.close(); }, false); }); }
+      onMount: function (root) { root.addEventListener('click', function (e) { docDetailClick(e, d, function () { p.close(); }); }); }
     });
   }
 
-  /* Abrir un documento desde cualquier lado (lista, Inicio, alertas, buscador): en pantalla
-     ancha va a Documentos con ese documento seleccionado; si no, al panel lateral. */
-  function abrirDoc(d) {
-    if (!d) return;
-    if (!vistaDividida()) return docPanel(d);
-    store.state.selDoc = d.id;
-    if (store.state.view === 'documentos') store.render(); else store.go('documentos');
-  }
-  function cerrarDetalle() { store.state.selDoc = ''; store.render(); }
+  /* Abrir un documento desde cualquier lado (lista, Panorama, alertas, buscador): siempre en el
+     panel lateral, sobre la vista en la que se está. */
+  function abrirDoc(d) { if (d) docPanel(d); }
 
   function detailRow(k, v) {
     return '<div class="detail-row"><span class="detail-k">' + esc(k) + '</span><span class="detail-v">' + esc(v) + '</span></div>';
@@ -514,20 +437,32 @@
    * ===================================================================== */
   function vInformacionAlmacen() {
     var d = store.dg();
-    return '<div class="view-header"><div><div class="view-title">Información del almacén</div>' +
-      '<div class="view-sub">Datos declarados · ' + esc(d.nombre) + '</div></div></div>' +
-      '<form id="infoAlmacenForm" class="inspection-group warehouse-info" novalidate>' +
-        '<div class="grid-2"><div class="field" id="wrap_ia_razon"><label for="ia_razon">Razón social</label><input class="inp" id="ia_razon" value="' + esc(d.nombre) + '"><div class="err">Ingresa la razón social.</div></div>' +
-        '<div class="field"><label for="ia_comercial">Nombre comercial</label><input class="inp" id="ia_comercial" value="' + esc(d.nombreComercial || '') + '"></div></div>' +
-        '<div class="grid-2"><div class="field" id="wrap_ia_ruc"><label for="ia_ruc">RUC</label><input class="inp mono" id="ia_ruc" inputmode="numeric" maxlength="11" value="' + esc(d.ruc || '') + '"><div class="err">Ingresa un RUC de 11 dígitos.</div></div>' +
-        '<div class="field"><label for="ia_dt">Director técnico</label><input class="inp" id="ia_dt" value="' + esc(d.dt || '') + '"></div></div>' +
-        '<div class="field"><label for="ia_direccion">Dirección</label><input class="inp" id="ia_direccion" value="' + esc(d.direccion || '') + '"></div>' +
-        '<div class="field"><label for="ia_direccion_almacen">Dirección del almacén</label><input class="inp" id="ia_direccion_almacen" value="' + esc(d.direccionAlmacen || '') + '"></div>' +
-        '<div class="grid-2"><div class="field"><label for="ia_area">Área del almacén declarada (m²)</label><input class="inp" id="ia_area" type="number" min="0" step="0.01" value="' + esc(d.areaAlmacen || '') + '"></div>' +
-        '<div class="field"><label for="ia_cuarentena">Tipo de cuarentena</label><input class="inp" id="ia_cuarentena" value="' + esc(d.tipoCuarentena || '') + '"></div></div>' +
-        '<div class="field"><label for="ia_almacenamiento">Tipo de almacenamiento</label><select class="inp" id="ia_almacenamiento"><option' + (d.tipoAlmacenamiento !== 'Tercerizado' ? ' selected' : '') + '>Propio</option><option' + (d.tipoAlmacenamiento === 'Tercerizado' ? ' selected' : '') + '>Tercerizado</option></select></div>' +
-        '<div class="warehouse-actions"><button class="btn btn-primary" id="ia_save" type="submit">' + icon('check', 16) + 'Guardar información</button></div>' +
-      '</form>';
+    var docs = store.byDg('documentosInspeccion'), req = [];
+    SECCIONES_INSPECCION.forEach(function (x) { req = req.concat(x.docs); });
+    var cargados = req.filter(function (def) { var x = existenteInspeccion(docs, def); return x && x.file; }).length;
+    function campo(id, label, html, err) {
+      return '<div class="field"' + (err ? ' id="wrap_' + id + '"' : '') + '><label for="' + id + '">' + label + '</label>' + html + (err ? '<div class="err">' + err + '</div>' : '') + '</div>';
+    }
+    function inp(id, v, extra) { return '<input class="inp' + (extra && extra.mono ? ' mono' : '') + '" id="' + id + '" value="' + esc(v || '') + '"' + (extra && extra.attrs || '') + '>'; }
+    return '<form id="infoAlmacenForm" class="warehouse-info" novalidate>' +
+      '<div class="view-header"><div><div class="view-title">Información del almacén</div>' +
+        '<div class="view-sub">Ficha de la droguería · se usa en actas y formatos</div></div>' +
+        '<button class="btn btn-primary" id="ia_save" type="submit">' + icon('check', 16) + 'Guardar información</button></div>' +
+      '<section class="box"><h2 class="box-title">Empresa</h2><div class="grid-2">' +
+        campo('ia_razon', 'Razón social', inp('ia_razon', d.nombre), 'Ingresa la razón social.') +
+        campo('ia_comercial', 'Nombre comercial', inp('ia_comercial', d.nombreComercial)) +
+        campo('ia_ruc', 'RUC', inp('ia_ruc', d.ruc, { mono: true, attrs: ' inputmode="numeric" maxlength="11"' }), 'Ingresa un RUC de 11 dígitos.') +
+        campo('ia_dt', 'Director técnico', inp('ia_dt', d.dt)) +
+      '</div></section>' +
+      '<section class="box"><h2 class="box-title">Almacén</h2><div class="grid-2">' +
+        campo('ia_direccion', 'Dirección', inp('ia_direccion', d.direccion)) +
+        campo('ia_direccion_almacen', 'Dirección del almacén', inp('ia_direccion_almacen', d.direccionAlmacen)) +
+        campo('ia_area', 'Área del almacén declarada (m²)', inp('ia_area', d.areaAlmacen, { attrs: ' type="number" min="0" step="0.01"' })) +
+        campo('ia_cuarentena', 'Tipo de cuarentena', inp('ia_cuarentena', d.tipoCuarentena)) +
+        campo('ia_almacenamiento', 'Tipo de almacenamiento', '<select class="inp" id="ia_almacenamiento"><option' + (d.tipoAlmacenamiento !== 'Tercerizado' ? ' selected' : '') + '>Propio</option><option' + (d.tipoAlmacenamiento === 'Tercerizado' ? ' selected' : '') + '>Tercerizado</option></select>') +
+      '</div></section>' +
+      '<button class="link-btn" type="button" data-goto="documentos-inspeccion">Documentos de inspección · ' + cargados + ' de ' + req.length + ' cargados' + icon('right', 14) + '</button>' +
+    '</form>';
   }
 
   function guardarInformacionAlmacen(form) {
@@ -564,7 +499,7 @@
       realizada: real, vencida: all.filter(function (c) { return D.ecap(c) === 'vencida'; }).length
     };
 
-    return '' +
+    return '<section class="box">' +
       '<div class="view-header"><div><div class="view-title">Capacitaciones</div>' +
         '<div class="view-sub">' + real + ' de ' + all.length + ' realizadas · ' + esc(store.dg().nombre) + '</div></div>' +
         '<div class="header-actions">' +
@@ -577,26 +512,27 @@
         { v: 'todos', l: 'Todas', c: counts.todos }, { v: 'pendiente', l: 'Pendientes', c: counts.pendiente },
         { v: 'realizada', l: 'Realizadas', c: counts.realizada }, { v: 'vencida', l: 'Vencidas', c: counts.vencida }
       ], 'data-fcap') +
-      (caps.length ? '<div class="list">' + caps.map(capRow).join('') + '</div>'
-        : emptyState('cap', 'Sin capacitaciones', all.length ? 'Ninguna capacitación coincide con el filtro.' : 'Programá tu primera capacitación del año.'));
+      (caps.length ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Tema</th><th>Fecha</th><th class="num">Participantes</th><th class="num">Nota prom.</th><th>Estado</th><th></th></tr></thead>' +
+          '<tbody>' + caps.map(capRow).join('') + '</tbody></table></div>'
+        : emptyState('cap', 'Sin capacitaciones', all.length ? 'Ninguna capacitación coincide con el filtro.' : 'Programá tu primera capacitación del año.')) +
+      '</section>';
   }
 
   function capRow(c) {
-    var e = D.ecap(c), f = D.fDias(D.dias(c.fecha));
-    var sub = e === 'realizada'
-      ? '<span class="days ok">Realizada · ' + esc(D.fLocal(c.fecha)) + '</span>'
-      : '<span class="row-plain">Programada: ' + esc(D.fLocal(c.fecha)) + '</span> <span class="days ' + f.cls + '">' + f.txt + '</span>';
-    var np = (c.capacitados || []).length;
-    return '<div class="row" data-cap="' + c.id + '"><div class="row-top"><div class="chan cap"></div><div class="row-main">' +
-      '<div class="row-name">' + esc(c.tema) + '</div>' +
-      '<div class="row-meta"><span>' + esc(c.area) + ' · ' + esc(c.frec) + '</span>' + (np ? '<span><b>Participantes</b>' + np + '</span>' : '') + '</div>' +
-      '<div class="row-sub">' + sub + '</div></div>' + tag(e) + '</div>' +
-      '<div class="row-foot">' +
+    var e = D.ecap(c), att = c.capacitados || [];
+    var notas = att.map(function (p) { return p.nota; }).filter(function (n) { return n !== '' && n != null; });
+    var prom = notas.length ? Math.round(notas.reduce(function (a, n) { return a + +n; }, 0) / notas.length * 10) / 10 : null;
+    return '<tr data-cap="' + c.id + '" tabindex="0" role="button">' +
+      '<td class="strong">' + esc(c.tema) + '<small>' + esc(c.area) + ' · ' + esc(c.frec) + '</small></td>' +
+      '<td class="num">' + esc(D.fLocal(c.fecha)) + '</td>' +
+      '<td class="num">' + (att.length || '—') + '</td><td class="num">' + (prom == null ? '—' : prom) + '</td>' +
+      '<td>' + tag(e) + '</td>' +
+      '<td class="acts">' +
         (e === 'realizada'
-          ? '<button class="link-btn" data-capdone="' + c.id + '" data-to="pendiente">↺ Volver a pendiente</button>'
-          : '<button class="link-btn" data-capdone="' + c.id + '" data-to="realizada">' + icon('check', 14) + ' Marcar realizada</button>') +
-        '<button class="link-btn" data-capacta="' + c.id + '">' + icon('print', 14) + ' Acta de asistencia</button>' +
-      '</div></div>';
+          ? '<button class="btn btn-text btn-sm" data-capdone="' + c.id + '" data-to="pendiente">↺ Volver a pendiente</button>'
+          : '<button class="btn btn-text btn-sm" data-capdone="' + c.id + '" data-to="realizada">' + icon('check', 14) + 'Marcar realizada</button>') +
+        '<button class="btn btn-text btn-sm" data-capacta="' + c.id + '">' + icon('print', 14) + 'Acta de asistencia</button>' +
+      '</td></tr>';
   }
 
   function capForm(existing) {
@@ -805,7 +741,7 @@
           '<button class="btn btn-ghost" data-action="cron-insp">' + icon('upload', 16) + 'Importar cronograma</button>' +
           '<button class="btn btn-ghost" data-action="nueva-acta">' + icon('insp', 16) + 'Nueva acta</button>' +
           '<button class="btn btn-primary" data-action="programar-insp">' + icon('plus', 16) + 'Programar</button></div></div>' +
-      (actasList.length ? '<div class="section-title">Actas de inspección</div><div class="list">' + actasList.map(actaRow).join('') + '</div>' : '') +
+      (actasList.length ? '<div class="section-title">Actas de inspección</div><div class="box box-list">' + actasList.map(actaRow).join('') + '</div>' : '') +
       '<div class="section-title">Sub-programa</div>' +
       '<div class="subprog"><div class="subprog-txt">Llená el acta fuera de la app: descargá el formato de <b>' + esc(store.dg().nombre) +
         '</b>, completalo en el sub-programa y volvé a cargar acá el archivo llenado.</div>' +
@@ -816,18 +752,21 @@
       filterPills(S.filtInsp, [
         { v: 'todos', l: 'Todas', c: counts.todos }, { v: 'pendientes', l: 'Pendientes', c: counts.pendientes }, { v: 'realizadas', l: 'Realizadas', c: counts.realizadas }
       ], 'data-finsp') +
-      (insp.length ? '<div class="list">' + insp.map(inspRow).join('') + '</div>'
+      (insp.length ? '<div class="insp-grid">' + insp.map(inspRow).join('') + '</div>'
         : emptyState('insp', 'Sin autoinspecciones', all.length ? 'Ninguna coincide con el filtro.' : 'Programá tu primera autoinspección.'));
   }
 
   function inspRow(i) {
-    var r = !!i.real, f = D.fDias(D.dias(i.prog));
-    var right = r ? tag('realizada') : '<span class="days ' + f.cls + '">' + f.txt + '</span>';
-    var foot = r ? '<div class="row-foot"><span class="row-plain" style="flex:1;min-width:0">' + esc(i.result || 'Realizada') + '</span>' +
-      (i.hall > 0 ? '<span class="tag vencido"><i></i>' + i.hall + ' hallazgo' + (i.hall > 1 ? 's' : '') + '</span>' : '<span class="tag vigente"><i></i>Sin hallazgos</span>') + '</div>' : '';
-    return '<div class="row" data-insp="' + i.id + '"><div class="row-top"><div class="chan insp"></div><div class="row-main">' +
-      '<div class="row-name">' + esc(i.area) + '</div>' +
-      '<div class="row-meta"><span><b>Programada</b>' + esc(D.fLocal(i.prog)) + '</span>' + (r ? '<span><b>Realizada</b>' + esc(D.fLocal(i.real)) + '</span>' : '') + '</div></div>' + right + '</div>' + foot + '</div>';
+    var r = !!i.real, n = D.dias(i.prog), f = D.fDias(n);
+    var estado = r ? tag('realizada') : n < 0 ? tag('vencido', 'Atrasada') : tag('agenda', 'Programada');
+    var cuerpo = r
+      ? '<p class="ic-big">' + (i.hall || 0) + '<small> hallazgo' + (i.hall === 1 ? '' : 's') + '</small></p>' +
+        '<p class="ic-sub">' + esc(i.result || (i.hall ? 'Con hallazgos abiertos' : 'Sin hallazgos')) + '</p>'
+      : '<p class="ic-sub days ' + f.cls + '">' + f.txt + '</p>' +
+        '<button class="link-btn" type="button" data-action="nueva-acta">Iniciar acta →</button>';
+    return '<div class="box insp-card" data-insp="' + i.id + '" tabindex="0" role="button">' +
+      '<div class="ic-top"><b class="num">' + esc(D.fLocal(r ? i.real : i.prog)) + '</b>' + estado + '</div>' +
+      '<p class="ic-area">' + esc(i.area) + '</p>' + cuerpo + '</div>';
   }
 
   function actaRow(a) {
@@ -840,9 +779,10 @@
     var hallTxt = a.hall > 0 ? ' · ' + a.hall + ' hallazgo' + (a.hall > 1 ? 's' : '') : '';
     var pasoTxt = (!a.completada && a.paso > 0 && a.paso <= checklist.length) ? ' · quedó en sección ' + a.paso + ' de ' + checklist.length : '';
     var destino = store.find('inspecciones', a.inspeccionId);
-    return '<div class="row" data-acta="' + a.id + '"><div class="row-top"><div class="chan insp"></div><div class="row-main">' +
-      '<div class="row-name">Acta N.° ' + esc(a.numActa || '—') + ' · Inspección al almacén</div>' +
-      '<div class="row-meta"><span>' + esc(D.fLocal(a.fecha)) + (a.auditor ? ' · ' + esc(a.auditor) : '') + esc(hallTxt) + esc(pasoTxt) + (destino ? ' · ' + esc(destino.area) : '') + '</span></div></div>' + tag(cls, label) + '</div></div>';
+    return '<div class="box-row" data-acta="' + a.id + '" tabindex="0" role="button"><span class="box-row-txt">' +
+      '<b>Acta N.° ' + esc(a.numActa || '—') + ' · Inspección al almacén</b>' +
+      '<small>' + esc(D.fLocal(a.fecha)) + (a.auditor ? ' · ' + esc(a.auditor) : '') + esc(hallTxt) + esc(pasoTxt) + (destino ? ' · ' + esc(destino.area) : '') + '</small></span>' +
+      tag(cls, label) + '</div>';
   }
 
   function inspForm(existing) {
@@ -1310,15 +1250,12 @@
   function bind(container) {
     container.addEventListener('click', function (e) {
       var t = e.target;
-      var det = t.closest('[data-doc-detail]');
-      if (det) return docDetailClick(e, store.find('documentos', det.dataset.docDetail), cerrarDetalle, true);
       var goto = t.closest('[data-goto]'); if (goto) return store.go(goto.dataset.goto);
       var act = t.closest('[data-action]');
       if (act) {
         var a = act.dataset.action;
         if (a === 'nuevo-doc') return docForm(null);
-        if (a === 'nuevo-menu') return store.quickNew(act);
-        if (a === 'ver-proximos') { store.state.verProx = !store.state.verProx; return store.render(); }
+        if (a === 'criterios') return criteriosForm();
         if (a === 'nueva-cap') return capForm(null);
         if (a === 'programar-insp') return inspForm(null);
         if (a === 'nueva-acta') return actaForm(null);
@@ -1363,15 +1300,10 @@
     container.addEventListener('input', function (e) {
       if (e.target.id === 'qDoc') { store.state.qDoc = e.target.value; store.renderInto(); }
     });
-    // Las filas de documento son foco de teclado: Enter o espacio las abren como un clic.
+    // Las filas que abren un registro son foco de teclado: Enter o espacio las abren como un clic.
     container.addEventListener('keydown', function (e) {
-      if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.row[data-doc]')) { e.preventDefault(); e.target.click(); }
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role="button"][tabindex]')) { e.preventDefault(); e.target.click(); }
     });
-    /* Escape cierra el detalle de la vista dividida, salvo que haya un diálogo o menú encima. En
-       captura, para mirar antes de que ui.js cierre ese diálogo con la misma tecla. */
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && document.querySelector('.doc-detail') && !document.querySelector('.dialog, .panel, .picker, .finder')) cerrarDetalle();
-    }, true);
     container.addEventListener('submit', function (e) {
       if (e.target.id === 'infoAlmacenForm') { e.preventDefault(); guardarInformacionAlmacen(e.target); }
     });
