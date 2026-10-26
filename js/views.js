@@ -636,11 +636,14 @@
       body:
         '<div class="panel-lead"><div class="panel-lead-title">' + esc(c.tema) + '</div>' + tag(e) + '</div>' +
         detailRow('Área', c.area) + detailRow('Frecuencia', c.frec) + detailRow('Fecha programada', D.fLocal(c.fecha)) +
-        '<div class="section-title">Material (' + mats.length + ')</div>' +
+        '<div class="section-title">Material de capacitación (' + mats.length + ')</div>' +
         (mats.length ? '<div class="file-list">' + mats.map(function (f, i) {
-          return '<button class="file-item" data-mat="' + i + '">' + icon('doc', 16) +
-            '<span><b>' + esc(f.name || 'archivo') + '</b><small>Vista previa</small></span></button>';
-        }).join('') + '</div>' : '<div class="row-empty">Sin material cargado. Editá la capacitación para subirlo.</div>') +
+          return '<div class="file-item-row"><button class="file-item" data-mat="' + i + '">' + icon('doc', 16) +
+            '<span><b>' + esc(f.name || 'archivo') + '</b><small>Vista previa</small></span></button>' +
+            '<button class="icon-btn" data-mat-dl="' + i + '" title="Descargar" aria-label="Descargar ' + esc(f.name || 'archivo') + '">' + icon('download', 16) + '</button></div>';
+        }).join('') + '</div>' : '<div class="row-empty">Sin material cargado. Subí la diapositiva o el documento que se usó en la capacitación.</div>') +
+        '<div class="row-foot"><button class="btn btn-primary btn-sm" data-mat-up>' + icon('upload', 14) + (mats.length ? 'Agregar material' : 'Subir material') + '</button>' +
+        '<input type="file" data-mat-file accept=".pdf,.pptx,.ppt,.docx,.xlsx" multiple hidden></div>' +
         '<div class="section-title">Participantes (' + att.length + ')</div>' +
         (att.length ? att.map(function (p) { return '<div class="att-item"><div class="att-nombre">' + esc(p.nombre) + '</div><div class="att-cargo">' + esc(p.cargo || '—') + (p.nota == null || p.nota === '' ? '' : ' · Nota: ' + esc(p.nota) + '/20') + '</div></div>'; }).join('')
           : '<div class="row-empty">Sin participantes registrados.</div>'),
@@ -656,6 +659,27 @@
             global.BPAPLUS.drive.previewStored(mats[+b.dataset.mat]).catch(function (e) { UI.note(e.message || e); });
           };
         });
+        root.querySelectorAll('[data-mat-dl]').forEach(function (b) {
+          b.onclick = function () {
+            global.BPAPLUS.drive.downloadStored(mats[+b.dataset.matDl]).catch(function (e) { UI.note(e.message || e); });
+          };
+        });
+        var matFile = root.querySelector('[data-mat-file]'), matUp = root.querySelector('[data-mat-up]');
+        matUp.onclick = function () { matFile.click(); };
+        matFile.onchange = function () {
+          var files = Array.prototype.slice.call(matFile.files);
+          if (!files.length) return;
+          if (files.some(function (f) { return f.size >= 25 * 1024 * 1024; })) { UI.note('Cada material debe pesar menos de 25 MB.'); return; }
+          matUp.disabled = true; matUp.textContent = 'Subiendo…';
+          var obj = Object.assign({}, c, { materiales: mats.slice() });
+          files.reduce(function (p, f) {
+            return p.then(function () { return global.BPAPLUS.drive.storeMaterial(store.dg().id, c.id, f); })
+              .then(function (meta) { obj.materiales = obj.materiales.concat(meta); });
+          }, Promise.resolve())
+            .then(function () { return store.save('capacitaciones', obj); })
+            .then(function () { root.querySelector('[data-close]').click(); capPanel(obj); UI.note('Material cargado'); })
+            .catch(function (err) { matUp.disabled = false; matUp.textContent = 'Subir material'; UI.note('No se pudo subir el material: ' + (err && err.message || err)); });
+        };
         root.querySelector('[data-eval]').onclick = function () { root.querySelector('[data-close]').click(); evalPanel(c); };
         root.querySelector('[data-edit]').onclick = function () { root.querySelector('[data-close]').click(); capForm(c); };
         root.querySelector('[data-del]').onclick = function () { root.querySelector('[data-close]').click(); store.removeWithUndo('capacitaciones', c, 'Capacitación eliminada'); };
