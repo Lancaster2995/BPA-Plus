@@ -135,7 +135,7 @@
 
     var side = document.getElementById('sidebar');
     if (side) side.innerHTML =
-      '<button class="ws" id="dgSwitch" aria-label="Cambiar droguería"><img class="ws-logo" src="icons/icon-192.png?v=5" alt="">' +
+      '<button class="ws" id="dgSwitch" aria-label="Cambiar droguería"><img class="ws-logo" src="icons/icon-192.png?v=6" alt="">' +
         '<span class="ws-txt"><span class="ws-name">' + esc(dg.nombre) + '</span><span class="ws-ruc">' + (dg.ruc ? 'RUC ' + esc(dg.ruc) : 'Sin RUC') + '</span></span></button>' +
       '<nav class="nav" aria-label="Principal">' + grupos.map(function (g) {
         return '<div class="nav-head">' + esc(g) + '</div>' + NAV.filter(function (n) { return n.group === g; }).map(item).join('');
