@@ -171,7 +171,9 @@ body.nav-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .ws-ruc { margin-top: 2px; font-size: 13px; color: var(--navy-dim); }
 .ws:hover .ws-name { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(255,255,255,.4); }
 
-.nav { display: flex; flex-direction: column; gap: 2px; }
+/* Solo el menú se desplaza; el pie («Nuevo», tema, alertas, cuenta) queda siempre a la vista. */
+.sidebar { overflow: hidden; }
+.nav { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; }
 .nav-head { margin: 20px 0 6px; font-size: 12px; font-weight: 700; line-height: 21px; letter-spacing: .06em; text-transform: uppercase; color: #A9BDD0; }
 .nav-head:first-child { margin-top: 0; }
 .nav-item {
@@ -208,31 +210,32 @@ body.nav-open .nav-scrim { opacity: 1; pointer-events: auto; }
   display: flex; align-items: center; justify-content: center; flex: none;
 }
 .icon-btn:hover { background: var(--beacon-soft); color: var(--primary); }
-.tb-bell svg { stroke-width: 1.6; }
-.tb-user {
-  display: flex; align-items: center; gap: 4px; height: 44px; padding: 0; margin-left: 10px;
-  border: 0; border-radius: 999px; background: transparent; color: var(--ink);
+@media (min-width: 921px) { .topbar { display: none; } }
+
+/* ------------------------------ Pie de la barra lateral ------------------------------ */
+.side-foot { flex: none; padding-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.side-new {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; padding: 11px 4px;
+  border: 0; border-radius: 12px; background: var(--primary); color: #FFFFFF; font-size: 13px; font-weight: 600;
+  box-shadow: 0 6px 16px -8px rgba(0,0,0,.5);
 }
+.side-new:hover { filter: brightness(1.1); }
+.side-tools { display: flex; align-items: center; justify-content: space-around; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.12); }
+.side-tool {
+  position: relative; width: 34px; height: 34px; border-radius: 999px; border: 0; background: transparent; color: #DCE6EF;
+  display: flex; align-items: center; justify-content: center; flex: none;
+}
+.side-tool:hover { background: rgba(255,255,255,.1); color: #FFFFFF; }
+.side-new:focus-visible, .side-tool:focus-visible { outline: 2px solid #8CC3E6; outline-offset: 2px; }
 .acc-av {
-  position: relative; width: 42px; height: 42px; border-radius: 999px; flex: none;
-  display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; letter-spacing: .02em;
+  position: relative; width: 30px; height: 30px; border-radius: 999px; flex: none;
+  display: flex; align-items: center; justify-content: center; font-size: 11.5px; font-weight: 700; letter-spacing: .02em;
   background: #F2F7FB; color: #2B5577;
 }
-:root.dark .acc-av { background: var(--surface-2); color: var(--ink); }
-.tb-user:hover { color: var(--primary); }
 /* Sin conexión: un punto ámbar sobre el avatar (el detalle va en el título del botón). */
-.acc-av.off::after { content: ''; position: absolute; right: -1px; bottom: 1px; width: 11px; height: 11px; border-radius: 999px; background: #E0A030; box-shadow: 0 0 0 2px var(--bg); }
-.bell-badge {
-  position: absolute; top: 0; right: 0; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: #D9533F; color: #FFFFFF;
-  font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center;
-}
-.topbar .tb-new { margin: 0 8px 0 4px; min-height: 36px; padding: 0 14px; }
-@media (max-width: 560px) {
-  .topbar .tb-new { width: 40px; padding: 0; }
-  .tb-new span { display: none; }
-  .tb-user { margin-left: 2px; }
-  .tb-user > svg { display: none; }
-}
+.acc-av.off::after { content: ''; position: absolute; right: -2px; bottom: -1px; width: 10px; height: 10px; border-radius: 999px; background: #E0A030; box-shadow: 0 0 0 2px var(--navy); }
+/* En el cajón del celular el pie va en fila: «Nuevo» a lo ancho y las herramientas debajo. */
+@media (max-width: 920px) { .side-new { flex-direction: row; } }
 
 /* ------------------------------ Encabezado de vista ------------------------------ */
 .view-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }

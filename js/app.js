@@ -139,19 +139,21 @@
         '<span class="ws-txt"><span class="ws-name">' + esc(dg.nombre) + '</span><span class="ws-ruc">' + (dg.ruc ? 'RUC ' + esc(dg.ruc) : 'Sin RUC') + '</span></span></button>' +
       '<nav class="nav" aria-label="Principal">' + grupos.map(function (g) {
         return '<div class="nav-head">' + esc(g) + '</div>' + NAV.filter(function (n) { return n.group === g; }).map(item).join('');
-      }).join('') + '</nav>';
+      }).join('') + '</nav>' +
+      /* Al pie del riel, como en Logistics: «Nuevo» (el alta de la vista) y debajo tema, alertas y cuenta. */
+      '<div class="side-foot">' +
+        '<button class="side-new" id="newBtn"' + (v === 'informacion-almacen' ? ' hidden' : '') + '>' + UI.icon('plus', 24) + '<span>Nuevo</span></button>' +
+        '<div class="side-tools">' +
+          '<button class="side-tool" id="themeBtn" aria-label="' + (isDark() ? 'Tema claro' : 'Tema oscuro') + '">' + UI.icon(isDark() ? 'sun' : 'moon', 19) + '</button>' +
+          '<button class="side-tool" id="alertBellM" aria-label="Alertas' + (alertN ? ' (' + alertN + ')' : '') + '">' + UI.icon('bell', 19) + (alertN ? '<span class="bell-badge">' + alertN + '</span>' : '') + '</button>' +
+          '<button class="side-tool" id="accountBtn" aria-label="Mi cuenta" title="' + syncTxt + '"><span class="acc-av' + (offline ? ' off' : '') + '">' + meAv + '</span></button>' +
+        '</div></div>';
 
-    /* Una sola barra superior: buscador, tema, «Nuevo» (el alta de la vista), alertas y cuenta.
-       En el celular el buscador cede su lugar al botón de menú y al logo. */
+    /* La barra superior solo existe en el celular: ☰ para abrir el cajón y el logo. */
     var top = document.getElementById('topbar');
     if (top) top.innerHTML =
       '<button class="icon-btn" id="menuBtn" aria-label="Menú">' + UI.icon('menu', 22) + '</button>' +
-      '<span class="tb-logo">BPA<b>Plus</b></span>' +
-      '<button class="icon-btn" id="themeBtn" aria-label="' + (isDark() ? 'Tema claro' : 'Tema oscuro') + '">' + UI.icon(isDark() ? 'sun' : 'moon', 20) + '</button>' +
-      '<button class="btn btn-primary tb-new" id="newBtn"' + (v === 'informacion-almacen' ? ' hidden' : '') + '>' +
-        UI.icon('plus', 16) + '<span>Nuevo</span></button>' +
-      '<button class="icon-btn tb-bell" id="alertBellM" aria-label="Alertas' + (alertN ? ' (' + alertN + ')' : '') + '">' + UI.icon('bell', 22) + (alertN ? '<span class="bell-badge">' + alertN + '</span>' : '') + '</button>' +
-      '<button class="tb-user" id="accountBtn" aria-label="Mi cuenta" title="' + syncTxt + '"><span class="acc-av' + (offline ? ' off' : '') + '">' + meAv + '</span>' + UI.icon('chevron', 16) + '</button>';
+      '<span class="tb-logo">BPA<b>Plus</b></span>';
 
     wireChrome();
   }
