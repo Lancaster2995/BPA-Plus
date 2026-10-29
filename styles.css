@@ -142,8 +142,8 @@ body { background: linear-gradient(180deg, #ECF3F9 0%, #E7EFF7 100%) fixed var(-
 @media (min-width: 1280px) { .content { max-width: 1280px; } }
 @media (min-width: 1536px) { .content { max-width: 1536px; } }
 
-/* Como en el boceto, la barra lateral es siempre un cajón que entra desde la izquierda con el
-   botón de menú; arriba quedan ☰, el logo al centro y las acciones. */
+/* En el celular la barra lateral es un cajón que entra desde la izquierda con el botón de menú;
+   arriba quedan ☰, el logo al centro y las acciones. */
 .sidebar {
   position: fixed; left: 0; top: 0; bottom: 0; z-index: 31; width: min(286px, 86vw);
   transform: translateX(-100%); transition: transform .18s cubic-bezier(.2,.7,.3,1);
@@ -182,6 +182,22 @@ body.nav-open .nav-scrim { opacity: 1; pointer-events: auto; }
 .nav-item.active { background: rgba(53,132,186,.42); color: #FFFFFF; font-weight: 500; box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
 .nav-item:focus-visible, .ws:focus-visible { outline: 2px solid #8CC3E6; outline-offset: 2px; }
 .ni-ico { flex: none; stroke-width: 1.5; }
+
+/* En escritorio (mismo corte que DESKTOP en ui.js) es un riel fijo como el de Logistics:
+   solo el logo arriba, y cada opción con el ícono sobre el nombre. */
+@media (min-width: 921px) {
+  .sidebar { position: sticky; transform: none; width: 132px; padding: 16px 10px 20px; }
+  .nav-scrim, #menuBtn { display: none; }
+  .ws { justify-content: center; margin-bottom: 14px; }
+  .ws-logo { width: 54px; height: 54px; }
+  .ws-txt { display: none; }
+  .nav { gap: 4px; }
+  .nav-head { margin: 14px 0 4px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.12); font-size: 10px; text-align: center; }
+  .nav-head:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+  .nav-item { flex-direction: column; justify-content: center; gap: 6px; min-height: 0; padding: 11px 4px; white-space: normal; font-size: 12.5px; line-height: 1.2; text-align: center; }
+  .nav-item:hover { transform: none; }
+  .nav-item .ni-ico { width: 24px; height: 24px; }
+}
 
 /* ------------------------------ Barra superior ------------------------------ */
 .tb-logo { flex: 1; text-align: center; font-size: 24px; font-weight: 700; color: var(--primary); }
