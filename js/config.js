@@ -10,5 +10,9 @@ window.BPAPLUS_CONFIG = {
      lo que la protege es que exige un ID token de Firebase de este proyecto, no el
      secreto de la URL. Vacío = el botón "Generar evaluación" avisa y no hace nada. */
   workerUrl: 'https://bpa-plus.logisticss.workers.dev',
+  /* Runner de diapositivas (runner/diapositivas.mjs): corre en esta PC con la suscripción
+     de Claude Code. Solo atiende a 127.0.0.1, así que «Crear diapositiva» funciona
+     únicamente abriendo BPA-Plus en la misma PC donde está abierto el runner. */
+  runnerUrl: 'http://127.0.0.1:8787',
   logisticsUrl: 'https://impo-db.web.app/'
 };

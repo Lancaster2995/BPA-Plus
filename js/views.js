@@ -643,7 +643,9 @@
             '<button class="icon-btn" data-mat-dl="' + i + '" title="Descargar" aria-label="Descargar ' + esc(f.name || 'archivo') + '">' + icon('download', 16) + '</button></div>';
         }).join('') + '</div>' : '<div class="row-empty">Sin material cargado. Subí la diapositiva o el documento que se usó en la capacitación.</div>') +
         '<div class="row-foot"><button class="btn btn-primary btn-sm" data-mat-up>' + icon('upload', 14) + (mats.length ? 'Agregar material' : 'Subir material') + '</button>' +
+        '<button class="btn btn-ghost btn-sm" data-diapo>' + icon('cap', 14) + 'Crear diapositiva</button>' +
         '<input type="file" data-mat-file accept=".pdf,.pptx,.ppt,.docx,.xlsx" multiple hidden></div>' +
+        '<div class="hint" data-diapo-estado hidden></div>' +
         '<div class="section-title">Participantes (' + att.length + ')</div>' +
         (att.length ? att.map(function (p) { return '<div class="att-item"><div class="att-nombre">' + esc(p.nombre) + '</div><div class="att-cargo">' + esc(p.cargo || '—') + (p.nota == null || p.nota === '' ? '' : ' · Nota: ' + esc(p.nota) + '/20') + '</div></div>'; }).join('')
           : '<div class="row-empty">Sin participantes registrados.</div>'),
@@ -680,6 +682,72 @@
             .then(function () { root.querySelector('[data-close]').click(); capPanel(obj); UI.note('Material cargado'); })
             .catch(function (err) { matUp.disabled = false; matUp.textContent = 'Subir material'; UI.note('No se pudo subir el material: ' + (err && err.message || err)); });
         };
+
+        /* «Crear diapositiva»: el runner de esta PC (runner/diapositivas.mjs) arma el deck con
+           slide-maker y la suscripción de Claude Code. Tarda minutos, así que el id del trabajo
+           queda en localStorage: al reabrir el panel se retoma y el .pptx se sube solo. */
+        var diapo = root.querySelector('[data-diapo]'), diapoEst = root.querySelector('[data-diapo-estado]');
+        var KEY = 'bpa-diapo-' + c.id, timer = null;
+        function runner(path, opts) {
+          var base = (global.BPAPLUS_CONFIG || {}).runnerUrl;
+          return fetch(base + path, opts).catch(function () {
+            throw new Error('No hay conexión con el runner de diapositivas. Abrilo en esta PC (runner/iniciar.cmd).');
+          }).then(function (r) {
+            if (r.ok) return r;
+            return r.json().catch(function () { return {}; }).then(function (b) { throw new Error(b.error || 'El runner respondió ' + r.status + '.'); });
+          });
+        }
+        function guardado(v) {
+          try {
+            if (v === undefined) return localStorage.getItem(KEY);
+            if (v) localStorage.setItem(KEY, v); else localStorage.removeItem(KEY);
+          } catch (e) { return null; }
+        }
+        function estado(txt) { diapoEst.hidden = !txt; diapoEst.textContent = txt || ''; }
+        function seguir(id) {
+          diapo.disabled = true; diapo.textContent = 'Creando…';
+          function tick() {
+            if (!document.body.contains(root)) { clearInterval(timer); return; }
+            runner('/estado?id=' + id).then(function (r) { return r.json(); }).then(function (s) {
+              if (s.estado === 'listo') {
+                clearInterval(timer); estado('Subiendo la presentación…');
+                return runner('/archivo?id=' + id).then(function (r) { return r.blob(); }).then(function (b) {
+                  var nombre = ('Diapositivas - ' + c.tema).replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80) + '.pptx';
+                  return global.BPAPLUS.drive.storeMaterial(store.dg().id, c.id, new File([b], nombre, { type: b.type }));
+                }).then(function (meta) {
+                  var actual = store.find('capacitaciones', c.id) || c;
+                  var obj = Object.assign({}, actual, { materiales: (actual.materiales || []).concat(meta) });
+                  return store.save('capacitaciones', obj).then(function () { return obj; });
+                }).then(function (obj) {
+                  guardado(null);
+                  runner('/entregado?id=' + id, { method: 'POST' }).catch(function () {});
+                  root.querySelector('[data-close]').click(); capPanel(obj); UI.note('Diapositiva cargada');
+                });
+              }
+              if (s.estado === 'error') { clearInterval(timer); guardado(null); throw new Error(s.mensaje || 'No se pudo crear la presentación.'); }
+              estado((s.estado === 'en cola' ? 'En cola' : 'Creando la presentación') + ' · ' + s.minutos +
+                ' min. Puede tardar media hora o más; si cerrás este panel, se sube sola al volver a abrirlo.');
+            }).catch(function (err) {
+              clearInterval(timer); diapo.disabled = false; diapo.textContent = 'Crear diapositiva'; estado('');
+              if (/No existe ese trabajo/.test(err.message)) guardado(null);
+              UI.note(err && err.message || err);
+            });
+          }
+          tick(); timer = setInterval(tick, 15000);
+        }
+        diapo.onclick = function () {
+          diapo.disabled = true; diapo.textContent = 'Leyendo el material…';
+          var leido = mats.length ? global.BPAPLUS.drive.materialEvaluacion(mats[mats.length - 1]) : Promise.resolve({});
+          leido.then(function (mat) {
+            return runner('/crear', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tema: c.tema, area: c.area, drogueria: store.dg().nombre, material: mat.material || '', pdf: mat.pdf })
+            });
+          }).then(function (r) { return r.json(); }).then(function (j) { guardado(j.id); seguir(j.id); })
+            .catch(function (err) { diapo.disabled = false; diapo.textContent = 'Crear diapositiva'; UI.note(err && err.message || err); });
+        };
+        if (guardado()) seguir(guardado());
+
         root.querySelector('[data-eval]').onclick = function () { root.querySelector('[data-close]').click(); evalPanel(c); };
         root.querySelector('[data-edit]').onclick = function () { root.querySelector('[data-close]').click(); capForm(c); };
         root.querySelector('[data-del]').onclick = function () { root.querySelector('[data-close]').click(); store.removeWithUndo('capacitaciones', c, 'Capacitación eliminada'); };
