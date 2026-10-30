@@ -56,6 +56,12 @@
       return new Promise(function (resolve, reject) {
         try {
           var popupTimer;
+          var pedir = function () {
+            popupTimer = setTimeout(function () {
+              if (document.hasFocus()) reject(new Error('El navegador bloqueó la ventana de Google. Permití las ventanas emergentes y volvé a intentar.'));
+            }, 3000);
+            client.requestAccessToken({ prompt: '' });
+          };
           var client = google.accounts.oauth2.initTokenClient({
             client_id: clientId, scope: SCOPE,
             callback: function (resp) {
@@ -72,12 +78,6 @@
                 : 'No se completó la autorización de Google.'));
             }
           });
-          var pedir = function () {
-            popupTimer = setTimeout(function () {
-              if (document.hasFocus()) reject(new Error('El navegador bloqueó la ventana de Google. Permití las ventanas emergentes y volvé a intentar.'));
-            }, 3000);
-            client.requestAccessToken({ prompt: '' });
-          };
           var ua = navigator.userActivation;
           if (!ua || ua.isActive) { pedir(); return; }
           var ok = false;
