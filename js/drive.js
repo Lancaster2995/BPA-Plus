@@ -44,16 +44,18 @@
 
   function isConnected() { return !!state.token && Date.now() < state.expiresAt; }
 
+  /* El navegador solo deja abrir la ventana de Google justo después de un clic. Si el token
+     venció a mitad de un flujo (p. ej. al volver del selector de archivos, que gasta el clic),
+     se pide un clic propio en vez de dejar que la ventana se bloquee. Un solo pedido a la vez. */
   function ensureAuth() {
     var clientId = getClientId();
     if (!clientId) return Promise.reject(new Error('NO_CLIENT_ID'));
     if (isConnected()) return Promise.resolve(state.token);
-    return loadScript(GIS_SRC).then(function () {
+    if (state.pending) return state.pending;
+    state.pending = loadScript(GIS_SRC).then(function () {
       return new Promise(function (resolve, reject) {
         try {
-          var popupTimer = setTimeout(function () {
-            if (document.hasFocus()) reject(new Error('El navegador bloqueó la ventana de Google. Permití las ventanas emergentes y volvé a intentar.'));
-          }, 3000);
+          var popupTimer;
           var client = google.accounts.oauth2.initTokenClient({
             client_id: clientId, scope: SCOPE,
             callback: function (resp) {
@@ -70,10 +72,26 @@
                 : 'No se completó la autorización de Google.'));
             }
           });
-          client.requestAccessToken({ prompt: '' });
+          var pedir = function () {
+            popupTimer = setTimeout(function () {
+              if (document.hasFocus()) reject(new Error('El navegador bloqueó la ventana de Google. Permití las ventanas emergentes y volvé a intentar.'));
+            }, 3000);
+            client.requestAccessToken({ prompt: '' });
+          };
+          var ua = navigator.userActivation;
+          if (!ua || ua.isActive) { pedir(); return; }
+          var ok = false;
+          var m = UI.dialog({
+            title: 'Google Drive',
+            body: '<p class="dialog-note">La sesión de Google venció. Confirmá tu cuenta para continuar.</p>',
+            footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" data-google>Continuar con Google</button>',
+            onMount: function (root) { root.querySelector('[data-google]').onclick = function () { ok = true; m.close(); pedir(); }; },
+            onClose: function () { if (!ok) reject(new Error('Conexión con Google Drive cancelada.')); }
+          });
         } catch (e) { reject(e); }
       });
-    });
+    }).finally(function () { state.pending = null; });
+    return state.pending;
   }
 
   function api(path, params) {
