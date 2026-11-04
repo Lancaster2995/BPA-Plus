@@ -7,8 +7,8 @@ Verificado el **2026-10-03**. Estado completo: [ESTADO.md](ESTADO.md) · encargo
 
 - **03/11:** desplegado (Hosting y Worker) y commiteado en `feat/crear-diapositiva`: la app móvil,
   los avisos push y su refactor, y el cambio de `js/actas.js` (evaluaciones impresas sin pies de
-  firma, `?v=48`), con el harness en OK y `CACHE` v78. Producción = el árbol. **Falta el push** a
-  GitHub, y la rama no es `main`.
+  firma, `?v=48`), con el harness en OK y `CACHE` v78. Producción = el árbol = GitHub
+  (`origin/feat/crear-diapositiva`). La rama no es `main`.
 - Antes del 03/11: `main` pusheado y producción (`https://bpa-db.web.app/`) igual al árbol,
   desplegado el 03/10. GitHub Pages está desactivado.
 - **Push no es despliegue.** Producción se publica aparte con
@@ -23,7 +23,7 @@ cron `0 13 * * *`, secreto `VAPID_PRIVATE_KEY`). Código en `movil-app/`, compil
 ([ESTADO.md](ESTADO.md) § App móvil y § Avisos push). Verificado en producción hasta el acceso de
 Firebase, sin errores.
 
-1. **Subir a GitHub** (`git push`) y llevar la rama a `main` cuando corresponda.
+1. **Llevar la rama a `main`** cuando corresponda (está pusheada).
 2. **Probarla con tu sesión en el teléfono**: instalarla (Chrome › Instalar aplicación; iPhone:
    Compartir › Agregar a inicio), entrar, crear un acta, llenarla en modo avión y ver que llegue a la
    web al volver la señal.
