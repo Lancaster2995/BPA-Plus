@@ -156,6 +156,9 @@
       '<span class="tb-logo">BPA<b>Plus</b></span>';
 
     wireChrome();
+    /* Se repinta tras cada carga y cada guardado: buen momento para pasarle al Worker los
+       vencimientos (js/avisos.js), así lo renovado acá deja de avisar en el teléfono. */
+    if (global.BPAPLUS.avisos) global.BPAPLUS.avisos.programar();
   }
 
   function on(id, fn) { var el = document.getElementById(id); if (el) el.onclick = fn; }

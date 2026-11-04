@@ -12,20 +12,8 @@
   var AREAS = ['Almacén', 'Calidad', 'Aseguramiento de la calidad', 'Dirección Técnica', 'Administración', 'Otra'];
   var TIPOS = ['POE', 'Formato', 'Instructivo', 'Registro', 'Manual', 'Política', 'Otro'];
   var FRECS = ['Única', 'Trimestral', 'Semestral', 'Anual', 'Según necesidad'];
-  var SECCIONES_INSPECCION = [
-    { id: 'listados', titulo: 'Listados', docs: [
-      ['listado-clientes', 'Lista de clientes'], ['listado-proveedores', 'Lista de proveedores'], ['listado-registros', 'Listado de registros']
-    ] },
-    /* `grupo` junta secciones consecutivas bajo un mismo título (subcategorías). El id
-       'resoluciones' se conserva: los documentos ya cargados ahí siguen en su lugar. */
-    { id: 'resoluciones', grupo: 'Documentos emitidos', titulo: 'Resoluciones', ejemplo: 'Ej. Resolución de ampliación de rubro', docs: [
-      ['autorizacion-sanitaria', 'Autorización Sanitaria'], ['certificado-bpa', 'Certificado BPA']
-    ] },
-    { id: 'cartas', grupo: 'Documentos emitidos', titulo: 'Cartas', boton: 'Agregar carta', ejemplo: 'Ej. Carta N.° 015-2026', docs: [] },
-    { id: 'almacen', titulo: 'Documentos del almacén', docs: [
-      ['planos-almacen', 'Planos e información del almacén', ['planos-drogueria']]
-    ] }
-  ];
+  /* Viven en domain.js: los lee también la app móvil. */
+  var SECCIONES_INSPECCION = D.SECCIONES_INSPECCION, existenteInspeccion = D.existenteInspeccion, docsSeccion = D.docsSeccion;
 
   function opts(list, sel) { return list.map(function (o) { return '<option ' + (o === sel ? 'selected' : '') + '>' + esc(o) + '</option>'; }).join(''); }
 
@@ -38,31 +26,9 @@
     var docs = store.byDg('documentos'), caps = store.byDg('capacitaciones'), insp = store.byDg('inspecciones');
     var retiros = store.byDg('retiros');
     var sc = D.scoreCumplimiento(docs, caps, insp);
-    function porFecha(campo) { return function (a, b) { return D.dias(a[campo]) - D.dias(b[campo]); }; }
-    function fila(attr, titulo, sub, nivel) { return { attr: attr, titulo: titulo, sub: sub, nivel: nivel }; }
-
-    var urgente = []
-      .concat(docs.filter(function (d) { return D.edoc(d) === 'vencido'; }).sort(porFecha('rev')).map(function (d) {
-        return fila('data-doc="' + d.id + '"', d.codigo + ' vencido', d.nombre + ' · revisión vencida el ' + D.fLocal(d.rev), 'urgente');
-      }))
-      .concat(caps.filter(function (c) { return D.ecap(c) === 'vencida'; }).sort(porFecha('fecha')).map(function (c) {
-        return fila('data-cap="' + c.id + '"', 'Capacitación «' + c.tema + '»', 'Fecha pasada sin realizar · ' + D.fLocal(c.fecha), 'urgente');
-      }))
-      .concat(insp.filter(function (i) { return !i.real && D.dias(i.prog) < 0; }).sort(porFecha('prog')).map(function (i) {
-        return fila('data-insp="' + i.id + '"', 'Autoinspección atrasada · ' + i.area, 'Programada para el ' + D.fLocal(i.prog), 'urgente');
-      }))
-      .concat(insp.filter(function (i) { return i.real && (i.hall || 0) > 0; }).map(function (i) {
-        return fila('data-insp="' + i.id + '"', i.hall + ' hallazgo' + (i.hall > 1 ? 's' : '') + ' sin cerrar', i.area + ' · inspección del ' + D.fLocal(i.real), 'urgente');
-      }));
-    var pronto = docs.filter(function (d) { return D.edoc(d) === 'por_vencer'; }).sort(porFecha('rev')).map(function (d) {
-      return fila('data-doc="' + d.id + '"', d.codigo + ' por vencer', 'Revisión el ' + D.fLocal(d.rev), 'pronto');
-    });
-    var proxInsp = insp.filter(function (i) { return !i.real && D.dias(i.prog) >= 0; }).sort(porFecha('prog'))[0];
-    var proxCap = caps.filter(function (c) { return D.ecap(c) === 'pendiente'; }).sort(porFecha('fecha'))[0];
-    var agenda = []
-      .concat(proxInsp ? [fila('data-insp="' + proxInsp.id + '"', 'Autoinspección programada', proxInsp.area + ' · ' + D.fLocal(proxInsp.prog), 'agenda')] : [])
-      .concat(proxCap ? [fila('data-cap="' + proxCap.id + '"', 'Capacitación «' + proxCap.tema + '»', D.fLocal(proxCap.fecha), 'agenda')] : []);
-    var todo = urgente.concat(pronto, agenda), MAX = 6;
+    var todo = D.queHacer(docs, caps, insp).map(function (t) {
+      return Object.assign({ attr: 'data-' + t.kind + '="' + t.obj.id + '"' }, t);
+    }), MAX = 6;
     var NIVEL = { urgente: ['vencido', 'Urgente'], pronto: ['por_vencer', 'Pronto'], agenda: ['agenda', 'Agenda'] };
 
     var real = caps.filter(function (c) { return D.ecap(c) === 'realizada'; }).length;
@@ -350,18 +316,6 @@
         };
       }
     });
-  }
-
-  /* Documentos de una sección en el orden de la pantalla: los requeridos y después los agregados.
-     Lo usan la vista y el ZIP, para que la carpeta descargada se vea igual que la app. */
-  var LEGACY_SECCION = { 'ficha-ruc': 'resoluciones', 'resoluciones-bpa': 'resoluciones' };
-  function existenteInspeccion(docs, def) { return docs.filter(function (d) { return d.tipoInspeccion === def[0] || (def[2] || []).indexOf(d.tipoInspeccion) >= 0; })[0]; }
-  function docsSeccion(seccion, docs) {
-    var conocidos = {};
-    SECCIONES_INSPECCION.forEach(function (s) { s.docs.forEach(function (def) { conocidos[def[0]] = true; (def[2] || []).forEach(function (a) { conocidos[a] = true; }); }); });
-    return seccion.docs.map(function (def) { return { d: existenteInspeccion(docs, def), titulo: def[1], tipo: def[0] }; })
-      .concat(docs.filter(function (d) { return !conocidos[d.tipoInspeccion] && (d.seccion === seccion.id || LEGACY_SECCION[d.tipoInspeccion] === seccion.id); })
-        .map(function (d) { return { d: d, titulo: d.nombre }; }));
   }
 
   /* Todo el expediente en un ZIP: una carpeta por categoría (numerada como en la app) y cada

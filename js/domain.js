@@ -587,6 +587,63 @@
     return { drogueria: dg, acta: acta };
   }
 
+  /* ----- «Qué hacer ahora» del Panorama -----
+     Lo urgente primero (vencido, atrasado, hallazgos abiertos), después lo que vence pronto y lo
+     próximo en agenda. Vive acá y no en la vista porque lo leen la web y la app móvil (movil/). */
+  function queHacer(docs, caps, insp) {
+    function porFecha(campo) { return function (a, b) { return dias(a[campo]) - dias(b[campo]); }; }
+    function fila(kind, obj, titulo, sub, nivel) { return { kind: kind, obj: obj, titulo: titulo, sub: sub, nivel: nivel }; }
+    var urgente = []
+      .concat(docs.filter(function (d) { return edoc(d) === EST.VENCIDO; }).sort(porFecha('rev')).map(function (d) {
+        return fila('doc', d, d.codigo + ' vencido', d.nombre + ' · revisión vencida el ' + fLocal(d.rev), 'urgente');
+      }))
+      .concat(caps.filter(function (c) { return ecap(c) === EST.VENCIDA; }).sort(porFecha('fecha')).map(function (c) {
+        return fila('cap', c, 'Capacitación «' + c.tema + '»', 'Fecha pasada sin realizar · ' + fLocal(c.fecha), 'urgente');
+      }))
+      .concat(insp.filter(function (i) { return !i.real && dias(i.prog) < 0; }).sort(porFecha('prog')).map(function (i) {
+        return fila('insp', i, 'Autoinspección atrasada · ' + i.area, 'Programada para el ' + fLocal(i.prog), 'urgente');
+      }))
+      .concat(insp.filter(function (i) { return i.real && (i.hall || 0) > 0; }).map(function (i) {
+        return fila('insp', i, i.hall + ' hallazgo' + (i.hall > 1 ? 's' : '') + ' sin cerrar', i.area + ' · inspección del ' + fLocal(i.real), 'urgente');
+      }));
+    var pronto = docs.filter(function (d) { return edoc(d) === EST.POR_VENCER; }).sort(porFecha('rev')).map(function (d) {
+      return fila('doc', d, d.codigo + ' por vencer', 'Revisión el ' + fLocal(d.rev), 'pronto');
+    });
+    var proxInsp = insp.filter(function (i) { return !i.real && dias(i.prog) >= 0; }).sort(porFecha('prog'))[0];
+    var proxCap = caps.filter(function (c) { return ecap(c) === EST.PENDIENTE; }).sort(porFecha('fecha'))[0];
+    var agenda = []
+      .concat(proxInsp ? [fila('insp', proxInsp, 'Autoinspección programada', proxInsp.area + ' · ' + fLocal(proxInsp.prog), 'agenda')] : [])
+      .concat(proxCap ? [fila('cap', proxCap, 'Capacitación «' + proxCap.tema + '»', fLocal(proxCap.fecha), 'agenda')] : []);
+    return urgente.concat(pronto, agenda);
+  }
+
+  /* ----- Expediente de inspección (Documentos de inspección) -----
+     `grupo` junta secciones consecutivas bajo un mismo título (subcategorías). El id
+     'resoluciones' se conserva: los documentos ya cargados ahí siguen en su lugar. */
+  var SECCIONES_INSPECCION = [
+    { id: 'listados', titulo: 'Listados', docs: [
+      ['listado-clientes', 'Lista de clientes'], ['listado-proveedores', 'Lista de proveedores'], ['listado-registros', 'Listado de registros']
+    ] },
+    { id: 'resoluciones', grupo: 'Documentos emitidos', titulo: 'Resoluciones', ejemplo: 'Ej. Resolución de ampliación de rubro', docs: [
+      ['autorizacion-sanitaria', 'Autorización Sanitaria'], ['certificado-bpa', 'Certificado BPA']
+    ] },
+    { id: 'cartas', grupo: 'Documentos emitidos', titulo: 'Cartas', boton: 'Agregar carta', ejemplo: 'Ej. Carta N.° 015-2026', docs: [] },
+    { id: 'almacen', titulo: 'Documentos del almacén', docs: [
+      ['planos-almacen', 'Planos e información del almacén', ['planos-drogueria']]
+    ] }
+  ];
+  var LEGACY_SECCION = { 'ficha-ruc': 'resoluciones', 'resoluciones-bpa': 'resoluciones' };
+  function existenteInspeccion(docs, def) { return docs.filter(function (d) { return d.tipoInspeccion === def[0] || (def[2] || []).indexOf(d.tipoInspeccion) >= 0; })[0]; }
+  /* Documentos de una sección en el orden de la pantalla: los requeridos y después los agregados.
+     Lo usan la vista, el ZIP y la app móvil, para que el expediente se vea igual en todos. */
+  function docsSeccion(seccion, docs) {
+    var conocidos = {};
+    SECCIONES_INSPECCION.forEach(function (s) { s.docs.forEach(function (def) { conocidos[def[0]] = true; (def[2] || []).forEach(function (a) { conocidos[a] = true; }); }); });
+    return seccion.docs.map(function (def) { return { d: existenteInspeccion(docs, def), titulo: def[1], tipo: def[0] }; })
+      .concat(docs.filter(function (d) { return !conocidos[d.tipoInspeccion] && (d.seccion === seccion.id || LEGACY_SECCION[d.tipoInspeccion] === seccion.id); })
+        .map(function (d) { return { d: d, titulo: d.nombre }; }));
+  }
+
   global.BPAPLUS = global.BPAPLUS || {};
   global.BPAPLUS.domain = {
     EST: EST, EST_LABEL: EST_LABEL, VENTANA_POR_VENCER: VENTANA_POR_VENCER,
@@ -598,6 +655,7 @@
     clasificarPorCriterio: clasificarPorCriterio, criterioDeDoc: criterioDeDoc, numeroEnNombre: numeroEnNombre,
     scoreCumplimiento: scoreCumplimiento, nextId: nextId, checklistOficial: checklistOficial, SEV_LABEL: SEV_LABEL,
     actaNueva: actaNueva, hallazgos: hallazgos, aplicarHallazgos: aplicarHallazgos,
-    formatoActa: formatoActa, leerActa: leerActa
+    formatoActa: formatoActa, leerActa: leerActa, queHacer: queHacer,
+    SECCIONES_INSPECCION: SECCIONES_INSPECCION, existenteInspeccion: existenteInspeccion, docsSeccion: docsSeccion
   };
 })(window);

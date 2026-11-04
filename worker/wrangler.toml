@@ -16,3 +16,17 @@ enabled = true
 [[kv_namespaces]]
 binding = "CUPO"
 id = "8fe5a7f3f6c6403daf8579d46b15c548"
+
+# Avisos push (avisos.js): mismo namespace KV que el cupo, con otra clave ('avisos/<uid>' contra
+# 'uso/<uid>'), así no hay que crear nada nuevo en Cloudflare.
+[[kv_namespaces]]
+binding = "AVISOS"
+id = "8fe5a7f3f6c6403daf8579d46b15c548"
+
+# Los avisos del día salen a las 08:00 de Lima (13:00 UTC; Perú no cambia de hora).
+[triggers]
+crons = ["0 13 * * *"]
+
+# La clave PRIVADA VAPID (JWK) es secreto, como la de Anthropic; la pública va en js/avisos.js
+# (VAPID_KEY). Si se cambia una hay que cambiar la otra y reactivar los avisos en cada teléfono.
+#   npx wrangler secret put VAPID_PRIVATE_KEY

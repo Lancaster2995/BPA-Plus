@@ -110,7 +110,7 @@ No requiere un servidor propio:
 El frontend es estático y el backend administrado vive en Firebase. La
 instancia oficial se publica en **Firebase Hosting**:
 
-- **Aplicación:** `https://bpa-db.web.app/`
+- **Aplicación:** `https://bpa-db.web.app/` · **en el teléfono:** `https://bpa-db.web.app/movil/` (ver ESTADO.md § App móvil)
 - **Despliegue:** `firebase deploy --only hosting --project bpa-db`
 - **GitHub** conserva el código fuente y el historial; no almacena los datos
   de la aplicación.

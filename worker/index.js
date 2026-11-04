@@ -14,6 +14,7 @@
      npx wrangler secret put ANTHROPIC_API_KEY
    ========================================================================== */
 'use strict';
+import { sincronizarAvisos, guardarSuscripcion, enviarAvisos } from './avisos.js';
 
 const PROJECT_ID = 'bpa-db';
 const JWKS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
@@ -23,7 +24,9 @@ const ORIGENES = [
   'https://bpa-db.web.app',
   'https://bpa-db.firebaseapp.com',
   'http://localhost:8080',
-  'http://127.0.0.1:8080'
+  'http://127.0.0.1:8080',
+  'http://localhost:5194', // app móvil en desarrollo (movil/, npm run dev)
+  'http://localhost:5195'  // app móvil compilada (npm run preview)
 ];
 
 /* Tope por usuario y día. Una sesión robada no puede vaciar la cuenta: con
@@ -110,7 +113,7 @@ function b64urlABytes(s) {
 async function verificarToken(request) {
   const header = request.headers.get('Authorization') || '';
   const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
-  if (!token) throw new ErrorHttp(401, 'Iniciá sesión para generar la evaluación.');
+  if (!token) throw new ErrorHttp(401, 'Iniciá sesión en BPA Plus.');
 
   const partes = token.split('.');
   if (partes.length !== 3) throw new ErrorHttp(401, 'La sesión no es válida.');
@@ -166,6 +169,7 @@ async function consumirCupo(kv, uid) {
 
 /* ------------------------------ Evaluación ------------------------------ */
 async function generarEvaluacion(datos, uid, env) {
+  if (!env.ANTHROPIC_API_KEY) throw new ErrorHttp(500, 'Falta el secreto ANTHROPIC_API_KEY en el worker.');
   const tema = String(datos.tema || '').trim().slice(0, 300);
   if (!tema) throw new ErrorHttp(400, 'Falta el tema de la capacitación.');
   const area = String(datos.area || '').trim().slice(0, 120);
@@ -247,9 +251,18 @@ async function generarEvaluacion(datos, uid, env) {
 }
 
 /* ------------------------------ Entrada ------------------------------ */
-const RUTAS = { '/generarEvaluacion': generarEvaluacion };
+const RUTAS = {
+  '/generarEvaluacion': generarEvaluacion,
+  // Avisos push (worker/avisos.js): la app sincroniza sus vencimientos y activa el teléfono.
+  '/avisos/sync': (datos, uid, env) => sincronizarAvisos(env, uid, datos),
+  '/push/subscribe': (datos, uid, env) => guardarSuscripcion(env, uid, datos)
+};
 
 export default {
+  // Cron diario de wrangler.toml: los avisos de vencimientos de hoy.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(enviarAvisos(env, event.scheduledTime));
+  },
   async fetch(request, env) {
     const cabeceras = cors(request.headers.get('Origin') || '');
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cabeceras });
@@ -267,13 +280,12 @@ export default {
       /* El token primero: sin él nadie tiene por qué enterarse de cómo está configurado
          el worker, ni siquiera de si le falta el secreto. */
       const uid = await verificarToken(request);
-      if (!env.ANTHROPIC_API_KEY) throw new ErrorHttp(500, 'Falta el secreto ANTHROPIC_API_KEY en el worker.');
       let datos;
       try { datos = await request.json(); } catch (e) { throw new ErrorHttp(400, 'El cuerpo no es JSON.'); }
 
       return json(await ruta(datos || {}, uid, env));
     } catch (error) {
-      const status = error instanceof ErrorHttp ? error.status : 500;
+      const status = error.status || 500; // ErrorHttp, y los de avisos.js que traen su estado
       return json({ error: error.message || 'Error inesperado.' }, status);
     }
   }

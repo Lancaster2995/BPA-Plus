@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BPA Plus móvil · boceto</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+<style>
+/* Tokens tomados de BPA-Plus/styles.css: el móvil es BPA Plus, no otra app. */
+:root {
+  --bg: #EAF1F7; --surface: #FFFFFF; --surface-2: #EEF3F8; --track: #E3EBF2;
+  --ink: #13283F; --ink-2: #33495E; --ink-3: #5B6F82;
+  --border: #DCE5EE; --border-strong: #B4C3D2;
+  --navy: #173B58; --navy-2: #1D5F8A; --navy-dim: #A9BDD0;
+  --primary: #2370A1; --beacon-soft: #E2EEF7; --beacon-ink: #1D5F8A;
+  --ok: #1E7A54; --ok-soft: #D8EEE6; --warn: #9A6200; --warn-ink: #6E4A10; --warn-soft: #F6EEE1;
+  --bad: #B9392A; --bad-soft: #FBE9E6;
+  --mono: 'Geist Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: 'Roboto', system-ui, sans-serif; color: var(--ink); background: #DDE7F0; -webkit-font-smoothing: antialiased; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* ---------- Página del boceto ---------- */
+.page { max-width: 1320px; margin: 0 auto; padding: 32px 16px 64px; }
+.intro { max-width: 860px; }
+.intro h1 { font-size: 28px; margin: 0 0 6px; letter-spacing: -.01em; }
+.intro .lead { color: var(--ink-2); margin: 0 0 18px; font-size: 15px; line-height: 1.55; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 36px; }
+.fact { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+.fact b { display: block; color: var(--ink); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+
+.screens { display: flex; flex-wrap: wrap; gap: 40px 32px; justify-content: center; }
+.screen { display: flex; flex-direction: column; gap: 14px; width: 360px; max-width: 100%; }
+.screen h2 { margin: 0; font-size: 16px; display: flex; gap: 8px; align-items: baseline; }
+.screen h2 span { font-family: var(--mono); font-size: 12px; color: var(--ink-3); font-weight: 500; }
+
+.notes { font-size: 13px; line-height: 1.5; color: var(--ink-2); display: grid; gap: 8px; }
+.notes div { background: var(--surface); border-radius: 10px; padding: 10px 12px; border-left: 3px solid var(--border-strong); }
+.notes div > b:first-child { color: var(--ink); display: block; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.notes .cambia { border-left-color: var(--primary); }
+.notes .telefono { border-left-color: var(--ok); }
+.notes .web { border-left-color: var(--warn); }
+.notes ul { margin: 2px 0 0; padding-left: 18px; }
+
+/* ---------- Marco de teléfono ---------- */
+.phone { width: 360px; max-width: 100%; height: 740px; border-radius: 38px; background: #0E1A26; padding: 10px; box-shadow: 0 30px 60px -30px rgba(16,42,67,.55); }
+.scr { position: relative; height: 100%; border-radius: 29px; overflow: hidden; background: linear-gradient(180deg, #ECF3F9 0%, #E7EFF7 100%); display: flex; flex-direction: column; }
+.status { height: 30px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; font-size: 12px; font-weight: 600; }
+.status.dark { background: var(--navy); color: #fff; }
+.notch { width: 90px; height: 20px; border-radius: 12px; background: #0E1A26; }
+.body { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.pad { padding: 0 14px; }
+
+/* Cabecera de droguería: la misma idea que el selector de la barra lateral de la web. */
+.dghead { background: var(--navy); color: #fff; padding: 6px 14px 14px; display: flex; align-items: center; gap: 10px; flex: none; }
+.logo { width: 36px; height: 36px; border-radius: 10px; background: #EAF1F7; display: grid; place-items: center; flex: none; }
+.dgname { flex: 1; min-width: 0; text-align: left; background: none; border: 0; color: inherit; padding: 0; }
+.dgname b { display: block; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dgname small { font-size: 11.5px; color: var(--navy-dim); display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; }
+.dot-sync { width: 7px; height: 7px; border-radius: 50%; background: #6FD3A4; display: inline-block; }
+.bell { width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,.1); display: grid; place-items: center; position: relative; flex: none; }
+.badge { position: absolute; top: 6px; right: 5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: #F4978E; color: #3D1E22; font-size: 10.5px; font-weight: 700; display: grid; place-items: center; }
+
+.card { background: var(--surface); border-radius: 16px; box-shadow: 0 1px 2px rgba(16,42,67,.04), 0 10px 26px -14px rgba(16,42,67,.14); }
+.sec-t { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3); margin: 16px 2px 8px; }
+
+/* Panorama */
+.acta-cta { margin-top: -2px; padding: 14px; border: 1px solid #CFE0EE; }
+.acta-cta .k { font-size: 11px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .06em; }
+.acta-cta .t { font-size: 15.5px; font-weight: 600; margin: 3px 0 2px; }
+.acta-cta .s { font-size: 12.5px; color: var(--ink-3); }
+.bar { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; margin: 10px 0 10px; }
+.bar i { display: block; height: 100%; background: var(--primary); border-radius: 3px; }
+.btn { height: 46px; border-radius: 12px; border: 0; font-weight: 600; font-size: 14.5px; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
+.btn.pri { background: var(--primary); color: #fff; }
+.btn.ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--border-strong); }
+.btn.small { height: 34px; font-size: 12.5px; border-radius: 9px; width: auto; padding: 0 12px; }
+
+.score { display: flex; align-items: center; gap: 14px; padding: 12px 14px; margin-top: 10px; }
+.ring { width: 64px; height: 64px; position: relative; flex: none; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring circle { fill: none; stroke-width: 3.4; }
+.ring b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 16px; }
+.meters { flex: 1; display: grid; gap: 6px; font-size: 12px; color: var(--ink-2); }
+.meters div { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; }
+.meters em { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+.meters em i { display: block; height: 100%; background: var(--navy-2); }
+
+.todo { overflow: hidden; }
+.todo-row { display: flex; gap: 10px; align-items: center; padding: 11px 14px; border-bottom: 1px solid var(--border); min-height: 56px; }
+.todo-row:last-child { border-bottom: 0; }
+.todo-row .tx { flex: 1; min-width: 0; }
+.todo-row b { display: block; font-size: 13.5px; font-weight: 600; }
+.todo-row span.sub { display: block; font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tag { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 11px; font-weight: 600; flex: none; }
+.tag.urg { background: var(--bad-soft); color: var(--bad); }
+.tag.pronto { background: var(--warn-soft); color: var(--warn-ink); }
+.tag.agenda { background: var(--beacon-soft); color: var(--beacon-ink); }
+.tag.ok { background: var(--ok-soft); color: var(--ok); }
+.act { font-size: 12.5px; font-weight: 600; color: var(--primary); background: var(--beacon-soft); border: 0; border-radius: 8px; height: 32px; padding: 0 10px; flex: none; }
+
+/* Barra inferior */
+.tabs { flex: none; display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface); border-top: 1px solid var(--border); padding: 6px 8px 14px; }
+.tab { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--ink-3); padding-top: 4px; }
+.tab .ic { width: 52px; height: 30px; border-radius: 15px; display: grid; place-items: center; }
+.tab.on { color: var(--navy); }
+.tab.on .ic { background: var(--beacon-soft); color: var(--primary); }
+
+/* Acta: mapa de secciones */
+.ahead { background: var(--navy); color: #fff; padding: 4px 14px 14px; flex: none; }
+.back { display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--navy-dim); height: 32px; }
+.ahead h3 { margin: 2px 0 2px; font-size: 18px; }
+.ahead .meta { font-size: 12px; color: var(--navy-dim); }
+.ahead .bar { background: rgba(255,255,255,.14); }
+.ahead .bar i { background: #8CC3E6; }
+.hall { display: flex; gap: 6px; }
+.hall span { flex: 1; border-radius: 10px; padding: 7px 8px; background: rgba(255,255,255,.08); font-size: 11px; color: var(--navy-dim); }
+.hall span b { display: block; font-size: 17px; color: #fff; font-family: var(--mono); }
+.hall .c b { color: #F4978E; } .hall .m b { color: #E2B64D; }
+.secs { overflow: hidden; }
+.srow { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); min-height: 50px; }
+.srow:last-child { border-bottom: 0; }
+.srow .n { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-size: 11.5px; font-weight: 600; background: var(--surface-2); color: var(--ink-3); flex: none; font-family: var(--mono); }
+.srow.done .n { background: var(--ok); color: #fff; }
+.srow.cur .n { background: var(--primary); color: #fff; }
+.srow .tx { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 500; }
+.srow .tx small { display: block; height: 3px; border-radius: 2px; background: var(--track); margin-top: 5px; overflow: hidden; }
+.srow .tx small i { display: block; height: 100%; background: var(--primary); }
+.srow.done .tx small i { background: var(--ok); }
+.srow .cnt { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); flex: none; }
+.srow.cur { background: #F4F8FC; }
+.sticky { flex: none; padding: 10px 14px 16px; background: linear-gradient(180deg, rgba(234,241,247,0), #E7EFF7 30%); }
+
+/* Acta: ítem */
+.itop { flex: none; padding: 0 14px; display: flex; align-items: center; gap: 8px; height: 46px; }
+.itop .back { color: var(--primary); font-weight: 600; flex: 1; }
+.itop .pos { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+.ticks { display: flex; gap: 3px; padding: 0 14px; flex: none; }
+.ticks i { flex: 1; height: 4px; border-radius: 2px; background: var(--track); }
+.ticks i.si { background: var(--ok); } .ticks i.no { background: var(--bad); } .ticks i.cur { background: var(--primary); }
+.qcard { margin: 14px 14px 0; padding: 16px; }
+.qsec { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.ctx { margin: 10px 0 0; padding: 8px 10px; border-radius: 9px; background: var(--surface-2); font-size: 12.5px; color: var(--ink-2); line-height: 1.45; }
+.q { font-size: 21px; line-height: 1.32; font-weight: 600; margin: 12px 0 10px; letter-spacing: -.005em; }
+.q .ref { color: var(--ink-3); font-weight: 500; }
+.sev { display: inline-flex; height: 24px; align-items: center; padding: 0 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.sev.mayor { background: var(--warn-soft); color: var(--warn-ink); }
+.sev.critico { background: var(--bad-soft); color: var(--bad); }
+.obs { margin: 12px 14px 0; }
+.obs label { font-size: 12px; font-weight: 600; color: var(--bad); display: block; margin-bottom: 6px; }
+.obs .ta { background: var(--surface); border: 1.5px solid var(--bad); border-radius: 12px; padding: 11px 12px; font-size: 14px; line-height: 1.45; min-height: 74px; color: var(--ink); }
+.obs .hint { font-size: 11.5px; color: var(--ink-3); margin-top: 6px; display: flex; gap: 6px; align-items: center; }
+.yn { flex: none; padding: 12px 14px 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: auto; }
+.yn button { height: 64px; border-radius: 16px; font-size: 19px; font-weight: 700; border: 2px solid var(--border-strong); background: var(--surface); color: var(--ink-2); display: flex; align-items: center; justify-content: center; gap: 8px; }
+.yn .si { border-color: #9FCDB7; color: var(--ok); }
+.yn .no.sel { background: var(--bad); border-color: var(--bad); color: #fff; }
+.nav2 { flex: none; display: flex; justify-content: space-between; padding: 0 14px 16px; }
+.nav2 button { height: 44px; border: 0; background: none; font-size: 14px; font-weight: 600; color: var(--ink-3); display: flex; align-items: center; gap: 4px; padding: 0 6px; }
+.nav2 .next { color: var(--primary); }
+.offline { margin: 10px 14px 0; font-size: 11.5px; color: var(--warn-ink); background: var(--warn-soft); border-radius: 9px; padding: 6px 10px; display: flex; gap: 6px; align-items: center; }
+
+/* Documentos */
+.dtop { flex: none; padding: 4px 14px 0; }
+.dtop h3 { margin: 4px 0 10px; font-size: 22px; }
+.search { height: 44px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; gap: 8px; padding: 0 12px; color: var(--ink-3); font-size: 14px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 11px; background: #DCE6EF; margin: 10px 0 2px; }
+.seg span { height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 12.5px; font-weight: 600; color: var(--ink-3); }
+.seg span.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(20,38,63,.12); }
+.dlist { overflow: hidden; }
+.drow { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); min-height: 54px; }
+.drow:last-child { border-bottom: 0; }
+.drow .tx { flex: 1; min-width: 0; }
+.drow code { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--navy-2); }
+.drow .nm { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scrim { position: absolute; inset: 0; background: rgba(14,26,38,.42); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: 22px 22px 0 0; padding: 8px 16px 18px; }
+.grab { width: 40px; height: 4px; border-radius: 2px; background: var(--border-strong); margin: 0 auto 12px; }
+.sheet code { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--navy-2); }
+.sheet h4 { margin: 2px 0 8px; font-size: 18px; line-height: 1.3; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 13px; margin: 12px 0; }
+.kv dt { color: var(--ink-3); } .kv dd { margin: 0; font-weight: 500; }
+.file { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: 12.5px; margin-bottom: 12px; }
+.file span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 11.5px; }
+
+.tech { max-width: 980px; margin: 48px auto 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.tech h3 { grid-column: 1 / -1; margin: 0; font-size: 18px; }
+
+@media (max-width: 420px) {
+  .page { padding-top: 20px; }
+  .intro h1 { font-size: 23px; }
+  .phone { border-radius: 30px; padding: 7px; height: 720px; }
+  .scr { border-radius: 24px; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="intro">
+    <h1>BPA Plus móvil — el acta en la mano</h1>
+    <p class="lead">En el escritorio, BPA Plus arma y archiva el sistema documental de cada droguería. En el teléfono sirve para <b>recorrer el almacén y llenar el acta de autoinspección</b> (REGISTRO_004: 16 secciones, 291 ítems), muchas veces sin señal, y para <b>mostrar o revisar un documento</b> cuando lo piden en una inspección. Misma marca, mismos datos y misma cuenta que la web: una droguería activa a la vez.</p>
+    <div class="facts">
+      <div class="fact"><b>Para quién</b>Tú, como D.T. o responsable de calidad, en las droguerías que atiendes. Es la misma cuenta y los mismos datos de Firestore que en bpa-db.web.app.</div>
+      <div class="fact"><b>Qué hace mejor que la web adaptada</b>Hoy el acta en el celular es un diálogo pequeño con botones de 36 px dentro de la página. Aquí es la pantalla entera: un ítem a la vez, Sí/No de pulgar y observación dictada.</div>
+      <div class="fact"><b>Sin señal</b>Lo que marques se guarda en el teléfono y se envía solo al volver la conexión (caché de Firestore). La app abre sin señal porque guarda también Firebase.</div>
+    </div>
+  </div>
+
+  <div class="screens">
+
+    <!-- ========== 1. Panorama ========== -->
+    <section class="screen">
+      <h2>1 · Panorama <span>#/</span></h2>
+      <div class="phone"><div class="scr">
+        <div class="status dark"><span>9:41</span><span class="notch"></span><span>5G ▮▮▮</span></div>
+        <div class="dghead">
+          <span class="logo"><svg width="22" height="22" viewBox="0 0 64 64"><rect x="10" y="10" width="6" height="44" rx="2" fill="#173B58"/><path d="M16 32a16 16 0 0 1 32 0h-8a8 8 0 0 0-16 0z" fill="#2370A1"/><path d="M16 32a16 16 0 0 0 32 0h-8a8 8 0 0 1-16 0z" fill="#173B58"/></svg></span>
+          <button class="dgname"><b>INTELLIGENCE TECHNOLOGY COMPANY S.A.C.</b><small><span class="dot-sync"></span><span class="mono">RUC 20608966405</span> · Conectado ▾</small></button>
+          <span class="bell"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="badge">9</span></span>
+        </div>
+        <div class="body pad" style="padding-top:12px">
+          <div class="card acta-cta">
+            <div class="k">Acta en curso</div>
+            <div class="t">Acta N.° <span class="mono">012-2026</span> · Almacén general</div>
+            <div class="s">Sección 4 de 16 · <span class="mono">143 / 291</span> ítems · 1 crítico, 4 mayores</div>
+            <div class="bar"><i style="width:49%"></i></div>
+            <button class="btn pri">Seguir el recorrido</button>
+          </div>
+          <div class="card score">
+            <div class="ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" stroke="#E3EBF2"/><circle cx="18" cy="18" r="15.9" stroke="#2370A1" stroke-dasharray="69 100" stroke-linecap="round"/></svg><b>69%</b></div>
+            <div class="meters">
+              <div><span>Documentos al día</span><span class="mono">6/8</span><em><i style="width:75%"></i></em></div>
+              <div><span>Capacitaciones al día</span><span class="mono">4/5</span><em><i style="width:80%"></i></em></div>
+              <div><span>Autoinspecciones</span><span class="mono">1/3</span><em><i style="width:33%"></i></em></div>
+            </div>
+          </div>
+          <div class="sec-t">Qué hacer ahora</div>
+          <div class="card todo">
+            <div class="todo-row"><div class="tx"><b>Autoinspección atrasada</b><span class="sub">Almacén general · programada el 31 oct 2026</span></div><button class="act">Iniciar acta</button></div>
+            <div class="todo-row"><div class="tx"><b>POE-ALM-003 vencido</b><span class="sub">Limpieza y sanitización · revisión 21 oct</span></div><span class="tag urg">Urgente</span></div>
+            <div class="todo-row"><div class="tx"><b>Capacitación «Inducción en BPA…»</b><span class="sub">Fecha pasada sin realizar · 25 oct</span></div><button class="act">Realizada</button></div>
+            <div class="todo-row"><div class="tx"><b>FOR-ALM-011 por vencer</b><span class="sub">Revisión el 30 nov 2026</span></div><span class="tag pronto">Pronto</span></div>
+          </div>
+        </div>
+        <nav class="tabs">
+          <span class="tab on"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span>Panorama</span>
+          <span class="tab"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3h6v3H9z"/><path d="m9 13 2 2 4-4"/></svg></span>Acta</span>
+          <span class="tab"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg></span>Documentos</span>
+        </nav>
+      </div></div>
+      <div class="notes">
+        <div class="cambia"><b>Qué cambia frente a la web</b>El panorama de la droguería activa, con lo primero que se hace en el teléfono arriba: seguir el acta. El anillo y «Qué hacer ahora» son los de la web, con las mismas reglas (<span class="mono">domain.js</span>).</div>
+        <div class="telefono"><b>Desde el teléfono</b><ul><li>Cambiar de droguería tocando su nombre.</li><li>La campana junta los vencimientos de 30 días de <i>todas</i> las droguerías, como en la web.</li><li>«Iniciar acta» desde la autoinspección programada (queda vinculada) y marcar una capacitación como realizada.</li></ul></div>
+        <div class="web"><b>Se queda en la web</b>Retiro de mercado, información del almacén, criterios y siglas, respaldo JSON e importar el cronograma.</div>
+      </div>
+    </section>
+
+    <!-- ========== 2. Acta: mapa ========== -->
+    <section class="screen">
+      <h2>2 · Acta: secciones <span>#/acta/:id</span></h2>
+      <div class="phone"><div class="scr">
+        <div class="status dark"><span>9:41</span><span class="notch"></span><span>5G ▮▮▮</span></div>
+        <div class="ahead">
+          <div class="back">‹ Panorama</div>
+          <h3>Acta N.° <span class="mono">012-2026</span></h3>
+          <div class="meta">REGISTRO_004 · Almacén general · 02 nov 2026 · E. Cordova</div>
+          <div class="bar"><i style="width:49%"></i></div>
+          <div class="hall"><span class="c"><b>1</b>Críticos</span><span class="m"><b>4</b>Mayores</span><span><b>2</b>Menores</span><span><b>143</b>de 291</span></div>
+        </div>
+        <div class="body pad" style="padding-top:10px">
+          <div class="card secs">
+            <div class="srow"><span class="n">✎</span><span class="tx">Datos generales del acta<small style="background:none"></small></span><span class="cnt">›</span></div>
+            <div class="srow done"><span class="n">✓</span><span class="tx">Sistema de aseguramiento de la calidad<small><i style="width:100%"></i></small></span><span class="cnt">12/12</span></div>
+            <div class="srow done"><span class="n">✓</span><span class="tx">Personal<small><i style="width:100%"></i></small></span><span class="cnt">21/21</span></div>
+            <div class="srow done"><span class="n">✓</span><span class="tx">Instalaciones, equipos e instrumentos<small><i style="width:100%"></i></small></span><span class="cnt">103/103</span></div>
+            <div class="srow cur"><span class="n">4</span><span class="tx">Almacén<small><i style="width:54%"></i></small></span><span class="cnt">7/13</span></div>
+            <div class="srow"><span class="n">5</span><span class="tx">Área de recepción<small><i style="width:0"></i></small></span><span class="cnt">0/16</span></div>
+            <div class="srow"><span class="n">6</span><span class="tx">Muestras de retención<small><i style="width:0"></i></small></span><span class="cnt">0/1</span></div>
+            <div class="srow"><span class="n">7</span><span class="tx">Cuarentena / aprobados / almacenamiento<small><i style="width:0"></i></small></span><span class="cnt">0/41</span></div>
+            <div class="srow"><span class="n">8</span><span class="tx">Baja / rechazados<small><i style="width:0"></i></small></span><span class="cnt">0/4</span></div>
+          </div>
+        </div>
+        <div class="sticky"><button class="btn pri">Seguir donde quedé · Almacén, ítem 8</button></div>
+      </div></div>
+      <div class="notes">
+        <div class="cambia"><b>Qué cambia frente a la web</b>En la web el acta es un asistente dentro de un diálogo. Aquí es una pantalla con el mapa de las 16 secciones (las demás siguen hacia abajo), el recuento de hallazgos en vivo y, al final, <b>Cierre</b>: observaciones adicionales, conclusiones y medidas correctivas.</div>
+        <div class="telefono"><b>Desde el teléfono</b><ul><li>Crear el acta (N.°, fecha, auditor y almacén ya llenados con los datos de la droguería; el resto, opcional).</li><li>Saltar a cualquier sección o seguir donde quedó.</li><li>Al terminar, «Registrar resultado» en la autoinspección vinculada (fecha, hallazgos y conclusiones), lo que en la web es un paso aparte.</li></ul></div>
+        <div class="web"><b>Se queda en la web</b>Imprimir el acta o pasarla al formato propio de la droguería, y descargar el formato para el sub-programa: ese sigue sirviendo para quien no tiene cuenta.</div>
+      </div>
+    </section>
+
+    <!-- ========== 3. Acta: ítem ========== -->
+    <section class="screen">
+      <h2>3 · Recorrido: un ítem a la vez <span>#/acta/:id/4/8</span></h2>
+      <div class="phone"><div class="scr">
+        <div class="status"><span>9:41</span><span class="notch"></span><span>sin señal</span></div>
+        <div class="itop"><span class="back">‹ Almacén</span><span class="pos">ítem 8 / 13</span></div>
+        <div class="ticks"><i class="si"></i><i class="si"></i><i class="si"></i><i class="si"></i><i class="no"></i><i class="si"></i><i class="si"></i><i class="cur"></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="offline">● Sin conexión · se guarda en el teléfono y se envía al volver</div>
+        <div class="card qcard">
+          <div class="qsec">Sección 4 · Almacén</div>
+          <div class="ctx"><b>a)</b> El almacén cuenta con las siguientes áreas debidamente separadas, delimitadas e identificadas:</div>
+          <div class="q">— Despacho</div>
+          <span class="sev mayor">Mayor</span>
+        </div>
+        <div class="obs">
+          <label>Observación del hallazgo</label>
+          <div class="ta">Despacho comparte zona con embalaje; falta delimitar con cinta y rotular.</div>
+          <div class="hint">🎤 Dicta con el micrófono del teclado · se guarda mientras escribes</div>
+        </div>
+        <div class="yn"><button class="si">✓ Sí</button><button class="no sel">✕ No</button></div>
+        <div class="nav2"><button>‹ Anterior</button><button>Saltar</button><button class="next">Siguiente ›</button></div>
+      </div></div>
+      <div class="notes">
+        <div class="cambia"><b>Qué cambia frente a la web</b>Un ítem por pantalla, con letra grande y la severidad a la vista. Si el ítem es un renglón «- …», arriba se muestra el enunciado del que depende, para que se entienda solo. La barra de rayitas es la sección: verde Sí, rojo No.</div>
+        <div class="telefono"><b>Desde el teléfono</b><ul><li><b>Sí</b> pasa solo al siguiente ítem. <b>No</b> abre la observación y espera.</li><li>Tocar de nuevo la respuesta marcada la borra, igual que en la web.</li><li>El botón atrás del teléfono vuelve a las secciones; se puede cerrar la app en cualquier momento: queda guardado.</li></ul></div>
+        <div class="web"><b>Igual que en la web</b>El acta es el mismo registro (<span class="mono">actas</span> en Firestore, mismas claves <span class="mono">sección::ítem</span>): lo que llenes aquí se ve y se imprime en la web.</div>
+      </div>
+    </section>
+
+    <!-- ========== 4. Documentos ========== -->
+    <section class="screen">
+      <h2>4 · Documentos y expediente <span>#/documentos</span></h2>
+      <div class="phone"><div class="scr">
+        <div class="status"><span>9:41</span><span class="notch"></span><span>5G ▮▮▮</span></div>
+        <div class="dtop">
+          <h3>Documentos</h3>
+          <div class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>Código o nombre…</div>
+          <div class="seg"><span class="on">Documentos · 8</span><span>Expediente de inspección</span></div>
+        </div>
+        <div class="body pad">
+          <div class="sec-t">POEs</div>
+          <div class="card dlist">
+            <div class="drow"><div class="tx"><code>POE-ALM-001</code><div class="nm">Recepción de productos farmacéuticos</div></div><span class="tag ok">Vigente</span></div>
+            <div class="drow"><div class="tx"><code>POE-ALM-002</code><div class="nm">Control de temperatura y humedad</div></div><span class="tag pronto">Por vencer</span></div>
+            <div class="drow"><div class="tx"><code>POE-ALM-003</code><div class="nm">Limpieza y sanitización del almacén</div></div><span class="tag urg">Vencido</span></div>
+          </div>
+        </div>
+        <nav class="tabs">
+          <span class="tab"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span>Panorama</span>
+          <span class="tab"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3h6v3H9z"/><path d="m9 13 2 2 4-4"/></svg></span>Acta</span>
+          <span class="tab on"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg></span>Documentos</span>
+        </nav>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <code>POE-ALM-003</code> <span class="tag urg" style="margin-left:6px">Vencido hace 12 d</span>
+          <h4>Limpieza y sanitización del almacén</h4>
+          <dl class="kv"><dt>Tipo</dt><dd>POE</dd><dt>Área</dt><dd>Almacén</dd><dt>Versión</dt><dd class="mono">V01</dd><dt>Próxima revisión</dt><dd>21 oct 2026</dd></dl>
+          <div class="file">📄<span>POE-ALM-003_limpieza-y-sanitizacion_V01.pdf</span></div>
+          <button class="btn pri">Abrir en Drive</button>
+        </div>
+      </div></div>
+      <div class="notes">
+        <div class="cambia"><b>Qué cambia frente a la web</b>Solo consulta. Una búsqueda por código o nombre, la lista agrupada por criterio como en la web, y la ficha en una hoja inferior. La otra pestaña es el <b>expediente de inspección</b>: autorización sanitaria, certificado BPA, planos y listados, lo que piden primero en una inspección.</div>
+        <div class="telefono"><b>Desde el teléfono</b><ul><li>Ver la vigencia y abrir el archivo vigente o sus anexos en Google Drive. Desde la app de Drive se envía o descarga.</li></ul></div>
+        <div class="web"><b>Se queda en la web</b>Crear, editar, versionar y cargar archivos; escanear la carpeta BPA; formatos propios; versiones anteriores y formatos llenados.</div>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="tech">
+    <h3>Cómo se construye y qué no cambia</h3>
+    <div class="fact"><b>Reutiliza, no duplica</b>Proyecto Vite aparte en <span class="mono">BPA-Plus/movil/</span> (React 18.3.1). Carga tal cual <span class="mono">js/domain.js</span> (estados, puntaje, checklist, hallazgos), <span class="mono">js/cloud.js</span> (Firebase por CDN, sin instalar el paquete <span class="mono">firebase</span>) y el PIN de <span class="mono">js/lock.js</span>. Solo la interfaz es nueva.</div>
+    <div class="fact"><b>Cuenta y PIN</b>Mismo correo y contraseña de Firebase. Si se publica en el mismo sitio (por ejemplo <span class="mono">bpa-db.web.app/movil/</span>), el teléfono comparte sesión, PIN y caché con la web, y Drive no pide configurar nada nuevo. Dónde publicar lo decides tú al final.</div>
+    <div class="fact"><b>Técnica de teléfono</b>Rutas <span class="mono">#/…</span> con el botón atrás, pestañas abajo, márgenes de la muesca, toques de 44 px o más (Sí/No de 64 px), tema claro y oscuro como la web. Prueba con <span class="mono">npm run check</span> sobre la navegación del acta (siguiente ítem, enunciado del que depende, «seguir donde quedé»).</div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -12,23 +12,25 @@
 
   var WINDOW_DAYS = 30;
 
-  function collect() {
+  /* `ventana`: días hacia adelante (30 por defecto); avisos.js pide más para el Worker. */
+  function collect(ventana) {
+    var w = ventana || WINDOW_DAYS;
     var byId = {}; store.data.droguerias.forEach(function (e) { byId[e.id] = e; });
     var items = [];
 
     store.data.documentos.forEach(function (d) {
       var n = D.dias(d.rev);
-      if (n <= WINDOW_DAYS) items.push({ kind: 'doc', dg: byId[d.e], obj: d, fecha: d.rev, dias: n, titulo: d.codigo + ' · ' + d.nombre });
+      if (n <= w) items.push({ kind: 'doc', dg: byId[d.e], obj: d, fecha: d.rev, dias: n, titulo: d.codigo + ' · ' + d.nombre });
     });
     store.data.capacitaciones.forEach(function (c) {
       if (D.ecap(c) === 'realizada') return;
       var n = D.dias(c.fecha);
-      if (n <= WINDOW_DAYS) items.push({ kind: 'cap', dg: byId[c.e], obj: c, fecha: c.fecha, dias: n, titulo: c.tema });
+      if (n <= w) items.push({ kind: 'cap', dg: byId[c.e], obj: c, fecha: c.fecha, dias: n, titulo: c.tema });
     });
     store.data.inspecciones.forEach(function (i) {
       if (i.real) return;
       var n = D.dias(i.prog);
-      if (n <= WINDOW_DAYS) items.push({ kind: 'insp', dg: byId[i.e], obj: i, fecha: i.prog, dias: n, titulo: i.area });
+      if (n <= w) items.push({ kind: 'insp', dg: byId[i.e], obj: i, fecha: i.prog, dias: n, titulo: i.area });
     });
 
     items = items.filter(function (it) { return it.dg; });
@@ -80,6 +82,6 @@
   global.BPAPLUS = global.BPAPLUS || {};
   global.BPAPLUS.alerts = {
     setStore: function (s, v) { store = s; V = v; },
-    count: count, open: open
+    count: count, open: open, collect: collect
   };
 })(window);

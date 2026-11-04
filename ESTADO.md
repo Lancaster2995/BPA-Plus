@@ -366,6 +366,82 @@ desde Inicio, alertas o el buscador lleva a Documentos con ese documento selecci
 archivo no la cierra: el render del guardado la muestra actualizada. Las filas de documento
 ahora se enfocan con Tab y se abren con Enter.
 
+## App móvil (2026-11-03) — `movil-app/` → bpa-db.web.app/movil/
+
+PWA aparte en React + Vite (React 18.3.1, Vite 8.2.0, `vite-plugin-pwa` 1.3.0), hecha a partir del
+boceto aprobado [boceto-movil-bpaplus.html](boceto-movil-bpaplus.html). No es la web en pequeño:
+es el acta REGISTRO_004 en la mano para recorrer el almacén, más el Panorama de la droguería activa
+y la consulta de documentos. Cuatro pantallas: **Panorama** (acta en curso, anillo de cumplimiento,
+«Qué hacer ahora» con «Iniciar acta» y «Realizada»), **Acta** (mapa de las 16 secciones, datos
+generales, cierre con «Registrar resultado» en la autoinspección vinculada), **Recorrido** (un ítem
+por pantalla; Sí pasa solo al siguiente, No abre la observación) y **Documentos** (búsqueda, ficha y
+expediente de inspección; los archivos se abren en Drive). Imprimir, cargar archivos, retiro,
+formatos propios y todo lo administrativo siguen en la web.
+
+Lo que no conviene aflojar:
+
+- **No copia reglas.** [movil-app/src/legacy.js](movil-app/src/legacy.js) importa tal cual `config.js`,
+  `cloud.js`, `domain.js`, `ui.js`, `db.js`, `lock.js` y `alerts.js`. Mismo Firebase (por CDN, sin
+  paquete npm), mismo PIN (`bpa-plus-lock`), mismo tema, mismos registros. El acta que se llena en el
+  teléfono es el mismo documento `actas` (claves `sección::ítem`, `paso` = sección): se ve, se sigue
+  y se imprime en la web.
+- Para eso salieron de las vistas tres piezas puras que ahora viven en `domain.js`: `queHacer`
+  (el «Qué hacer ahora» del Panorama), `SECCIONES_INSPECCION` y `docsSeccion` (el expediente). Y
+  `alerts.js` exporta `collect`. `views.js` las usa desde ahí; el harness siguió en OK.
+- **Sin señal.** Lo que se marca va a la caché de Firestore y se envía al volver. El SW de la app
+  guarda también los módulos de Firebase de gstatic (`CacheFirst`): sin eso no abriría sin conexión.
+  Cada toque reescribe el acta entera, igual que la web (marcado `ponytail:` en `App.jsx`).
+- **Rutas `#/…` con `pushState`:** el botón atrás cierra hojas y vuelve del ítem al mapa; pasar de un
+  ítem a otro reemplaza la entrada, así atrás no recorre 291 ítems.
+
+Prueba: `cd movil-app && npm run check` (navegación del acta contra el checklist real, rutas, `queHacer`
+y `docsSeccion`). Para verla sin cuenta: `npm run demo` (sin Firebase, datos de ejemplo de ITC en
+IndexedDB, como la web abierta sin `cloud.js`); el build de producción no trae ese modo.
+
+**Publicación:** el código está en `movil-app/` y `npm run build` compila en `movil/`, que Hosting
+sirve como **https://bpa-db.web.app/movil/** (mismo sitio que la web: misma sesión, PIN, caché de
+Firestore y Client ID de Drive). `movil/` se versiona a propósito: un despliegue de la web hecho
+desde un clon sin compilar sigue publicando la app móvil. `firebase.json` ignora `movil-app/**`,
+redirige `/movil` a `/movil/` (sin la barra las rutas relativas se rompen) y sirve sin caché su
+`index.html` y su manifiesto. **Antes de `firebase deploy`, si cambió algo en `movil-app/`:**
+`npm --prefix movil-app run build`. El SW de la app móvil tiene alcance `/movil/`; el de la web no
+recarga esas ventanas.
+
+**Verificado** en Chrome a 375 px con el modo demo (PIN, Panorama, nueva acta desde la autoinspección,
+Sí/No/observación, recarga, mapa, cierre y resultado, documentos, expediente, alertas, droguerías,
+tema oscuro) y el build de producción hasta el acceso de Firebase, con el SW activo. **Sin verificar:**
+con sesión real (Firestore de verdad) y en un teléfono.
+
+## Avisos push (2026-11-03) — `worker/avisos.js`, `js/avisos.js`
+
+Copiado del enfoque de LogisticS (`LogisticS/worker/src/web-push.js` y `test-reminders.js`), no
+diseñado de cero. [worker/web-push.js](worker/web-push.js) es el de LogisticS tal cual: Web Push sin
+dependencias (aes128gcm, RFC 8291, y firma VAPID, RFC 8292, con Web Crypto); solo cambia el contacto.
+
+- **Qué avisa:** los vencimientos de `alerts.js` (documentos, capacitaciones, autoinspecciones) de
+  **todas** las droguerías. Un aviso por hito, como LogisticS (uno por recordatorio): a 7 días y el día
+  que vence (o el primero en que se ve vencido). Lo que toca un mismo día va en **una** notificación
+  a las **08:00 de Lima** (cron `0 13 * * *`). Tocarla abre las alertas en la app móvil.
+- **Quién sabe qué:** la lista la arma la app con sus propias reglas y la manda al Worker
+  (`POST /avisos/sync`) al abrir y tras cada cambio, en la web y en el teléfono, solo si cambió. El
+  Worker no duplica reglas ni lee Firestore. Sin teléfonos activados no guarda nada. Renovar un
+  documento le cambia la fecha, y eso vuelve a armar sus avisos.
+- **Activar** (Droguerías › «Activar avisos en este teléfono», en la app móvil): permiso dentro del
+  toque (iOS lo exige), suscripción con la clave VAPID pública y `POST /push/subscribe`; el Worker
+  guarda el teléfono **solo si le llega el aviso de prueba**. Un 404/410 lo borra.
+- **Dónde vive:** KV `avisos/<uid>` (`{ subs, items, enviados }`), en el mismo namespace que el cupo
+  (binding `AVISOS`, otra clave): no hubo que crear nada nuevo en Cloudflare.
+- **iPhone:** iOS 16.4+ y la app abierta desde la pantalla de inicio; en una pestaña de Safari no hay push.
+
+Claves: la **pública** está en `js/avisos.js` (`VAPID_KEY`); la **privada** en `worker/.dev.vars`
+(fuera de git) y va como secreto `VAPID_PRIVATE_KEY`. Cambiar una obliga a cambiar la otra y a
+reactivar cada teléfono.
+
+Prueba: `node worker/test-avisos.mjs` (vector del RFC 8291, VAPID, hitos, un push por día, prueba
+al activar, 410, renovados) y `npm run check` en `movil-app/` (el manejador de push del SW). El
+Worker está **desplegado** (03/11) con el secreto y el cron; sin sesión responde 401 en las dos rutas
+nuevas. **Sin probar contra Apple/Google de verdad**: falta activar un teléfono.
+
 ## Pendiente
 
 Lo que queda está encargado en **[ENCARGO-CODEX-1.md](ENCARGO-CODEX-1.md)**, con criterios

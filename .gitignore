@@ -2,3 +2,5 @@
 Thumbs.db
 worker/.wrangler/
 .firebase/
+movil-app/node_modules/
+worker/.dev.vars

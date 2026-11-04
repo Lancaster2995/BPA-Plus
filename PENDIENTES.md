@@ -5,12 +5,31 @@ Verificado el **2026-10-03**. Estado completo: [ESTADO.md](ESTADO.md) · encargo
 
 ## Estado hoy
 
-- `main` pusheado, árbol **limpio**, y producción (`https://bpa-db.web.app/`) igual al
-  árbol: desplegado el 03/10 con el harness en OK. GitHub Pages está desactivado.
+- **03/11: producción va por delante de git.** Se desplegó (Hosting y Worker) la app móvil, los
+  avisos push y su refactor, y también el cambio de `js/actas.js` (las evaluaciones impresas van sin
+  pies de firma, `?v=48`), con el harness en OK y `CACHE` v78. **Nada está commiteado**: producción
+  es el árbol de esta carpeta.
+- Antes del 03/11: `main` pusheado y producción (`https://bpa-db.web.app/`) igual al árbol,
+  desplegado el 03/10. GitHub Pages está desactivado.
 - **Push no es despliegue.** Producción se publica aparte con
   `firebase deploy --only hosting --project bpa-db`, subiendo antes el `?v=` del archivo
   tocado en `index.html` y `sw.js`, y el `CACHE` de `sw.js`.
 - El Worker de Cloudflare **ya está desplegado** y conectado en `workerUrl`, con KV y secreto.
+
+## App móvil y avisos push (2026-11-03)
+
+**Publicada en https://bpa-db.web.app/movil/** y Worker desplegado (`/avisos/sync`, `/push/subscribe`,
+cron `0 13 * * *`, secreto `VAPID_PRIVATE_KEY`). Código en `movil-app/`, compilado en `movil/`
+([ESTADO.md](ESTADO.md) § App móvil y § Avisos push). Verificado en producción hasta el acceso de
+Firebase, sin errores.
+
+1. **Commitear** lo desplegado, incluido `js/actas.js`.
+2. **Probarla con tu sesión en el teléfono**: instalarla (Chrome › Instalar aplicación; iPhone:
+   Compartir › Agregar a inicio), entrar, crear un acta, llenarla en modo avión y ver que llegue a la
+   web al volver la señal.
+3. **Activar los avisos** en el teléfono: Droguerías › «Activar avisos en este teléfono». Tiene que
+   llegar «Avisos activados». Es la primera prueba real contra Apple/Google.
+4. **Al cambiar `movil-app/`:** `npm --prefix movil-app run build` antes de `firebase deploy`.
 
 ## Pendiente
 
