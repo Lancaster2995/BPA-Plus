@@ -126,7 +126,8 @@
     var html = participantes.map(function (p) {
       p = p || {};
       var valores = valoresDe(p);
-      if (fmt) return '<div class="acta">' + membrete(dg) + F.render(fmt, valores, [valores]) + '</div>';
+      // Las evaluaciones van sin pies de firma, aunque el formato traiga los de por defecto.
+      if (fmt) return '<div class="acta">' + membrete(dg) + F.render(Object.assign({}, fmt, { firmas: [] }), valores, [valores]) + '</div>';
       return '<div class="acta">' + membrete(dg) +
         '<h1>Evaluación de capacitación</h1>' +
         '<div class="acta-meta">' +
@@ -137,10 +138,7 @@
         '</div>' +
         '<table class="eval-head"><tbody><tr><td><b>Participante:</b></td><td>' + esc(p.nombre || '') + '</td><td><b>Cargo:</b></td><td>' + esc(p.cargo || '') + '</td></tr></tbody></table>' +
         (cuerpo || '<p style="color:#888">Esta capacitación todavía no tiene evaluación generada.</p>') +
-        '<div class="acta-firmas">' +
-          '<div class="firma-line">Firma del participante</div>' +
-          '<div class="firma-line">Evaluado por — ' + esc(dg.dt || '') + '</div>' +
-        '</div></div>';
+        '</div>';
     }).join('');
     print(html);
     }
