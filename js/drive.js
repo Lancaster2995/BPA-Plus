@@ -49,7 +49,14 @@
      se pide un clic propio en vez de dejar que la ventana se bloquee. Un solo pedido a la vez. */
   function ensureAuth() {
     var clientId = getClientId();
-    if (!clientId) return Promise.reject(new Error('NO_CLIENT_ID'));
+    /* El Client ID vive en el localStorage de cada navegador: en otra PC no está. Se pide
+       acá, para cualquier llamada a Drive, en vez de fallar con un error crudo. Un panel a la vez. */
+    if (!clientId) {
+      if (!state.panel) state.panel = new Promise(function (resolve, reject) {
+        connectPanel(function () { resolve(state.token); }, reject);
+      }).finally(function () { state.panel = null; });
+      return state.panel;
+    }
     if (isConnected()) return Promise.resolve(state.token);
     if (state.pending) return state.pending;
     state.pending = loadScript(GIS_SRC).then(function () {
@@ -631,9 +638,7 @@
   function subirArchivo(relative, file, name) {
     /* ponytail: una cola por pestaña; separar por cuenta solo si se permiten sesiones simultáneas. */
     var job = uploadQueue.catch(function () {}).then(function () {
-      return (getClientId() ? Promise.resolve() : new Promise(function (resolve, reject) {
-        connectPanel(resolve, reject);
-      })).then(function () { return driveUpload(file, name || file.name); });
+      return driveUpload(file, name || file.name);
     });
     uploadQueue = job;
     return job;
@@ -1153,9 +1158,7 @@
   }
 
   function withAuth(run) {
-    if (!getClientId()) { connectPanel(run); return; }
     ensureAuth().then(run).catch(function (e) {
-      if (String(e && e.message) === 'NO_CLIENT_ID') return connectPanel(run);
       UI.note('Google Drive: ' + (e && e.message || 'no se pudo conectar'));
     });
   }

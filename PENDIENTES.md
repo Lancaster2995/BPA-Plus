@@ -5,6 +5,9 @@ Verificado el **2026-10-03**. Estado completo: [ESTADO.md](ESTADO.md) · encargo
 
 ## Estado hoy
 
+- **06/11:** desplegado `js/drive.js?v=55` (`CACHE` v79): en un navegador sin Client ID guardado
+  (otra PC), cualquier función de Drive —p. ej. el acta de asistencia con formato propio— abre
+  el panel «Conectar Google Drive» en vez de fallar con `NO_CLIENT_ID`. Harness en OK.
 - **03/11:** desplegado (Hosting y Worker) y commiteado en `feat/crear-diapositiva`: la app móvil,
   los avisos push y su refactor, y el cambio de `js/actas.js` (evaluaciones impresas sin pies de
   firma, `?v=48`), con el harness en OK y `CACHE` v78. Producción = el árbol = GitHub
