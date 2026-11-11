@@ -17,12 +17,23 @@
   var XLSX_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
   var JSZIP_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
   var PDF_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs';
-  /* `drive.readonly` para escanear las carpetas que la droguería ya tiene; `drive.file`
-     para guardar las nuestras. `drive.file` es el scope angosto: solo ve los archivos que
-     esta app creó, nunca el resto del Drive. */
-  var SCOPE = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file';
+  /* Conector universal (MAPA.md, «Recepcion y envio universal de documentos»): el Client ID es el
+     de Sentinel y el permiso solo `drive.file`. Así BPA Plus ve lo que creó Sentinel (la carpeta
+     «BPA Plus» de cada cliente, sn=bpa) y lo suyo, nunca el resto del Drive. Lo subido a mano a
+     Drive entra primero a Sentinel («Traer de Drive»). */
+  var SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
-  var state = { token: null, tokenClient: null, expiresAt: 0 };
+  var state = { token: null, tokenClient: null, expiresAt: 0, email: '' };
+  /* El acceso se recuerda, como en Sentinel: el token vale la hora que dura aunque se recargue, y al
+     vencer Google lo renueva para la misma cuenta (login_hint) sin elegirla de nuevo. */
+  var CLAVE_ACCESO = 'bpa-plus-drive';
+  try {
+    var guardado = JSON.parse(localStorage.getItem(CLAVE_ACCESO)) || {};
+    state.token = guardado.token || null; state.expiresAt = guardado.expiresAt || 0; state.email = guardado.email || '';
+  } catch (e) {}
+  function recordar() {
+    try { localStorage.setItem(CLAVE_ACCESO, JSON.stringify({ token: state.token, expiresAt: state.expiresAt, email: state.email })); } catch (e) {}
+  }
 
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
@@ -34,13 +45,16 @@
   }
 
   function validClientId(id) { return /\.apps\.googleusercontent\.com$/i.test(String(id || '').trim()); }
+  /* Clave nueva a propósito: el Client ID propio de BPA Plus que quedó guardado con la clave
+     anterior ya no sirve (con drive.file no vería lo de Sentinel), así que se pide el de Sentinel. */
+  var CLAVE_CLIENT_ID = 'bpa-plus-sentinel-client-id';
   function getClientId() {
     try {
-      var id = localStorage.getItem('bpa-plus-drive-client-id') || '';
+      var id = localStorage.getItem(CLAVE_CLIENT_ID) || '';
       return validClientId(id) ? id : '';
     } catch (e) { return ''; }
   }
-  function setClientId(id) { try { localStorage.setItem('bpa-plus-drive-client-id', id); } catch (e) {} }
+  function setClientId(id) { try { localStorage.setItem(CLAVE_CLIENT_ID, id); } catch (e) {} }
 
   function isConnected() { return !!state.token && Date.now() < state.expiresAt; }
 
@@ -70,12 +84,17 @@
             client.requestAccessToken({ prompt: '' });
           };
           var client = google.accounts.oauth2.initTokenClient({
-            client_id: clientId, scope: SCOPE,
+            client_id: clientId, scope: SCOPE, login_hint: state.email || undefined,
             callback: function (resp) {
               clearTimeout(popupTimer);
               if (resp.error) { reject(new Error(resp.error)); return; }
               state.token = resp.access_token;
-              state.expiresAt = Date.now() + (Number(resp.expires_in) || 3300) * 1000;
+              state.expiresAt = Date.now() + ((Number(resp.expires_in) || 3360) - 60) * 1000;
+              recordar();
+              if (!state.email) fetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', { headers: { Authorization: 'Bearer ' + state.token } })
+                .then(function (r) { return r.json(); })
+                .then(function (a) { state.email = (a.user && a.user.emailAddress) || ''; recordar(); })
+                .catch(function () {});
               resolve(state.token);
             },
             error_callback: function (error) {
@@ -105,6 +124,7 @@
     var url = 'https://www.googleapis.com/drive/v3/' + path + (params ? '?' + params : '');
     return ensureAuth().then(function (token) {
       return fetch(url, { headers: { Authorization: 'Bearer ' + token } }).then(function (r) {
+        if (r.status === 401) { state.token = null; recordar(); }   // revocado: el próximo intento lo pide
         if (!r.ok) return r.text().then(function (t) { throw new Error('Drive API ' + r.status + ': ' + t.slice(0, 200)); });
         return r;
       });
@@ -143,6 +163,21 @@
       return Promise.all(subfolders.map(function (f) { return filesInFolder(f.id, pageSize, _depth + 1, f.name); }))
         .then(function (nested) { return leaves.concat.apply(leaves, nested); });
     }).then(function (all) { return pageSize ? all.slice(0, pageSize) : all.slice(0, 300); });
+  }
+
+  /* Las carpetas «BPA Plus» que prepara Sentinel (sn=bpa), una por cliente: [{id, cliente}]. */
+  function carpetasSentinel() {
+    var q = "mimeType = '" + FOLDER_TYPE + "' and appProperties has { key='sn' and value='bpa' } and trashed = false";
+    return api('files', 'q=' + encodeURIComponent(q) + '&fields=' + encodeURIComponent('files(id,parents)') + '&pageSize=200')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        return Promise.all((d.files || []).map(function (f) {
+          var padre = (f.parents || [])[0];
+          return (padre ? fileMeta(padre).then(function (p) { return p.name; }, function () { return ''; }) : Promise.resolve(''))
+            .then(function (cliente) { return { id: f.id, cliente: cliente || 'Sin cliente' }; });
+        }));
+      })
+      .then(function (l) { return l.sort(function (a, b) { return a.cliente.localeCompare(b.cliente); }); });
   }
 
   function fileMeta(fileId) {
@@ -1138,8 +1173,8 @@
     var m = UI.dialog({
       title: 'Conectar Google Drive',
       body:
-        '<p class="dialog-note">La app se conecta directo a tu cuenta de Google desde el navegador — no hay servidor propio de por medio. Necesitás un Client ID de OAuth propio (gratis, se crea una vez en Google Cloud Console). Instrucciones en el README.</p>' +
-        '<div class="field"><label>Client ID de OAuth</label><input class="inp mono" id="dr_cid" value="' + UI.esc(clientId) + '" placeholder="xxxxx.apps.googleusercontent.com"></div>',
+        '<p class="dialog-note">La app se conecta directo a tu cuenta de Google desde el navegador — no hay servidor propio de por medio. Usá el Client ID de Sentinel (lo ves en sus Ajustes): todas las apps comparten el mismo y así BPA Plus ve las carpetas que Sentinel prepara.</p>' +
+        '<div class="field"><label>Client ID de Sentinel</label><input class="inp mono" id="dr_cid" value="' + UI.esc(clientId) + '" placeholder="xxxxx.apps.googleusercontent.com"></div>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="dr_connect">Conectar</button>',
       onMount: function (root) {
         root.querySelector('#dr_connect').onclick = function () {
@@ -1170,7 +1205,7 @@
         body:
           '<div class="field"><label>Carpeta o archivos del dispositivo</label><input class="inp" id="im_local" type="file" accept=".pdf,.doc,.docx,.xlsx" webkitdirectory multiple><div class="hint">Lee PDF con texto, Word y Excel. Los Word .doc antiguos se identifican por el nombre. Cada original se guarda automáticamente en tu Drive.</div></div>' +
           '<div class="section-title">O seleccionar desde Google Drive</div>' +
-          '<div class="grid-2"><div class="field"><label>Carpeta de Drive (URL o ID)</label><input class="inp" id="im_folder" placeholder="https://drive.google.com/drive/folders/…"></div>' +
+          '<div class="grid-2"><div class="field"><label>Carpeta «BPA Plus» de Sentinel</label><select class="inp" id="im_folder"><option value="">Elegí el cliente…</option></select><div class="hint">Sentinel la llena con «Preparar para BPA Plus».</div></div>' +
           '<div class="field"><label>… o buscar por nombre</label><input class="inp" id="im_q" placeholder="POE, Registro…"></div></div>' +
           '<button class="btn btn-ghost btn-sm" id="im_go" type="button">' + UI.icon('search', 14) + ' Buscar</button>' +
           '<div id="im_results" style="margin-top:14px"></div>',
@@ -1192,15 +1227,27 @@
             var btn = root.querySelector('#im_add'); btn.disabled = !n; btn.textContent = 'Agregar seleccionados (' + n + ')';
           }
           root.querySelector('#im_results').addEventListener('change', updateCount);
+          /* La lista de clientes se pide al tocar el selector: abrir el panel para un archivo local
+             no debe pedir Google. */
+          var sel = root.querySelector('#im_folder'), cargadas = false;
+          sel.onfocus = function () {
+            if (cargadas) return;
+            cargadas = true;
+            withAuth(function () {
+              carpetasSentinel().then(function (l) {
+                sel.innerHTML = '<option value="">' + (l.length ? 'Elegí el cliente…' : 'Sentinel aún no preparó ninguna carpeta') + '</option>' +
+                  l.map(function (c) { return '<option value="' + UI.esc(c.id) + '">' + UI.esc(c.cliente) + '</option>'; }).join('');
+              }).catch(function (e) { cargadas = false; UI.note('Google Drive: ' + (e && e.message || e)); });
+            });
+          };
           root.querySelector('#im_local').onchange = function (event) {
             found = localFiles(event.target.files); renderResults();
           };
           root.querySelector('#im_go').onclick = function () {
             withAuth(function () {
               var box = root.querySelector('#im_results'); box.innerHTML = '<div class="row-empty">Buscando…</div>';
-              var folderRaw = root.querySelector('#im_folder').value.trim();
               var q = root.querySelector('#im_q').value.trim();
-              var folderId = folderRaw ? extractIdFromUrl(folderRaw) : null;
+              var folderId = sel.value || null;
               var task = folderId ? filesInFolder(folderId) : searchFiles(q);
               task.then(function (files) { found = files; renderResults(); })
                 .catch(function (e) { box.innerHTML = '<div class="row-empty">Error: ' + UI.esc(e.message || e) + '</div>'; });
@@ -1608,6 +1655,6 @@
     exportarFormato: exportarFormato, exportarFormatoXlsx: exportarFormatoXlsx, exportarFormatoDocx: exportarFormatoDocx,
     camposRequeridos: camposRequeridos,
     deleteStored: deleteStored, filePanel: filePanel,
-    linkPanel: linkPanel, extractIdFromUrl: extractIdFromUrl
+    linkPanel: linkPanel, extractIdFromUrl: extractIdFromUrl, carpetasSentinel: carpetasSentinel
   };
 })(window);

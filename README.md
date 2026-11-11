@@ -140,8 +140,10 @@ local en cada dispositivo.
 ## Conectar Google Drive
 
 La app se conecta directo a tu cuenta desde el navegador — no hay servidor
-propio en el medio, así que necesitás tu propio "Client ID" de OAuth
-(gratis, se crea una sola vez).
+propio en el medio. **Desde el 10/11/2026 usa el Client ID de Sentinel** (conector
+universal: todas las apps comparten uno, ver `MAPA.md`). En ese Client ID hay que agregar
+`https://bpa-db.web.app` a los orígenes autorizados. Los pasos de abajo son para crear
+uno, si algún día hiciera falta.
 
 > Esto funciona instalando BPA-Plus como PWA (ver arriba). Un APK nativo que
 > envuelva la página en un WebView **no** puede usar este login — Google
@@ -170,11 +172,11 @@ cada vez.
 
 Drive no es solo de lectura: los archivos que cargues (documentos, formatos,
 material de capacitación) también se guardan ahí, en una carpeta `BPA-Plus`
-que la app crea sola. Por eso pide dos permisos y no uno:
-
-- `drive.readonly` — para escanear las carpetas que ya tenés y leer lo que elijas.
-- `drive.file` — para guardar lo suyo. Es el permiso angosto: con él la app
-  **solo ve los archivos que ella misma creó**, nunca el resto de tu Drive.
+que la app crea sola. Pide un solo permiso, `drive.file`: con el Client ID de
+Sentinel ve lo que crearon Sentinel y ella misma, nunca el resto de tu Drive.
+«Escanear carpeta BPA» lee la carpeta «BPA Plus» del cliente que prepara Sentinel
+(«Preparar para BPA Plus»). Lo que subiste a mano a Drive entra primero a Sentinel
+(«Traer de Drive», que lo mueve sin cambiarle el id).
 
 ## Datos y respaldo
 
