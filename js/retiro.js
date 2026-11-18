@@ -339,12 +339,12 @@
         '<p class="dialog-note">Para un expediente que ya tenés armado: se guardan los archivos tal cual, ' +
           'sin generar los documentos.</p>' +
         '<div class="field"><label><input type="checkbox" id="x_sim"' + (sim(r) ? ' checked' : '') + '> Es un simulacro</label></div>' +
-        '<div class="field" id="wrap_xprod"><label>Producto</label><input class="inp" id="x_prod" value="' + esc(r.producto) +
+        '<div class="field" id="wrap_xprod"><label for="x_prod">Producto</label><input class="inp" id="x_prod" value="' + esc(r.producto) +
           '"><div class="err">Ingresá el producto.</div></div>' +
-        '<div class="grid-2"><div class="field" id="wrap_xlote"><label>Lote / serie</label><input class="inp mono" id="x_lote" value="' +
+        '<div class="grid-2"><div class="field" id="wrap_xlote"><label for="x_lote">Lote / serie</label><input class="inp mono" id="x_lote" value="' +
           esc(r.lote) + '"><div class="err">Ingresá el lote.</div></div>' +
-          '<div class="field"><label>Fecha del retiro</label><input class="inp" id="x_fecha" type="date" value="' + esc(r.cartaFabFecha || '') + '"></div></div>' +
-        '<div class="field"><label>Archivos del expediente</label><input class="inp" id="x_files" type="file" multiple accept="' + ACCEPT + '">' +
+          '<div class="field"><label for="x_fecha">Fecha del retiro</label><input class="inp" id="x_fecha" type="date" value="' + esc(r.cartaFabFecha || '') + '"></div></div>' +
+        '<div class="field"><label for="x_files">Archivos del expediente</label><input class="inp" id="x_files" type="file" multiple accept="' + ACCEPT + '">' +
           '<div class="hint">PDF, Word, Excel, JPG, PNG o ZIP de menos de 25 MB; podés elegir varios.' +
           (existing ? ' Se agregan a los que ya tiene.' : '') + '</div></div>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button>' +
@@ -578,7 +578,7 @@
     if (!lots.length) { UI.note('La droguería coincidente no tiene lotes en LogisticS.'); return; }
     var m = UI.dialog({
       title: 'Traer lote de LogisticS',
-      body: '<div class="field"><label>Lote / serie</label><select class="inp" id="log_lot">' + lots.map(function (l, i) {
+      body: '<div class="field"><label for="log_lot">Lote / serie</label><select class="inp" id="log_lot">' + lots.map(function (l, i) {
         return '<option value="' + i + '">' + esc([l.importNo, l.product, 'lote ' + l.batch].filter(Boolean).join(' · ')) + '</option>';
       }).join('') + '</select></div><p class="dialog-note">Coincidencia: ' + esc(payload.drogueria && payload.drogueria.name || '') + '</p>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" data-use-logistics>Usar datos</button>',
@@ -631,42 +631,42 @@
 
         '<div class="section-title">Producto</div>' +
         '<button class="btn btn-ghost btn-sm" type="button" data-logistics>' + icon('download', 14) + 'Traer de LogisticS</button>' +
-        '<div class="field" id="wrap_prod"><label>Producto</label><input class="inp" id="r_prod" value="' + esc(r.producto) +
+        '<div class="field" id="wrap_prod"><label for="r_prod">Producto</label><input class="inp" id="r_prod" value="' + esc(r.producto) +
           '"><div class="err">Ingresá el producto.</div></div>' +
-        '<div class="grid-2"><div class="field"><label>Código</label><input class="inp mono" id="r_cod" value="' + esc(r.codigo || '') + '"></div>' +
-          '<div class="field" id="wrap_lote"><label>Lote / serie</label><input class="inp mono" id="r_lote" value="' + esc(r.lote) +
+        '<div class="grid-2"><div class="field"><label for="r_cod">Código</label><input class="inp mono" id="r_cod" value="' + esc(r.codigo || '') + '"></div>' +
+          '<div class="field" id="wrap_lote"><label for="r_lote">Lote / serie</label><input class="inp mono" id="r_lote" value="' + esc(r.lote) +
             '"><div class="err">Ingresá el lote.</div></div></div>' +
-        '<div class="grid-2"><div class="field"><label>Presentación comercial</label><input class="inp" id="r_pres" value="' + esc(r.presentacion || '') + '"></div>' +
-          '<div class="field"><label>Fecha de vencimiento</label><input class="inp" id="r_venc" value="' + esc(r.venc || '') + '" placeholder="N/A"></div></div>' +
-        '<div class="grid-2"><div class="field"><label>Registro sanitario</label><input class="inp mono" id="r_rs" value="' + esc(r.rs || '') + '"></div>' +
-          '<div class="field"><label>Factura / invoice del ingreso</label><input class="inp" id="r_fact" value="' + esc(r.factura || '') + '"></div></div>' +
-        '<div class="grid-2"><div class="field"><label>Fecha de la factura</label><input class="inp" id="r_factf" type="date" value="' + esc(r.facturaFecha || '') + '"></div>' +
-          '<div class="field"><label>Unidades del lote (importación)</label><input class="inp mono" id="r_dist" type="number" min="0" value="' + distribuida(r) + '"></div></div>' +
+        '<div class="grid-2"><div class="field"><label for="r_pres">Presentación comercial</label><input class="inp" id="r_pres" value="' + esc(r.presentacion || '') + '"></div>' +
+          '<div class="field"><label for="r_venc">Fecha de vencimiento</label><input class="inp" id="r_venc" value="' + esc(r.venc || '') + '" placeholder="N/A"></div></div>' +
+        '<div class="grid-2"><div class="field"><label for="r_rs">Registro sanitario</label><input class="inp mono" id="r_rs" value="' + esc(r.rs || '') + '"></div>' +
+          '<div class="field"><label for="r_fact">Factura / invoice del ingreso</label><input class="inp" id="r_fact" value="' + esc(r.factura || '') + '"></div></div>' +
+        '<div class="grid-2"><div class="field"><label for="r_factf">Fecha de la factura</label><input class="inp" id="r_factf" type="date" value="' + esc(r.facturaFecha || '') + '"></div>' +
+          '<div class="field"><label for="r_dist">Unidades del lote (importación)</label><input class="inp mono" id="r_dist" type="number" min="0" value="' + distribuida(r) + '"></div></div>' +
 
         '<div class="section-title">Carta del fabricante</div>' +
-        '<div class="grid-2"><div class="field"><label>Fabricante</label><input class="inp" id="r_fab" value="' + esc(r.fabricante || '') + '"></div>' +
-          '<div class="field"><label>N° de carta</label><input class="inp mono" id="r_cnum" value="' + esc(r.cartaFabNum || '') + '"></div></div>' +
-        '<div class="grid-2"><div class="field"><label>Fecha de la carta</label><input class="inp" id="r_cfec" type="date" value="' + esc(r.cartaFabFecha || '') + '"></div>' +
-          '<div class="field"><label>Quien firma</label><input class="inp" id="r_cfirm" value="' + esc(r.fabFirmante || '') + '"></div></div>' +
-        '<div class="grid-2"><div class="field"><label>Cargo de quien firma</label><input class="inp" id="r_ccargo" value="' + esc(r.fabCargo || '') + '"></div>' +
-          '<div class="field"><label>Motivo del retiro</label><input class="inp" id="r_mot" value="' + esc(r.motivo || '') + '"></div></div>' +
+        '<div class="grid-2"><div class="field"><label for="r_fab">Fabricante</label><input class="inp" id="r_fab" value="' + esc(r.fabricante || '') + '"></div>' +
+          '<div class="field"><label for="r_cnum">N° de carta</label><input class="inp mono" id="r_cnum" value="' + esc(r.cartaFabNum || '') + '"></div></div>' +
+        '<div class="grid-2"><div class="field"><label for="r_cfec">Fecha de la carta</label><input class="inp" id="r_cfec" type="date" value="' + esc(r.cartaFabFecha || '') + '"></div>' +
+          '<div class="field"><label for="r_cfirm">Quien firma</label><input class="inp" id="r_cfirm" value="' + esc(r.fabFirmante || '') + '"></div></div>' +
+        '<div class="grid-2"><div class="field"><label for="r_ccargo">Cargo de quien firma</label><input class="inp" id="r_ccargo" value="' + esc(r.fabCargo || '') + '"></div>' +
+          '<div class="field"><label for="r_mot">Motivo del retiro</label><input class="inp" id="r_mot" value="' + esc(r.motivo || '') + '"></div></div>' +
 
         '<div class="section-title">Destinatarios</div>' +
         '<div id="destList">' + dests(r).map(destRow).join('') + '</div>' +
         '<button class="btn btn-ghost btn-sm" type="button" id="r_adddest">' + icon('plus', 14) + 'Agregar destinatario</button>' +
 
         '<div class="section-title">Cierre y eficacia</div>' +
-        '<div class="grid-2"><div class="field"><label>Representante legal</label><input class="inp" id="r_rep" value="' + esc(r.repLegal || '') + '"></div>' +
-          '<div class="field"><label>Comunicación usada</label><input class="inp" id="r_com" value="' + esc(r.comunicacion || 'Carta') + '"></div></div>' +
-        '<div class="grid-2"><div class="field"><label>Primera solicitud de retiro</label><input class="inp" id="r_fsol" type="date" value="' + esc(r.fSolicitud || '') + '"></div>' +
-          '<div class="field"><label>Ingreso del primer producto</label><input class="inp" id="r_fing" type="date" value="' + esc(r.fIngreso || '') + '"></div></div>' +
-        '<div class="grid-2"><div class="field"><label>Ingreso del último producto</label><input class="inp" id="r_fingu" type="date" value="' + esc(r.fIngresoUlt || '') + '"></div>' +
-          '<div class="field"><label>Destrucción del producto</label><input class="inp" id="r_fdes" type="date" value="' + esc(r.fDestruccion || '') + '"></div></div>' +
-        '<div class="grid-2"><div class="field"><label>Costo de comercialización</label><input class="inp mono" id="r_cc" type="number" step="0.01" min="0" value="' + num(r.costoComercial) + '"></div>' +
-          '<div class="field"><label>Costo del proceso de retiro</label><input class="inp mono" id="r_cp" type="number" step="0.01" min="0" value="' + num(r.costoProceso) + '"></div></div>' +
-        '<div class="grid-2"><div class="field"><label>Unidades vencidas</label><input class="inp mono" id="r_venc2" type="number" min="0" value="' + num(r.vencidas) + '"></div>' +
-          '<div class="field"><label>Comunicación a DIGEMID</label><input class="inp" id="r_dig" type="date" value="' + esc(r.digemidFecha || '') + '"></div></div>' +
-        '<div class="field"><label>Conclusiones</label><textarea class="inp" id="r_conc" rows="3">' + esc(r.conclusiones || '') + '</textarea></div>',
+        '<div class="grid-2"><div class="field"><label for="r_rep">Representante legal</label><input class="inp" id="r_rep" value="' + esc(r.repLegal || '') + '"></div>' +
+          '<div class="field"><label for="r_com">Comunicación usada</label><input class="inp" id="r_com" value="' + esc(r.comunicacion || 'Carta') + '"></div></div>' +
+        '<div class="grid-2"><div class="field"><label for="r_fsol">Primera solicitud de retiro</label><input class="inp" id="r_fsol" type="date" value="' + esc(r.fSolicitud || '') + '"></div>' +
+          '<div class="field"><label for="r_fing">Ingreso del primer producto</label><input class="inp" id="r_fing" type="date" value="' + esc(r.fIngreso || '') + '"></div></div>' +
+        '<div class="grid-2"><div class="field"><label for="r_fingu">Ingreso del último producto</label><input class="inp" id="r_fingu" type="date" value="' + esc(r.fIngresoUlt || '') + '"></div>' +
+          '<div class="field"><label for="r_fdes">Destrucción del producto</label><input class="inp" id="r_fdes" type="date" value="' + esc(r.fDestruccion || '') + '"></div></div>' +
+        '<div class="grid-2"><div class="field"><label for="r_cc">Costo de comercialización</label><input class="inp mono" id="r_cc" type="number" step="0.01" min="0" value="' + num(r.costoComercial) + '"></div>' +
+          '<div class="field"><label for="r_cp">Costo del proceso de retiro</label><input class="inp mono" id="r_cp" type="number" step="0.01" min="0" value="' + num(r.costoProceso) + '"></div></div>' +
+        '<div class="grid-2"><div class="field"><label for="r_venc2">Unidades vencidas</label><input class="inp mono" id="r_venc2" type="number" min="0" value="' + num(r.vencidas) + '"></div>' +
+          '<div class="field"><label for="r_dig">Comunicación a DIGEMID</label><input class="inp" id="r_dig" type="date" value="' + esc(r.digemidFecha || '') + '"></div></div>' +
+        '<div class="field"><label for="r_conc">Conclusiones</label><textarea class="inp" id="r_conc" rows="3">' + esc(r.conclusiones || '') + '</textarea></div>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="r_save">Guardar</button>',
       onMount: function (root) {
         var list = root.querySelector('#destList');

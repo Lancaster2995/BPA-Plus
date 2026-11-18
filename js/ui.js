@@ -222,6 +222,13 @@
     if (e.key === 'Escape' && openStack.length) { openStack[openStack.length - 1].close(); }
   });
 
+  // Campos repetidos por fila (sin id): tocar el título enfoca la caja que tiene debajo.
+  document.addEventListener('click', function (e) {
+    var l = e.target.closest && e.target.closest('label:not([for])');
+    var c = l && l.nextElementSibling;
+    if (c && /^(INPUT|SELECT|TEXTAREA)$/.test(c.tagName) && !l.contains(c)) c.focus();
+  });
+
   global.BPAPLUS = global.BPAPLUS || {};
   /* ------------------------------ Descarga de un JSON ------------------------------ */
   function download(nombre, obj) {

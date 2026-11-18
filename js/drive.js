@@ -1136,12 +1136,12 @@
     var m = UI.dialog({
       title: agregar ? (doc.file ? 'Agregar archivos' : 'Cargar archivos') : (doc.file ? 'Reemplazar archivo' : 'Cargar archivo'),
       body: (agregar ? '' : '<p class="dialog-note">El reemplazo conserva la versión anterior. Si eliges varios archivos, el primero queda como vigente y los demás como anexos. Los formatos llenados se archivan como registros y no sustituyen la plantilla vacía.</p>') +
-        '<div class="field"><label>PDF, Word o Excel (máximo 25 MB cada uno)</label><input class="inp" id="df_file" type="file" accept=".pdf,.doc,.docx,.xlsx" multiple required></div>' +
-        (agregar ? '' : '<div class="grid-2"><div class="field"><label>Uso del archivo</label><select class="inp" id="df_role">' +
+        '<div class="field"><label for="df_file">PDF, Word o Excel (máximo 25 MB cada uno)</label><input class="inp" id="df_file" type="file" accept=".pdf,.doc,.docx,.xlsx" multiple required></div>' +
+        (agregar ? '' : '<div class="grid-2"><div class="field"><label for="df_role">Uso del archivo</label><select class="inp" id="df_role">' +
           '<option value="controlado"' + (defaultRole === 'controlado' ? ' selected' : '') + '>Documento controlado</option>' +
           '<option value="plantilla"' + (defaultRole === 'plantilla' ? ' selected' : '') + '>Plantilla vacía</option>' +
           '<option value="registro">Formato llenado</option></select></div>' +
-        '<div class="field"><label>Versión</label><input class="inp mono" id="df_version" type="number" min="1" value="' + (+(doc.version || 1) + (doc.file ? 1 : 0)) + '"></div></div>'),
+        '<div class="field"><label for="df_version">Versión</label><input class="inp mono" id="df_version" type="number" min="1" value="' + (+(doc.version || 1) + (doc.file ? 1 : 0)) + '"></div></div>'),
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="df_save">Subir</button>',
       onMount: function (root) {
         root.querySelector('#df_save').onclick = function () {
@@ -1174,7 +1174,7 @@
       title: 'Conectar Google Drive',
       body:
         '<p class="dialog-note">La app se conecta directo a tu cuenta de Google desde el navegador — no hay servidor propio de por medio. Usá el Client ID de Sentinel (lo ves en sus Ajustes): todas las apps comparten el mismo y así BPA Plus ve las carpetas que Sentinel prepara.</p>' +
-        '<div class="field"><label>Client ID de Sentinel</label><input class="inp mono" id="dr_cid" value="' + UI.esc(clientId) + '" placeholder="xxxxx.apps.googleusercontent.com"></div>',
+        '<div class="field"><label for="dr_cid">Client ID de Sentinel</label><input class="inp mono" id="dr_cid" value="' + UI.esc(clientId) + '" placeholder="xxxxx.apps.googleusercontent.com"></div>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="dr_connect">Conectar</button>',
       onMount: function (root) {
         root.querySelector('#dr_connect').onclick = function () {
@@ -1203,10 +1203,10 @@
       var m = UI.dialog({
         title: 'Escanear documentos BPA', wide: true,
         body:
-          '<div class="field"><label>Carpeta o archivos del dispositivo</label><input class="inp" id="im_local" type="file" accept=".pdf,.doc,.docx,.xlsx" webkitdirectory multiple><div class="hint">Lee PDF con texto, Word y Excel. Los Word .doc antiguos se identifican por el nombre. Cada original se guarda automáticamente en tu Drive.</div></div>' +
+          '<div class="field"><label for="im_local">Carpeta o archivos del dispositivo</label><input class="inp" id="im_local" type="file" accept=".pdf,.doc,.docx,.xlsx" webkitdirectory multiple><div class="hint">Lee PDF con texto, Word y Excel. Los Word .doc antiguos se identifican por el nombre. Cada original se guarda automáticamente en tu Drive.</div></div>' +
           '<div class="section-title">O seleccionar desde Google Drive</div>' +
-          '<div class="grid-2"><div class="field"><label>Carpeta «BPA Plus» de Sentinel</label><select class="inp" id="im_folder"><option value="">Elegí el cliente…</option></select><div class="hint">Sentinel la llena con «Preparar para BPA Plus».</div></div>' +
-          '<div class="field"><label>… o buscar por nombre</label><input class="inp" id="im_q" placeholder="POE, Registro…"></div></div>' +
+          '<div class="grid-2"><div class="field"><label for="im_folder">Carpeta «BPA Plus» de Sentinel</label><select class="inp" id="im_folder"><option value="">Elegí el cliente…</option></select><div class="hint">Sentinel la llena con «Preparar para BPA Plus».</div></div>' +
+          '<div class="field"><label for="im_q">… o buscar por nombre</label><input class="inp" id="im_q" placeholder="POE, Registro…"></div></div>' +
           '<button class="btn btn-ghost btn-sm" id="im_go" type="button">' + UI.icon('search', 14) + ' Buscar</button>' +
           '<div id="im_results" style="margin-top:14px"></div>',
         footer: '<button class="btn btn-ghost" data-close>Cerrar</button><button class="btn btn-primary" id="im_add" disabled>Agregar seleccionados (0)</button>',
@@ -1500,9 +1500,9 @@
           '<p class="dialog-note">' + (esInsp
             ? 'Se leen las áreas y sus fechas programadas. Si la hoja mezcla capacitaciones y autoinspecciones, se importan ambas.'
             : 'Se leen temas, áreas y fechas. Si la hoja mezcla capacitaciones y autoinspecciones, se importan ambas.') + '</p>' +
-          '<div class="field"><label>Archivos XLSX del dispositivo</label><input class="inp" id="cr_file" type="file" multiple accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div>' +
+          '<div class="field"><label for="cr_file">Archivos XLSX del dispositivo</label><input class="inp" id="cr_file" type="file" multiple accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div>' +
           '<div class="section-title">O seleccionar desde Google Drive</div>' +
-          '<div class="field"><label>Archivo XLSX (URL, ID o nombre)</label><input class="inp" id="cr_q" value="CRONOGRAMA" placeholder="REGISTRO 005 CRONOGRAMA..."></div>' +
+          '<div class="field"><label for="cr_q">Archivo XLSX (URL, ID o nombre)</label><input class="inp" id="cr_q" value="CRONOGRAMA" placeholder="REGISTRO 005 CRONOGRAMA..."></div>' +
           '<button class="btn btn-ghost btn-sm" id="cr_go" type="button">' + UI.icon('search', 14) + ' Buscar</button>' +
           '<div id="cr_results" style="margin-top:14px"></div>',
         footer: '<button class="btn btn-ghost" data-close>Cerrar</button>',
@@ -1613,7 +1613,7 @@
       var m = UI.dialog({
         title: 'Vincular a Google Drive',
         body:
-          '<div class="field"><label>Buscar archivo por nombre</label><input class="inp" id="lk_q" value="' + UI.esc(doc.codigo || '') + '"></div>' +
+          '<div class="field"><label for="lk_q">Buscar archivo por nombre</label><input class="inp" id="lk_q" value="' + UI.esc(doc.codigo || '') + '"></div>' +
           '<button class="btn btn-ghost btn-sm" id="lk_go" type="button">' + UI.icon('search', 14) + ' Buscar</button>' +
           '<div id="lk_results" style="margin-top:12px"></div>',
         footer: '<button class="btn btn-ghost" data-close>Cerrar</button>',

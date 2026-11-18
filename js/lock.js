@@ -159,8 +159,8 @@
       title: 'Cambiar PIN',
       body:
         '<p class="dialog-note">El PIN se guarda solo en este dispositivo. Si lo olvidás, tendrás que borrar los datos locales para volver a entrar.</p>' +
-        '<div class="field"><label>Nuevo PIN (4 a 6 dígitos)</label><input class="inp mono" id="lp_new" type="password" inputmode="numeric" maxlength="6" placeholder="Nuevo PIN"></div>' +
-        '<div class="field"><label>Confirmar</label><input class="inp mono" id="lp_conf" type="password" inputmode="numeric" maxlength="6" placeholder="Repetí el PIN"></div>' +
+        '<div class="field"><label for="lp_new">Nuevo PIN (4 a 6 dígitos)</label><input class="inp mono" id="lp_new" type="password" inputmode="numeric" maxlength="6" placeholder="Nuevo PIN"></div>' +
+        '<div class="field"><label for="lp_conf">Confirmar</label><input class="inp mono" id="lp_conf" type="password" inputmode="numeric" maxlength="6" placeholder="Repetí el PIN"></div>' +
         '<div class="err" id="lp_err">Los PIN no coinciden o son muy cortos (mínimo 4 dígitos).</div>',
       footer:
         '<button class="btn btn-ghost" data-close>Cancelar</button>' +

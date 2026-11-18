@@ -150,12 +150,12 @@
     var m = UI.dialog({
       title: existing ? 'Editar documento' : 'Nuevo documento',
       body:
-        '<div class="grid-2"><div class="field" id="wrap_codigo"><label>Código</label><input class="inp mono" id="f_cod" value="' + esc(d.codigo) + '" placeholder="POE-ALM-001"><div class="err">Siglas y número, como figura en el documento (ej. POE-ALM-001).</div></div>' +
-        '<div class="field"><label>Versión</label><input class="inp mono" id="f_ver" type="number" min="1" value="' + esc(d.version) + '"></div></div>' +
-        '<div class="field" id="wrap_nombre"><label>Nombre del documento</label><input class="inp" id="f_nom" value="' + esc(d.nombre) + '" placeholder="Recepción de productos"><div class="err">Ingresá un nombre.</div></div>' +
-        '<div class="grid-2"><div class="field"><label>Área</label><select class="inp" id="f_area">' + opts(global.BPAPLUS.drive.opciones(AREAS, 'area', d.area), d.area) + '</select></div>' +
-        '<div class="field"><label>Tipo</label><select class="inp" id="f_tipo">' + opts(global.BPAPLUS.drive.opciones(TIPOS, 'tipo', d.tipo), d.tipo) + '</select></div></div>' +
-        '<div class="field"><label>Fecha de próxima revisión / vencimiento</label><input class="inp" id="f_rev" type="date" value="' + esc(d.rev) + '">' +
+        '<div class="grid-2"><div class="field" id="wrap_codigo"><label for="f_cod">Código</label><input class="inp mono" id="f_cod" value="' + esc(d.codigo) + '" placeholder="POE-ALM-001"><div class="err">Siglas y número, como figura en el documento (ej. POE-ALM-001).</div></div>' +
+        '<div class="field"><label for="f_ver">Versión</label><input class="inp mono" id="f_ver" type="number" min="1" value="' + esc(d.version) + '"></div></div>' +
+        '<div class="field" id="wrap_nombre"><label for="f_nom">Nombre del documento</label><input class="inp" id="f_nom" value="' + esc(d.nombre) + '" placeholder="Recepción de productos"><div class="err">Ingresá un nombre.</div></div>' +
+        '<div class="grid-2"><div class="field"><label for="f_area">Área</label><select class="inp" id="f_area">' + opts(global.BPAPLUS.drive.opciones(AREAS, 'area', d.area), d.area) + '</select></div>' +
+        '<div class="field"><label for="f_tipo">Tipo</label><select class="inp" id="f_tipo">' + opts(global.BPAPLUS.drive.opciones(TIPOS, 'tipo', d.tipo), d.tipo) + '</select></div></div>' +
+        '<div class="field"><label for="f_rev">Fecha de próxima revisión / vencimiento</label><input class="inp" id="f_rev" type="date" value="' + esc(d.rev) + '">' +
         '<div class="hint">El estado (vigente / por vencer / vencido) se calcula solo a partir de esta fecha.</div></div>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="f_save">Guardar</button>',
       onMount: function (root) {
@@ -504,10 +504,10 @@
     var m = UI.dialog({
       title: existing ? 'Editar capacitación' : 'Nueva capacitación', wide: true,
       body:
-        '<div class="field" id="wrap_tema"><label>Tema</label><input class="inp" id="c_tema" value="' + esc(c.tema) + '" placeholder="Inducción en BPA"><div class="err">Ingresá un tema.</div></div>' +
-        '<div class="grid-2"><div class="field"><label>Área</label><select class="inp" id="c_area">' + opts(AREAS, c.area) + '</select></div>' +
-        '<div class="field"><label>Frecuencia</label><select class="inp" id="c_frec">' + opts(FRECS, c.frec) + '</select></div></div>' +
-        '<div class="field"><label>Fecha programada</label><input class="inp" id="c_fecha" type="date" value="' + esc(c.fecha) + '"></div>' +
+        '<div class="field" id="wrap_tema"><label for="c_tema">Tema</label><input class="inp" id="c_tema" value="' + esc(c.tema) + '" placeholder="Inducción en BPA"><div class="err">Ingresá un tema.</div></div>' +
+        '<div class="grid-2"><div class="field"><label for="c_area">Área</label><select class="inp" id="c_area">' + opts(AREAS, c.area) + '</select></div>' +
+        '<div class="field"><label for="c_frec">Frecuencia</label><select class="inp" id="c_frec">' + opts(FRECS, c.frec) + '</select></div></div>' +
+        '<div class="field"><label for="c_fecha">Fecha programada</label><input class="inp" id="c_fecha" type="date" value="' + esc(c.fecha) + '"></div>' +
         '<div class="field"><label>Material de la capacitación</label>' +
           '<input class="inp" id="c_material" type="file" accept=".pdf,.docx,.xlsx,.pptx" multiple>' +
           '<div class="hint">' + ((c.materiales || []).length ? (c.materiales.length + ' archivo(s) ya cargado(s). ') : '') +
@@ -836,8 +836,8 @@
     var m = UI.dialog({
       title: existing ? 'Editar autoinspección' : 'Programar autoinspección',
       body:
-        '<div class="field"><label>Área a inspeccionar</label><input class="inp" id="i_area" value="' + esc(i.area) + '"></div>' +
-        '<div class="field"><label>Fecha programada</label><input class="inp" id="i_prog" type="date" value="' + esc(i.prog) + '"></div>',
+        '<div class="field"><label for="i_area">Área a inspeccionar</label><input class="inp" id="i_area" value="' + esc(i.area) + '"></div>' +
+        '<div class="field"><label for="i_prog">Fecha programada</label><input class="inp" id="i_prog" type="date" value="' + esc(i.prog) + '"></div>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="i_save">Guardar</button>',
       onMount: function (root) {
         root.querySelector('#i_save').onclick = function () {
@@ -894,9 +894,9 @@
     var m = UI.dialog({
       title: 'Registrar resultado',
       body:
-        '<div class="field"><label>Fecha de realización</label><input class="inp" id="r_fecha" type="date" value="' + D.isoHoy() + '"></div>' +
-        '<div class="field"><label>Hallazgos abiertos</label><input class="inp mono" id="r_hall" type="number" min="0" value="0"></div>' +
-        '<div class="field"><label>Resultado / observaciones</label><textarea class="inp" id="r_res" placeholder="Resumen de la inspección…"></textarea></div>',
+        '<div class="field"><label for="r_fecha">Fecha de realización</label><input class="inp" id="r_fecha" type="date" value="' + D.isoHoy() + '"></div>' +
+        '<div class="field"><label for="r_hall">Hallazgos abiertos</label><input class="inp mono" id="r_hall" type="number" min="0" value="0"></div>' +
+        '<div class="field"><label for="r_res">Resultado / observaciones</label><textarea class="inp" id="r_res" placeholder="Resumen de la inspección…"></textarea></div>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="r_save">Registrar</button>',
       onMount: function (root) {
         root.querySelector('#r_save').onclick = function () {
@@ -978,19 +978,19 @@
 
     /* ---- paso 0: datos generales ---- */
     function headerStepHtml() {
-      return '<div class="field"><label>Acta N.°</label><input class="inp mono" id="a_num" value="' + esc(a.numActa) + '" placeholder="001-2026"></div>' +
-        '<div class="field"><label>Autoinspección destino</label><select class="inp" id="a_insp"><option value="">Sin asignar</option>' + destinos.map(function (i) { return '<option value="' + esc(i.id) + '"' + (a.inspeccionId === i.id ? ' selected' : '') + '>' + esc(i.area + ' · ' + D.fLocal(i.prog) + (i.real ? ' · Realizada' : ' · Pendiente')) + '</option>'; }).join('') + '</select></div>' +
-        '<div class="grid-2"><div class="field"><label>Fecha</label><input class="inp" id="a_fecha" type="date" value="' + esc(a.fecha) + '"></div>' +
-        '<div class="field"><label>Auditor</label><input class="inp" id="a_aud" value="' + esc(a.auditor) + '"></div></div>' +
-        '<div class="field"><label>Almacén inspeccionado</label><input class="inp" id="a_almacen" value="' + esc(a.almacen) + '"></div>' +
+      return '<div class="field"><label for="a_num">Acta N.°</label><input class="inp mono" id="a_num" value="' + esc(a.numActa) + '" placeholder="001-2026"></div>' +
+        '<div class="field"><label for="a_insp">Autoinspección destino</label><select class="inp" id="a_insp"><option value="">Sin asignar</option>' + destinos.map(function (i) { return '<option value="' + esc(i.id) + '"' + (a.inspeccionId === i.id ? ' selected' : '') + '>' + esc(i.area + ' · ' + D.fLocal(i.prog) + (i.real ? ' · Realizada' : ' · Pendiente')) + '</option>'; }).join('') + '</select></div>' +
+        '<div class="grid-2"><div class="field"><label for="a_fecha">Fecha</label><input class="inp" id="a_fecha" type="date" value="' + esc(a.fecha) + '"></div>' +
+        '<div class="field"><label for="a_aud">Auditor</label><input class="inp" id="a_aud" value="' + esc(a.auditor) + '"></div></div>' +
+        '<div class="field"><label for="a_almacen">Almacén inspeccionado</label><input class="inp" id="a_almacen" value="' + esc(a.almacen) + '"></div>' +
         '<details class="acta-extra" open><summary>Datos generales del acta</summary>' +
-          '<div class="grid-2"><div class="field"><label>R.U.C.</label><input class="inp mono" id="a_ruc" value="' + esc(a.ruc) + '" maxlength="11"></div>' +
-          '<div class="field"><label>R.D. autorización sanitaria</label><input class="inp" id="a_rd" value="' + esc(a.rdAutorizacion) + '"></div></div>' +
-          '<div class="field"><label>Planos de distribución de las áreas del almacén</label><input class="inp" id="a_planos" value="' + esc(a.planos) + '"></div>' +
-          '<div class="field"><label>Relación de clientes y proveedores</label><input class="inp" id="a_cliprov" value="' + esc(a.clientesProveedores) + '"></div>' +
-          '<div class="field"><label>Relación de productos que comercializa</label><input class="inp" id="a_prod" value="' + esc(a.productos) + '"></div>' +
-          '<div class="field"><label>Lista de procedimientos operativos estándar verificados</label><input class="inp" id="a_poe" value="' + esc(a.poeVerificados) + '"></div>' +
-          '<div class="field"><label>Resultados de inspecciones anteriores</label><textarea class="inp" id="a_prev" placeholder="Plan de acciones realizadas y su eficacia…">' + esc(a.resultadosPrevios || '') + '</textarea></div>' +
+          '<div class="grid-2"><div class="field"><label for="a_ruc">R.U.C.</label><input class="inp mono" id="a_ruc" value="' + esc(a.ruc) + '" maxlength="11"></div>' +
+          '<div class="field"><label for="a_rd">R.D. autorización sanitaria</label><input class="inp" id="a_rd" value="' + esc(a.rdAutorizacion) + '"></div></div>' +
+          '<div class="field"><label for="a_planos">Planos de distribución de las áreas del almacén</label><input class="inp" id="a_planos" value="' + esc(a.planos) + '"></div>' +
+          '<div class="field"><label for="a_cliprov">Relación de clientes y proveedores</label><input class="inp" id="a_cliprov" value="' + esc(a.clientesProveedores) + '"></div>' +
+          '<div class="field"><label for="a_prod">Relación de productos que comercializa</label><input class="inp" id="a_prod" value="' + esc(a.productos) + '"></div>' +
+          '<div class="field"><label for="a_poe">Lista de procedimientos operativos estándar verificados</label><input class="inp" id="a_poe" value="' + esc(a.poeVerificados) + '"></div>' +
+          '<div class="field"><label for="a_prev">Resultados de inspecciones anteriores</label><textarea class="inp" id="a_prev" placeholder="Plan de acciones realizadas y su eficacia…">' + esc(a.resultadosPrevios || '') + '</textarea></div>' +
         '</details>' +
         '<p class="dialog-note" style="margin-top:14px">Después de esto vas a completar el checklist de a una sección por vez — 15 en total, ' + total + ' ítems. Podés cerrar en cualquier momento: queda guardado tal cual lo dejaste.</p>';
     }
@@ -1031,9 +1031,9 @@
           '<tr><th style="text-align:left">Hallazgos menores</th><td>' + (a.hallMenor || 0) + '</td></tr>' +
         '</tbody></table>' +
         (incompletas.length ? '<p class="dialog-note">Secciones sin terminar: ' + incompletas.map(function (s) { return esc(s.seccion); }).join(', ') + '.</p>' : '<p class="dialog-note">Todas las secciones están completas.</p>') +
-        '<div class="field"><label>Observaciones adicionales</label><textarea class="inp" id="a_obsad">' + esc(a.observAdicionales || '') + '</textarea></div>' +
-        '<div class="field"><label>Evaluación y conclusiones</label><textarea class="inp" id="a_conc">' + esc(a.conclusiones || '') + '</textarea></div>' +
-        '<div class="field"><label>Propuestas de medidas correctivas</label><textarea class="inp" id="a_med">' + esc(a.medidas || '') + '</textarea></div>';
+        '<div class="field"><label for="a_obsad">Observaciones adicionales</label><textarea class="inp" id="a_obsad">' + esc(a.observAdicionales || '') + '</textarea></div>' +
+        '<div class="field"><label for="a_conc">Evaluación y conclusiones</label><textarea class="inp" id="a_conc">' + esc(a.conclusiones || '') + '</textarea></div>' +
+        '<div class="field"><label for="a_med">Propuestas de medidas correctivas</label><textarea class="inp" id="a_med">' + esc(a.medidas || '') + '</textarea></div>';
     }
     function collectSummary(root) {
       a.observAdicionales = root.querySelector('#a_obsad').value.trim();
@@ -1146,16 +1146,16 @@
     var m = UI.dialog({
       title: existing ? 'Editar droguería' : 'Nueva droguería',
       body:
-        '<div class="field" id="wrap_en"><label>Razón social</label><input class="inp" id="e_nom" value="' + esc(e.nombre) + '"><div class="err">Ingresá la razón social.</div></div>' +
-        '<div class="grid-2"><div class="field"><label>RUC</label><input class="inp mono" id="e_ruc" value="' + esc(e.ruc) + '" maxlength="11"></div>' +
-        '<div class="field"><label>Director técnico</label><input class="inp" id="e_dt" value="' + esc(e.dt || '') + '"></div></div>' +
-        '<div class="grid-2"><div class="field"><label>Cargo del D.T. (sello)</label><input class="inp" id="e_dtc" value="' + esc(e.dtCargo || '') + '" placeholder="D.T QUIMICO FARMACEUTICO"></div>' +
-        '<div class="field"><label>Colegiatura (sello)</label><input class="inp mono" id="e_dtn" value="' + esc(e.dtColegiatura || '') + '" placeholder="CQFP 29902"></div></div>' +
-        '<div class="field"><label>Dirección</label><input class="inp" id="e_dir" value="' + esc(e.direccion || '') + '"></div>' +
-        '<div class="grid-2"><div class="field"><label>Teléfono</label><input class="inp" id="e_tel" value="' + esc(e.telefono || '') + '"></div>' +
-        '<div class="field"><label>Correo</label><input class="inp" id="e_mail" value="' + esc(e.email || '') + '"></div></div>' +
-        '<div class="field"><label>Web</label><input class="inp" id="e_web" value="' + esc(e.web || '') + '"><div class="hint">Dirección, teléfono, correo y web salen en el pie de página del expediente de retiro.</div></div>' +
-        '<div class="field"><label>Logo del membrete</label><input class="inp" id="e_logo" type="file" accept="image/png,image/jpeg,image/svg+xml">' +
+        '<div class="field" id="wrap_en"><label for="e_nom">Razón social</label><input class="inp" id="e_nom" value="' + esc(e.nombre) + '"><div class="err">Ingresá la razón social.</div></div>' +
+        '<div class="grid-2"><div class="field"><label for="e_ruc">RUC</label><input class="inp mono" id="e_ruc" value="' + esc(e.ruc) + '" maxlength="11"></div>' +
+        '<div class="field"><label for="e_dt">Director técnico</label><input class="inp" id="e_dt" value="' + esc(e.dt || '') + '"></div></div>' +
+        '<div class="grid-2"><div class="field"><label for="e_dtc">Cargo del D.T. (sello)</label><input class="inp" id="e_dtc" value="' + esc(e.dtCargo || '') + '" placeholder="D.T QUIMICO FARMACEUTICO"></div>' +
+        '<div class="field"><label for="e_dtn">Colegiatura (sello)</label><input class="inp mono" id="e_dtn" value="' + esc(e.dtColegiatura || '') + '" placeholder="CQFP 29902"></div></div>' +
+        '<div class="field"><label for="e_dir">Dirección</label><input class="inp" id="e_dir" value="' + esc(e.direccion || '') + '"></div>' +
+        '<div class="grid-2"><div class="field"><label for="e_tel">Teléfono</label><input class="inp" id="e_tel" value="' + esc(e.telefono || '') + '"></div>' +
+        '<div class="field"><label for="e_mail">Correo</label><input class="inp" id="e_mail" value="' + esc(e.email || '') + '"></div></div>' +
+        '<div class="field"><label for="e_web">Web</label><input class="inp" id="e_web" value="' + esc(e.web || '') + '"><div class="hint">Dirección, teléfono, correo y web salen en el pie de página del expediente de retiro.</div></div>' +
+        '<div class="field"><label for="e_logo">Logo del membrete</label><input class="inp" id="e_logo" type="file" accept="image/png,image/jpeg,image/svg+xml">' +
           '<div class="hint">' + (e.logo ? 'Ya hay un logo cargado. ' : '') +
           'Sale arriba en las actas y en el expediente de retiro. PNG, JPG o SVG de menos de 300 KB.</div></div>',
       footer: (existing ? '<button class="btn btn-danger" id="e_del" style="margin-right:auto">Eliminar</button>' : '') +
@@ -1164,7 +1164,7 @@
         root.querySelector('#e_save').onclick = function () {
           var nom = root.querySelector('#e_nom').value.trim();
           if (!nom) { root.querySelector('#wrap_en').classList.add('invalid'); return; }
-          var init = nom.split(/\s+/).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase();
+          var init = existing && existing.init && existing.nombre === nom ? existing.init : nom.split(/\s+/).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase();
           var obj = Object.assign({}, existing || { criterios: D.CRITERIOS_DEFAULT.slice() }, {
             id: existing ? existing.id : D.nextId(), nombre: nom,
             ruc: root.querySelector('#e_ruc').value.trim(), dt: root.querySelector('#e_dt').value.trim(),
@@ -1180,7 +1180,10 @@
             return store.save('droguerias', obj);
           }).then(function () {
             if (!existing) store.setDg(obj.id);
-            m.close(); UI.note(existing ? 'Droguería actualizada' : 'Droguería creada'); store.renderChrome();
+            /* Lo siguiente a crear una droguería es escanear la carpeta BPA de su cliente: va en el aviso. */
+            m.close(); store.renderChrome();
+            if (existing) UI.note('Droguería actualizada');
+            else UI.note('Droguería creada', { actionLabel: 'Escanear carpeta BPA', onAction: global.BPAPLUS.app.driveImport, duration: 10000 });
           }).catch(function () { UI.note('No se pudo leer el logo.'); });
         };
         var del = root.querySelector('#e_del');
@@ -1280,7 +1283,7 @@
   function archivoAutoinspeccion(i) {
     var m = UI.dialog({
       title: 'Agregar archivo a la autoinspección',
-      body: '<div class="field" id="wrap_ai_title"><label>Título del archivo</label><input class="inp" id="ai_title" placeholder="Ej. Evidencia fotográfica"><div class="err">Ingresa un título.</div></div>',
+      body: '<div class="field" id="wrap_ai_title"><label for="ai_title">Título del archivo</label><input class="inp" id="ai_title" placeholder="Ej. Evidencia fotográfica"><div class="err">Ingresa un título.</div></div>',
       footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="ai_continue">Continuar</button>',
       onMount: function (root) {
         var input = root.querySelector('#ai_title'); input.focus();

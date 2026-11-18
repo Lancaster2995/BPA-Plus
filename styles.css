@@ -170,6 +170,7 @@ body.nav-open .nav-scrim { opacity: 1; pointer-events: auto; }
 }
 .ws-ruc { margin-top: 2px; font-size: 13px; color: var(--navy-dim); }
 .ws:hover .ws-name { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(255,255,255,.4); }
+.ws-dg { display: none; }
 
 /* Solo el menú se desplaza; el pie («Nuevo», tema, alertas, cuenta) queda siempre a la vista. */
 .sidebar { overflow: hidden; }
@@ -190,9 +191,14 @@ body.nav-open .nav-scrim { opacity: 1; pointer-events: auto; }
 @media (min-width: 921px) {
   .sidebar { position: sticky; transform: none; width: 132px; padding: 16px 10px 20px; }
   .nav-scrim, #menuBtn { display: none; }
-  .ws { justify-content: center; margin-bottom: 14px; }
+  .ws { flex-direction: column; align-items: center; gap: 8px; margin-bottom: 14px; }
   .ws-logo { width: 54px; height: 54px; }
   .ws-txt { display: none; }
+  .ws-dg {
+    display: flex; align-items: center; justify-content: center; gap: 3px; max-width: 100%; padding: 3px 8px 3px 10px;
+    border: 1px solid rgba(255,255,255,.22); border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .04em; color: #FFFFFF;
+  }
+  .ws:hover .ws-dg { background: rgba(255,255,255,.1); }
   .nav { gap: 4px; }
   .nav-head { margin: 14px 0 4px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.12); font-size: 10px; text-align: center; }
   .nav-head:first-child { margin-top: 0; padding-top: 0; border-top: 0; }

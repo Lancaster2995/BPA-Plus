@@ -135,8 +135,11 @@
 
     var side = document.getElementById('sidebar');
     if (side) side.innerHTML =
-      '<button class="ws" id="dgSwitch" aria-label="Cambiar droguería"><img class="ws-logo" src="icons/icon-192.png?v=6" alt="">' +
-        '<span class="ws-txt"><span class="ws-name">' + esc(dg.nombre) + '</span><span class="ws-ruc">' + (dg.ruc ? 'RUC ' + esc(dg.ruc) : 'Sin RUC') + '</span></span></button>' +
+      /* En el riel de escritorio el nombre no entra: van las siglas con ⌄, para que se vea que
+         ahí se cambia o se agrega una droguería. */
+      '<button class="ws" id="dgSwitch" aria-label="Cambiar droguería" title="' + esc(dg.nombre) + ' · cambiar o agregar droguería"><img class="ws-logo" src="icons/icon-192.png?v=6" alt="">' +
+        '<span class="ws-txt"><span class="ws-name">' + esc(dg.nombre) + '</span><span class="ws-ruc">' + (dg.ruc ? 'RUC ' + esc(dg.ruc) : 'Sin RUC') + '</span></span>' +
+        '<span class="ws-dg">' + esc(dg.init || '?') + UI.icon('chevron', 14) + '</span></button>' +
       '<nav class="nav" aria-label="Principal">' + grupos.map(function (g) {
         return '<div class="nav-head">' + esc(g) + '</div>' + NAV.filter(function (n) { return n.group === g; }).map(item).join('');
       }).join('') + '</nav>' +
@@ -316,6 +319,8 @@
     idx.push({ type: 'Acción', name: 'Escanear carpeta BPA', run: driveImport });
     idx.push({ type: 'Acción', name: 'Importar cronograma', run: function () { importCronograma(); } });
     idx.push({ type: 'Acción', name: 'Cambiar tema claro/oscuro', run: toggleTheme });
+    idx.push({ type: 'Acción', name: 'Nueva droguería', run: function () { V.open.dgForm(null); } });
+    store.data.droguerias.forEach(function (e) { idx.push({ type: 'Droguería', name: e.nombre, run: function () { store.setDg(e.id); } }); });
     store.byDg('documentos').forEach(function (d) { idx.push({ type: 'Documento', name: d.codigo + ' · ' + d.nombre, run: function () { V.panels.docPanel(d); } }); });
     store.byDg('capacitaciones').forEach(function (c) { idx.push({ type: 'Capacitación', name: c.tema, run: function () { V.panels.capPanel(c); } }); });
     store.byDg('inspecciones').forEach(function (i) { idx.push({ type: 'Autoinspección', name: i.area + ' · ' + D.fLocal(i.prog), run: function () { V.panels.inspPanel(i); } }); });
@@ -387,7 +392,9 @@
       { label: 'Nueva capacitación', icon: 'cap', onClick: function () { V.open.capForm(null); } },
       { label: 'Nueva acta de inspección', icon: 'clipboard', onClick: function () { V.open.actaForm(null); } },
       { label: 'Programar autoinspección', icon: 'calendar', onClick: function () { V.open.inspForm(null); } },
-      { label: 'Simulacro de retiro', icon: 'flag', onClick: function () { global.BPAPLUS.retiro.form(null); } }
+      { label: 'Simulacro de retiro', icon: 'flag', onClick: function () { global.BPAPLUS.retiro.form(null); } },
+      { sep: true },
+      { label: 'Nueva droguería', icon: 'building', onClick: function () { V.open.dgForm(null); } }
     ], anchor);
   }
 
@@ -447,7 +454,7 @@
 
   global.BPAPLUS = global.BPAPLUS || {};
   global.BPAPLUS.store = store;
-  global.BPAPLUS.app = { boot: boot };
+  global.BPAPLUS.app = { boot: boot, driveImport: driveImport };
 
   if (document.readyState !== 'loading') boot();
   else document.addEventListener('DOMContentLoaded', boot);

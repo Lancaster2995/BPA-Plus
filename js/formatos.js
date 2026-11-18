@@ -254,13 +254,13 @@
       title: 'Configurar formato', wide: true,
       body:
         '<p class="dialog-note">Cada campo y cada columna se llena con el dato que elijas. Lo que quede «en blanco» se imprime vacío para completar a mano.</p>' +
-        '<div class="grid-2"><div class="field"><label>Nombre del formato</label><input class="inp" id="fm_nom" value="' + esc(f.nombre || '') + '"></div>' +
-        '<div class="field"><label>Módulo</label><select class="inp" id="fm_mod">' +
+        '<div class="grid-2"><div class="field"><label for="fm_nom">Nombre del formato</label><input class="inp" id="fm_nom" value="' + esc(f.nombre || '') + '"></div>' +
+        '<div class="field"><label for="fm_mod">Módulo</label><select class="inp" id="fm_mod">' +
           Object.keys(MODULOS).map(function (k) { return '<option value="' + k + '"' + (k === f.modulo ? ' selected' : '') + '>' + esc(MODULOS[k]) + '</option>'; }).join('') +
         '</select></div></div>' +
-        '<div class="field"><label>Título impreso</label><input class="inp" id="fm_tit" value="' + esc(f.titulo || '') + '"></div>' +
-        '<div class="grid-2"><div class="field"><label>Código</label><input class="inp mono" id="fm_cod" value="' + esc(f.codigo || '') + '" placeholder="FOR-ALM-011"></div>' +
-        '<div class="field"><label>Versión</label><input class="inp" id="fm_ver" value="' + esc(f.version || '') + '"></div></div>' +
+        '<div class="field"><label for="fm_tit">Título impreso</label><input class="inp" id="fm_tit" value="' + esc(f.titulo || '') + '"></div>' +
+        '<div class="grid-2"><div class="field"><label for="fm_cod">Código</label><input class="inp mono" id="fm_cod" value="' + esc(f.codigo || '') + '" placeholder="FOR-ALM-011"></div>' +
+        '<div class="field"><label for="fm_ver">Versión</label><input class="inp" id="fm_ver" value="' + esc(f.version || '') + '"></div></div>' +
         '<div class="field"><label>Campos de encabezado</label><div id="fm_campos">' + lista(f.campos, CAMPOS) + '</div>' +
         '<button class="btn btn-ghost btn-sm" id="fm_addc" type="button" style="margin-top:6px">' + icon('plus', 14) + 'Agregar campo</button></div>' +
         '<div class="field"><label>Columnas de la tabla</label><div id="fm_cols">' + lista(f.columnas, COLUMNAS) + '</div>' +
