@@ -5,6 +5,11 @@ Verificado el **2026-10-03**. Estado completo: [ESTADO.md](ESTADO.md) · encargo
 
 ## Estado hoy
 
+- **18/11:** desplegado y pusheado `607eb47` en `feat/crear-diapositiva` (`CACHE` v82): varias
+  droguerías a la vista (siglas en el riel, «Nueva droguería» en «Nuevo» y Ctrl+K, el aviso de alta
+  ofrece «Escanear carpeta BPA»; detalle en [ENCARGO-DROGUERIAS.md](ENCARGO-DROGUERIAS.md)) y los
+  títulos de los formularios enfocan su caja. **`main` quedó atrás** de esa rama. Falta probar con
+  tu cuenta: importar de verdad la carpeta del cliente desde Drive.
 - **06/11: `main` = `feat/crear-diapositiva` = producción** (fast-forward a `5948f90`, sin merge).
 - **06/11:** desplegado `js/drive.js?v=55` (`CACHE` v79): en un navegador sin Client ID guardado
   (otra PC), cualquier función de Drive —p. ej. el acta de asistencia con formato propio— abre
