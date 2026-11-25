@@ -42,7 +42,8 @@
 
     return '' +
       '<div class="view-header"><div><h1 class="view-title">Panorama</h1>' +
-        '<div class="view-sub">' + esc(store.dg().nombre) + ' · cumplimiento BPA</div></div></div>' +
+        '<div class="view-sub">' + esc(store.dg().nombre) + ' · cumplimiento BPA</div></div>' +
+        '<button class="btn btn-ghost" type="button" data-todo-zip>' + icon('download', 16) + 'Descargar todos los documentos</button></div>' +
       '<div class="pano">' +
         '<section class="box pano-score">' +
           '<p class="pano-label">Cumplimiento</p>' +
@@ -318,31 +319,67 @@
     });
   }
 
-  /* Todo el expediente en un ZIP: una carpeta por categoría (numerada como en la app) y cada
+  function limpio(s) { return String(s || '').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim(); }
+  function extDe(f) { return (String(f.name || f.originalName || '').match(/\.[a-z0-9]{1,5}$/i) || [''])[0].toLowerCase(); }
+
+  /* El expediente de inspección: una carpeta por categoría (numerada como en la app) y cada
      archivo renombrado con el título del documento. */
-  function descargarInspeccionZip(button) {
-    function limpio(s) { return String(s || '').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim(); }
+  function entradasInspeccion(base) {
     var docs = store.byDg('documentosInspeccion'), entradas = [], grupo = 0, previo = null;
     SECCIONES_INSPECCION.forEach(function (s) {
       if (!s.grupo || s.grupo !== previo) grupo++;
       previo = s.grupo || null;
-      var carpeta = grupo + '. ' + (s.grupo ? limpio(s.grupo) + '/' : '') + limpio(s.titulo), n = 0;
+      var carpeta = base + grupo + '. ' + (s.grupo ? limpio(s.grupo) + '/' : '') + limpio(s.titulo), n = 0;
       docsSeccion(s, docs).forEach(function (x) {
         var lista = global.BPAPLUS.drive.archivos(x.d);
         if (lista.length) n++;
         lista.forEach(function (f, j) {
-          var ext = (String(f.name || f.originalName || '').match(/\.[a-z0-9]{1,5}$/i) || [''])[0].toLowerCase();
-          entradas.push({ path: carpeta + '/' + limpio(String(n).padStart(2, '0') + ' ' + x.titulo + (j ? ' (' + (j + 1) + ')' : '')) + ext, meta: f });
+          entradas.push({ path: carpeta + '/' + limpio(String(n).padStart(2, '0') + ' ' + x.titulo + (j ? ' (' + (j + 1) + ')' : '')) + extDe(f), meta: f });
         });
       });
     });
+    return entradas;
+  }
+
+  /* Dos archivos con la misma ruta se pisarían dentro del ZIP: al repetido se le agrega « (2)». */
+  function zipear(button, entradas, nombre) {
     if (!entradas.length) return UI.note('Todavía no hay archivos cargados.');
+    var usadas = {};
+    entradas.forEach(function (e) {
+      var p = e.path, base = p.replace(/(\.[a-z0-9]{1,5})?$/i, ''), ext = p.slice(base.length), k = 1;
+      while (usadas[p.toLowerCase()]) p = base + ' (' + (++k) + ')' + ext;
+      usadas[p.toLowerCase()] = true; e.path = p;
+    });
     button.disabled = true;
-    UI.note('Preparando el ZIP…');
-    return global.BPAPLUS.drive.descargarZip(entradas, limpio('Documentos de inspección - ' + store.dg().nombre + ' - ' + D.isoHoy()) + '.zip')
+    UI.note('Preparando el ZIP (' + entradas.length + ' archivo' + (entradas.length === 1 ? '' : 's') + ')…');
+    return global.BPAPLUS.drive.descargarZip(entradas, limpio(nombre + ' - ' + store.dg().nombre + ' - ' + D.isoHoy()) + '.zip')
       .then(function (faltan) { UI.note(faltan ? 'ZIP descargado; ' + faltan + ' archivo(s) no se pudieron incluir.' : 'ZIP descargado'); })
       .catch(function (err) { UI.note(err.message || err); })
       .then(function () { button.disabled = false; });
+  }
+
+  function descargarInspeccionZip(button) { return zipear(button, entradasInspeccion(''), 'Documentos de inspección'); }
+
+  /* Todo lo cargado en la droguería, una carpeta por módulo. Los documentos van con su versión
+     vigente, sus anexos y los formatos llenados; las versiones anteriores quedan fuera. */
+  function descargarTodoZip(button) {
+    var dr = global.BPAPLUS.drive, crit = store.dg().criterios || D.CRITERIOS_DEFAULT, e = [];
+    function tal(carpeta, lista) { (lista || []).forEach(function (f) { e.push({ path: carpeta + '/' + limpio(f.name || f.originalName || 'archivo'), meta: f }); }); }
+    store.byDg('documentos').forEach(function (d) {
+      var carpeta = '1. Documentos/' + limpio(criterioDeDoc(d, crit)), titulo = limpio((d.codigo ? d.codigo + ' ' : '') + d.nombre);
+      dr.archivos(d).forEach(function (f, j) { e.push({ path: carpeta + '/' + titulo + (j ? ' - anexo ' + j : '') + extDe(f), meta: f }); });
+      tal(carpeta + '/Formatos llenados/' + titulo, d.records);
+    });
+    e = e.concat(entradasInspeccion('2. Documentos de inspección/'));
+    store.byDg('capacitaciones').forEach(function (c) { tal('3. Capacitaciones/' + limpio((c.fecha ? c.fecha + ' ' : '') + c.tema), c.materiales); });
+    store.byDg('documentosInspeccion').forEach(function (d) {
+      if (!d.inspeccionId) return;
+      var i = store.find('inspecciones', d.inspeccionId);
+      var carpeta = '4. Autoinspecciones/' + limpio(i ? (i.prog ? i.prog + ' ' : '') + i.area : 'Sin autoinspección');
+      dr.archivos(d).forEach(function (f, j) { e.push({ path: carpeta + '/' + limpio(d.nombre + (j ? ' (' + (j + 1) + ')' : '')) + extDe(f), meta: f }); });
+    });
+    store.byDg('retiros').forEach(function (r) { tal('5. Retiro de mercado/' + limpio(r.producto + (r.lote ? ' lote ' + r.lote : '')), r.archivos); });
+    return zipear(button, e, 'Documentos');
   }
 
   function vDocumentosInspeccion() {
@@ -1342,6 +1379,7 @@
       var idl = t.closest('[data-ins-preview]'); if (idl) return previewInspeccion(store.find('documentosInspeccion', idl.dataset.insPreview), +idl.dataset.i);
       var ide = t.closest('[data-ins-delete]'); if (ide) return quitarArchivoInspeccion(store.find('documentosInspeccion', ide.dataset.insDelete), +ide.dataset.i);
       var iz = t.closest('[data-ins-zip]'); if (iz) return descargarInspeccionZip(iz);
+      var tz = t.closest('[data-todo-zip]'); if (tz) return descargarTodoZip(tz);
       var cr = t.closest('[data-cap]'); if (cr) return capPanel(store.find('capacitaciones', cr.dataset.cap));
       var ir = t.closest('[data-insp]'); if (ir) return inspPanel(store.find('inspecciones', ir.dataset.insp));
       var ar = t.closest('[data-acta]'); if (ar) return actaForm(store.find('actas', ar.dataset.acta));

@@ -4,10 +4,10 @@
    de la caché y se actualizan por detrás para la próxima apertura. Un despliegue
    cambia CACHE, el SW nuevo precarga todo y recarga las ventanas abiertas.
    ========================================================================== */
-var CACHE = 'bpa-plus-v83';
+var CACHE = 'bpa-plus-v84';
 var ASSETS = [
   './', './index.html', './styles.css?v=57', './manifest.json',
-  './js/config.js', './js/cloud.js', './js/auth.js', './js/domain.js?v=2', './js/db.js?v=34', './js/ui.js?v=6', './js/formatos.js?v=51', './js/actas.js?v=48', './js/retiro.js?v=44', './js/views.js?v=64', './js/lock.js?v=6', './js/drive.js?v=58', './js/alerts.js?v=3', './js/avisos.js?v=2', './js/app.js?v=49',
+  './js/config.js', './js/cloud.js', './js/auth.js', './js/domain.js?v=2', './js/db.js?v=34', './js/ui.js?v=6', './js/formatos.js?v=51', './js/actas.js?v=48', './js/retiro.js?v=44', './js/views.js?v=65', './js/lock.js?v=6', './js/drive.js?v=58', './js/alerts.js?v=3', './js/avisos.js?v=2', './js/app.js?v=49',
   './autoinspecciones/index.html', './autoinspecciones/main.js',
   './icons/icon-44.png?v=6', './icons/icon-192.png?v=6', './icons/icon-512.png?v=6', './icons/icon-maskable-512.png?v=6', './icons/apple-touch-icon.png?v=6'
 ];
