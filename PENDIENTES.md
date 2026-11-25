@@ -5,6 +5,10 @@ Verificado el **2026-10-03**. Estado completo: [ESTADO.md](ESTADO.md) · encargo
 
 ## Estado hoy
 
+- **25/11:** desplegado y pusheado `6cd8ccf` (`views.js?v=65`, `CACHE` v84); `main` = `feat/crear-diapositiva`
+  = producción (fast-forward). Panorama → «Descargar todos los documentos»: un ZIP por droguería con
+  una carpeta por módulo (sin versiones anteriores). Probado en local (`localhost:8080`, el origen que
+  acepta el Client ID de Drive) con tu cuenta: 54 archivos de ALMA BONITA bajados de Drive.
 - **18/11:** desplegado y pusheado `607eb47` en `feat/crear-diapositiva` (`CACHE` v82): varias
   droguerías a la vista (siglas en el riel, «Nueva droguería» en «Nuevo» y Ctrl+K, el aviso de alta
   ofrece «Escanear carpeta BPA»; detalle en [ENCARGO-DROGUERIAS.md](ENCARGO-DROGUERIAS.md)) y los
