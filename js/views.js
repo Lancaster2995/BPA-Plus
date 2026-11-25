@@ -1242,8 +1242,7 @@
       { label: 'Nueva droguería…', icon: 'plus', onClick: function () { dgForm(null); } },
       { label: 'Información del almacén…', icon: 'building', onClick: function () { store.go('informacion-almacen'); } },
       { label: 'Editar droguería actual…', icon: 'edit', onClick: function () { dgForm(store.dg()); } },
-      { label: 'Editar criterios de clasificación…', icon: 'settings', onClick: function () { criteriosForm(); } },
-      { label: 'Cambiar PIN…', icon: 'settings', onClick: function () { global.BPAPLUS.lock.openSettings(); } }
+      { label: 'Editar criterios de clasificación…', icon: 'settings', onClick: function () { criteriosForm(); } }
     ]), document.getElementById('dgSwitch'));
   }
 

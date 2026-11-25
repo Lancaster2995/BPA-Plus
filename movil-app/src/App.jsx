@@ -2,7 +2,7 @@
 // No es la web en pequeño: es el acta REGISTRO_004 en la mano para recorrer el almacén, el
 // panorama de la droguería activa y la consulta de documentos. Lo administrativo queda en la web.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alerts, Avisos, Cloud, D, DB, Lock, UI } from "./legacy.js";
+import { Alerts, Avisos, Cloud, D, DB, UI } from "./legacy.js";
 import {
   archivos, clave, contexto, dondeQuedo, mover, nombreCorto, pendiente, primeroDe, respondidos, responder, ruta, textoItem, urlDrive,
 } from "./data.js";
@@ -54,7 +54,6 @@ function cambiarTema() {
 export default function App() {
   const [user, setUser] = useState(undefined); // undefined = cargando Firebase, null = sin sesión
   const [errArranque, setErrArranque] = useState("");
-  const [abierto, setAbierto] = useState(false); // PIN
   const [data, setData] = useState(null);
   const [errDatos, setErrDatos] = useState("");
   const [dgId, setDgId] = useState("");
@@ -149,7 +148,6 @@ export default function App() {
 
   if (errArranque) return <Aviso titulo="No se pudo abrir BPA Plus" texto={(online ? errArranque : "Sin conexión.") + " La primera vez hace falta señal para cargar Firebase."} />;
   if (user === null) return <><Login /><Toasts /></>;
-  if (!abierto && (Lock.isEnabled() || user)) return <Pin crear={!Lock.isEnabled()} onOk={() => setAbierto(true)} />;
   if (errDatos) return <Aviso titulo="No se pudieron cargar tus datos" texto={errDatos + (online ? "" : " · Sin conexión: ábrela una vez con señal.")} />;
   if (!user || !data) return <Cargando />;
   if (!dg) return <Aviso titulo="Todavía no hay droguerías" texto="Créalas en la versión web; aparecen aquí solas." web />;
@@ -821,68 +819,8 @@ function Login() {
         {msg && <div className={"acceso-msg" + (ok ? " ok" : "")} role="alert">{msg}</div>}
         <button className="btn pri" disabled={ocupado}>Iniciar sesión</button>
         <button type="button" className="link" onClick={olvido} disabled={ocupado}>Olvidé mi contraseña</button>
-        <p className="nota">Es la misma cuenta de BPA Plus en la web. Después se pide el PIN de este teléfono.</p>
+        <p className="nota">Es la misma cuenta de BPA Plus en la web.</p>
       </form>
-    </div>
-  );
-}
-
-// El PIN de js/lock.js (salteado, SHA-256, solo en este dispositivo). En el mismo sitio que la web es el mismo PIN.
-function Pin({ crear, onOk }) {
-  const [buf, setBuf] = useState(""), [primero, setPrimero] = useState(""), [err, setErr] = useState(""), [temblor, setTemblor] = useState(0);
-  const bufRef = useRef("");
-  const poner = (b) => { bufRef.current = b; setBuf(b); };
-  const fallo = (m) => { setErr(m); poner(""); setTemblor((x) => x + 1); UI.haptic(60); };
-  const confirmar = (b) => {
-    if (b.length < 4) return;
-    if (!crear) return Lock.verify(b).then((ok) => (ok ? onOk() : fallo("PIN incorrecto")));
-    if (!primero) { setPrimero(b); poner(""); return; }
-    if (b !== primero) { setPrimero(""); return fallo("Los PIN no coinciden. Créalo de nuevo."); }
-    Lock.setPin(b).then(onOk);
-  };
-  const tecla = (k) => {
-    setErr("");
-    if (k === "del") return poner(bufRef.current.slice(0, -1));
-    if (k === "ok") return confirmar(bufRef.current);
-    if (bufRef.current.length >= 6) return;
-    const b = bufRef.current + k;
-    poner(b);
-    // Un PIN correcto entra apenas se completa, como en la web; con 6 dígitos se confirma solo.
-    if (!crear && b.length >= 4) Lock.verify(b).then((ok) => { if (ok && bufRef.current === b) onOk(); else if (!ok && b.length === 6) fallo("PIN incorrecto"); });
-    if (crear && b.length === 6) confirmar(b);
-  };
-  const teclaRef = useRef(tecla);
-  teclaRef.current = tecla;
-  useEffect(() => {
-    const k = (e) => {
-      if (/^[0-9]$/.test(e.key)) teclaRef.current(e.key);
-      else if (e.key === "Backspace") teclaRef.current("del");
-      else if (e.key === "Enter") teclaRef.current("ok");
-    };
-    addEventListener("keydown", k);
-    return () => removeEventListener("keydown", k);
-  }, []);
-  const olvido = () => {
-    if (!confirm("El PIN no se puede recuperar: no se guarda en ningún servidor. Se borra de este teléfono y se cierra la sesión; vuelves a entrar con tu correo y contraseña y creas uno nuevo.")) return;
-    Lock.clearPin();
-    Promise.resolve().then(() => Cloud && Cloud.init().then(() => Cloud.api().signOut(Cloud.getAuth()))).catch(() => {}).finally(() => location.reload());
-  };
-  return (
-    <div className="pin">
-      <span className="logo grande"><Logo s={40} /></span>
-      <h1>{crear ? (primero ? "Confirmar PIN" : "Crear acceso") : "Ingresa tu PIN"}</h1>
-      <p>{crear ? (primero ? "Escríbelo una vez más" : "Un PIN de 4 a 6 dígitos para este teléfono") : "BPA Plus · este teléfono"}</p>
-      <div className={"dots" + (temblor ? " tiembla" : "")} key={temblor}>
-        {Array.from({ length: Math.max(4, buf.length) }, (_, k) => <i key={k} className={k < buf.length ? "on" : ""} />)}
-      </div>
-      <div className="pin-err" role="alert">{err}</div>
-      <div className="teclado">
-        {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((k) => <button key={k} onClick={() => tecla(k)}>{k}</button>)}
-        <button className="ok" onClick={() => tecla("ok")} disabled={buf.length < 4} aria-label={crear ? "Continuar" : "Entrar"}><Ico n="check" s={24} /></button>
-        <button onClick={() => tecla("0")}>0</button>
-        <button className="del" onClick={() => tecla("del")} aria-label="Borrar">⌫</button>
-      </div>
-      {!crear && <button className="link claro" onClick={olvido}>¿Olvidaste el PIN?</button>}
     </div>
   );
 }

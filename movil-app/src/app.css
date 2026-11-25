@@ -302,7 +302,7 @@ p.faltan { display: block; margin: 12px 0 0; }
 .alrow b { font-size: 14px; font-weight: 600; }
 .alrow small { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* ---------------- Acceso, PIN, avisos ---------------- */
+/* ---------------- Acceso y avisos ---------------- */
 .acceso { min-height: 100dvh; display: grid; place-items: center; padding: calc(20px + var(--top)) 16px calc(20px + var(--bottom)); }
 .acceso-card { width: 100%; max-width: 380px; display: grid; gap: 14px; }
 .acceso-card .logo { margin: 0 auto; box-shadow: var(--shadow); }
@@ -312,26 +312,6 @@ p.faltan { display: block; margin: 12px 0 0; }
 .acceso-msg { font-size: 13.5px; color: var(--bad); background: var(--bad-soft); border-radius: 10px; padding: 9px 12px; }
 .acceso-msg.ok { color: var(--ok); background: var(--ok-soft); }
 .acceso-card .nota { text-align: center; margin: 0; }
-
-.pin {
-  min-height: 100dvh; background: var(--navy); color: #fff; display: flex; flex-direction: column; align-items: center;
-  padding: calc(48px + var(--top)) 24px calc(24px + var(--bottom)); text-align: center;
-}
-.pin h1 { margin: 18px 0 4px; font-size: 20px; }
-.pin p { margin: 0; color: var(--navy-dim); font-size: 13.5px; }
-.dots { display: flex; gap: 14px; margin: 26px 0 10px; min-height: 14px; }
-.dots i { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--navy-dim); }
-.dots i.on { background: #fff; border-color: #fff; }
-.dots.tiembla { animation: tiembla .32s; }
-@keyframes tiembla { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
-.pin-err { min-height: 20px; font-size: 13px; color: #F4978E; }
-.teclado { display: grid; grid-template-columns: repeat(3, 76px); gap: 14px 22px; margin-top: 14px; }
-.teclado button { width: 76px; height: 76px; border-radius: 50%; border: 0; background: rgba(255,255,255,.1); color: #fff; font-size: 26px; font-weight: 500; display: grid; place-items: center; }
-.teclado button:active { background: rgba(255,255,255,.22); }
-.teclado .ok { background: var(--primary); }
-.teclado .ok:disabled { background: rgba(255,255,255,.05); color: rgba(255,255,255,.3); }
-.teclado .del { background: none; font-size: 22px; }
-.pin .link { margin-top: auto; }
 
 .splash { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; text-align: center; color: var(--ink-2); }
 .splash h2 { margin: 6px 0 0; font-size: 19px; color: var(--ink); }

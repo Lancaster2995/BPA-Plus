@@ -10,6 +10,11 @@ El proyecto de Firebase (`bpa-db`) está en el plan **Spark** y así se queda: e
 Cloud Functions y Cloud Storage, y es la razón de la forma que tiene el backend.
 El harness de regresión vive **fuera** del repo, en `../bpa-plus-test/`.
 
+**Sin PIN (25/11/2026, pedido del usuario).** Se quitó el bloqueo con PIN de la web y del móvil
+(`js/lock.js` borrado): basta la sesión de la cuenta, que Firebase recuerda en el equipo. Lo que
+abajo habla del PIN es historia. Los códigos aceptan una sola letra inicial si le sigue otra sigla
+(`F-ALM-002`, sigla `F` = Formato) en `isStandardCode` de `js/drive.js`.
+
 ---
 
 ## Verificación

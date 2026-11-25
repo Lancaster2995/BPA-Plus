@@ -4,10 +4,10 @@
    de la caché y se actualizan por detrás para la próxima apertura. Un despliegue
    cambia CACHE, el SW nuevo precarga todo y recarga las ventanas abiertas.
    ========================================================================== */
-var CACHE = 'bpa-plus-v84';
+var CACHE = 'bpa-plus-v86';
 var ASSETS = [
-  './', './index.html', './styles.css?v=57', './manifest.json',
-  './js/config.js', './js/cloud.js', './js/auth.js', './js/domain.js?v=2', './js/db.js?v=34', './js/ui.js?v=6', './js/formatos.js?v=51', './js/actas.js?v=48', './js/retiro.js?v=44', './js/views.js?v=65', './js/lock.js?v=6', './js/drive.js?v=58', './js/alerts.js?v=3', './js/avisos.js?v=2', './js/app.js?v=49',
+  './', './index.html', './styles.css?v=58', './manifest.json',
+  './js/config.js', './js/cloud.js', './js/auth.js?v=2', './js/domain.js?v=2', './js/db.js?v=34', './js/ui.js?v=6', './js/formatos.js?v=51', './js/actas.js?v=48', './js/retiro.js?v=44', './js/views.js?v=66', './js/drive.js?v=59', './js/alerts.js?v=3', './js/avisos.js?v=2', './js/app.js?v=50',
   './autoinspecciones/index.html', './autoinspecciones/main.js',
   './icons/icon-44.png?v=6', './icons/icon-192.png?v=6', './icons/icon-512.png?v=6', './icons/icon-maskable-512.png?v=6', './icons/apple-touch-icon.png?v=6'
 ];
@@ -43,8 +43,7 @@ self.addEventListener('push', function (e) {
   }));
 });
 
-/* Tocar el aviso: enfoca la web abierta y le pide abrir las alertas (sin recargar: recargar pediría el
-   PIN); si no hay ninguna, la abre. Las ventanas de /movil/ son de la app móvil, que tiene su propio SW. */
+/* Tocar el aviso: enfoca la web abierta y le pide abrir las alertas (sin recargar); si no hay ninguna, la abre. Las ventanas de /movil/ son de la app móvil, que tiene su propio SW. */
 self.addEventListener('notificationclick', function (e) {
   e.notification.close();
   var ruta = (e.notification.data && e.notification.data.url) || '#/';

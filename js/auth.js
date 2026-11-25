@@ -1,4 +1,4 @@
-/* Inicio de sesión real con Firebase Auth. El PIN sigue protegiendo el dispositivo. */
+/* Inicio de sesión real con Firebase Auth: la sesión queda recordada en el equipo, sin PIN. */
 (function (global) {
   'use strict';
 
@@ -28,7 +28,7 @@
       '<button class="auth-primary" id="authLogin" type="submit">Iniciar sesión</button>' +
       '<button class="auth-secondary" id="authCreate" type="button">Crear mi cuenta</button>' +
       '<button class="auth-link" id="authReset" type="button">Olvidé mi contraseña</button>' +
-      '<p class="auth-note">Después del acceso se pedirá el PIN de este dispositivo.</p></form>';
+      '</form>';
     document.body.appendChild(screen);
 
     var form = document.getElementById('authForm'), email = document.getElementById('authEmail');

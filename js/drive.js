@@ -399,9 +399,10 @@
     if (parts.length && /^\d+$/.test(parts[parts.length - 1])) parts[parts.length - 1] = parts[parts.length - 1].padStart(3, '0');
     return parts.join('-');
   }
-  /* Siglas y número. Qué siglas valen no lo decide la app: lo dice la droguería. */
+  /* Siglas y número. Qué siglas valen no lo decide la app: lo dice la droguería.
+     Una sola letra vale solo si le sigue otra sigla (F-ALM-002), no sola (A-001). */
   function isStandardCode(value) {
-    return /^[A-Z]{2,12}(-[A-Z]{1,12}){0,4}-\d{3,4}$/.test(normalizeCode(value));
+    return /^([A-Z]{2,12}|[A-Z](?=-[A-Z]))(-[A-Z]{1,12}){0,4}-\d{3,4}$/.test(normalizeCode(value));
   }
 
   /* ---------------- Siglas de los códigos ----------------
@@ -410,7 +411,7 @@
      escaneo encuentra una que no conoce, en vez de recodificar el documento con una que
      no le corresponde. */
   var SIGLAS_BASE = {
-    POE: { s: 'POE', k: 'tipo' }, FOR: { s: 'Formato', k: 'tipo' }, FORMATO: { s: 'Formato', k: 'tipo' },
+    POE: { s: 'POE', k: 'tipo' }, F: { s: 'Formato', k: 'tipo' }, FOR: { s: 'Formato', k: 'tipo' }, FORMATO: { s: 'Formato', k: 'tipo' },
     REG: { s: 'Registro', k: 'tipo' }, REGISTRO: { s: 'Registro', k: 'tipo' },
     INS: { s: 'Instructivo', k: 'tipo' }, INSTRUCTIVO: { s: 'Instructivo', k: 'tipo' },
     MAN: { s: 'Manual', k: 'tipo' }, MANUAL: { s: 'Manual', k: 'tipo' }, POL: { s: 'Política', k: 'tipo' },

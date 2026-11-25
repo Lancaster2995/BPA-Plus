@@ -192,7 +192,6 @@
   function accountOptions() {
     return [
       { label: isDark() ? 'Tema claro' : 'Tema oscuro', icon: isDark() ? 'sun' : 'moon', onClick: toggleTheme },
-      { label: 'Cambiar PIN', icon: 'settings', onClick: function () { global.BPAPLUS.lock.openSettings(); } },
       { sep: true },
       { label: 'Importar respaldo', icon: 'upload', onClick: importData },
       { label: 'Exportar respaldo', icon: 'download', onClick: exportData },
@@ -409,7 +408,7 @@
     var saved; try { saved = localStorage.getItem(THEME_KEY); } catch (e) {}
     applyTheme(saved || 'light');
 
-    var Lock = global.BPAPLUS.lock, Auth = global.BPAPLUS.auth;
+    var Auth = global.BPAPLUS.auth;
     function start() {
       V.setStore(store);
       if (global.BPAPLUS.alerts) global.BPAPLUS.alerts.setStore(store, V);
@@ -428,14 +427,10 @@
     }
     function gate(mod) { return new Promise(function (ok) { if (mod) mod.gate(ok); else ok(); }); }
 
-    /* Con el PIN ya creado, su pantalla sale al instante y Firebase (módulos, sesión y datos)
-       carga mientras se escribe: antes el PIN esperaba a Firebase y los datos esperaban al PIN.
-       Si no hay sesión, el login sale encima (z-index mayor). En un equipo sin PIN se mantiene
-       el orden cuenta → PIN, para no pedir un PIN antes de saber de quién es la cuenta. */
+    /* Sin PIN: basta la sesión de la cuenta, que Firebase recuerda en este equipo. */
     var authed = gate(Auth);
-    var unlocked = Lock && Lock.isEnabled() ? gate(Lock) : authed.then(function () { return gate(Lock); });
     var loaded = authed.then(loadData);
-    Promise.all([loaded, unlocked.then(start)]).then(function (r) {
+    Promise.all([loaded, authed.then(start)]).then(function (r) {
       route();
       if (r[0]) refresh();
     }).catch(function (err) {
