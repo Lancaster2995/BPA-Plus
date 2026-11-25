@@ -432,6 +432,12 @@ dependencias (aes128gcm, RFC 8291, y firma VAPID, RFC 8292, con Web Crypto); sol
 - **Dónde vive:** KV `avisos/<uid>` (`{ subs, items, enviados }`), en el mismo namespace que el cupo
   (binding `AVISOS`, otra clave): no hubo que crear nada nuevo en Cloudflare.
 - **iPhone:** iOS 16.4+ y la app abierta desde la pantalla de inicio; en una pestaña de Safari no hay push.
+- **En la PC (18/11):** el panel de Alertas de la web tiene al pie «Activar avisos en este equipo» (mismo
+  `avisos.activar()`; no sale sin sesión ni sin soporte). `sw.js` muestra el push y, al tocarlo, abre las
+  alertas en la web abierta (mensaje `{ ir }`) o abre `#/alertas`, que la web resuelve abriendo el panel.
+  Probado en Chrome headless: suscripción real, push simulado por CDP, `#/alertas`, 1920 y 375.
+  Ojo: con `python -m http.server` el SW de la web no instala (`addAll: Entry already exists`); en
+  producción sí.
 
 Claves: la **pública** está en `js/avisos.js` (`VAPID_KEY`); la **privada** en `worker/.dev.vars`
 (fuera de git) y va como secreto `VAPID_PRIVATE_KEY`. Cambiar una obliga a cambiar la otra y a

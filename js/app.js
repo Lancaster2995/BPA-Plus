@@ -367,6 +367,12 @@
   /* ------------------------------ Router ------------------------------ */
   function route() {
     var h = (location.hash || '').replace(/^#\/?/, '');
+    /* `#/alertas` es a donde lleva un aviso push: abre el panel sobre la vista que haya. */
+    if (h === 'alertas') {
+      h = store.state.view;
+      history.replaceState(null, '', '#/' + h);
+      setTimeout(openAlerts, 0);
+    }
     var view = NAV.filter(function (n) { return n.view === h; })[0] ? h : 'dashboard';
     store.state.view = view;
     /* Fundido nativo entre secciones (View Transitions); sin soporte, cambio directo. Si se
@@ -413,6 +419,10 @@
         if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); openCmd(); }
       });
       window.addEventListener('hashchange', route);
+      // Aviso push tocado con la web ya abierta (sw.js): abrir las alertas sin recargar.
+      if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', function (e) {
+        if (e.data && e.data.ir === '#/alertas') openAlerts();
+      });
       window.addEventListener('online', renderChrome);
       window.addEventListener('offline', renderChrome);
     }

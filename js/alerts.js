@@ -55,7 +55,9 @@
           '<div class="row-meta"><span>' + esc(KIND_LABEL[it.kind]) + '</span></div></div>' +
           '<div class="row-side"><span class="days ' + f.cls + '">' + f.txt + '</span></div></div></div>';
       }).join('') + '</div>' : emptyAlerts(),
+      footer: avisosFoot(),
       onMount: function (root) {
+        wireAvisos(root);
         root.querySelectorAll('[data-alert]').forEach(function (el) {
           el.onclick = function () {
             var it = items[+el.dataset.alert];
@@ -71,6 +73,30 @@
         });
       }
     });
+  }
+
+  /* Avisos push en este equipo (js/avisos.js): el Worker avisa a las 8:00 lo que vence en 7 días o
+     vence hoy, de todas las droguerías. Sin sesión (modo demo) o sin soporte, el pie no aparece. */
+  function avisosFoot() {
+    var A = global.BPAPLUS.avisos, C = global.BPAPLUS.cloud;
+    if (!A || !A.soportado() || !C || !C.getAuth()) return '';
+    return '<button class="btn btn-ghost" id="avisosBtn" type="button" disabled>' + icon('bell', 17) + '<span>Avisos en este equipo…</span></button>' +
+      '<span class="avisos-nota">A 7 días y el día que vence, a las 8:00.</span>';
+  }
+  function wireAvisos(root) {
+    var b = root.querySelector('#avisosBtn'), A = global.BPAPLUS.avisos;
+    if (!b) return;
+    function pintar(estado) {
+      b.disabled = estado !== 'apagado';
+      b.querySelector('span').textContent = estado === 'activo' ? 'Avisos activados en este equipo' :
+        estado === 'activando' ? 'Activando avisos…' : 'Activar avisos en este equipo';
+    }
+    A.activo().then(function (a) { pintar(a ? 'activo' : 'apagado'); }, function () { pintar('apagado'); });
+    b.onclick = function () {
+      pintar('activando');
+      A.activar().then(function () { pintar('activo'); UI.note('Avisos activados en este equipo'); },
+        function (err) { pintar('apagado'); UI.note((err && err.message) || String(err)); });
+    };
   }
 
   function emptyAlerts() {

@@ -142,7 +142,8 @@ local en cada dispositivo.
 La app se conecta directo a tu cuenta desde el navegador — no hay servidor
 propio en el medio. **Desde el 10/11/2026 usa el Client ID de Sentinel** (conector
 universal: todas las apps comparten uno, ver `MAPA.md`). En ese Client ID hay que agregar
-`https://bpa-db.web.app` a los orígenes autorizados. Los pasos de abajo son para crear
+`https://bpa-db.web.app` a los orígenes autorizados. **Desde el 24/11/2026 viene puesto en
+`js/drive.js` (`SENTINEL_CLIENT_ID`)**: la app ya no lo pide. Los pasos de abajo son para crear
 uno, si algún día hiciera falta.
 
 > Esto funciona instalando BPA-Plus como PWA (ver arriba). Un APK nativo que
@@ -161,9 +162,8 @@ uno, si algún día hiciera falta.
    autorizados" agregá la URL oficial de la app,
    `https://bpa-db.web.app` — y `http://localhost:8080` si la
    probás en tu máquina.
-5. Copiá el Client ID (termina en `.apps.googleusercontent.com`) y pegalo
-   en la app cuando te lo pida, la primera vez que uses "Importar de
-   Google Drive" o "Vincular a Google Drive".
+5. Copiá el Client ID (termina en `.apps.googleusercontent.com`) y ponelo en
+   `SENTINEL_CLIENT_ID` de `js/drive.js`.
 
 El token de acceso vive solo en la memoria de la pestaña — se pierde al
 cerrarla y no se guarda en ningún lado; solo el Client ID (que no es

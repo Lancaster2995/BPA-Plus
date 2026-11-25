@@ -48,11 +48,14 @@
   /* Clave nueva a propósito: el Client ID propio de BPA Plus que quedó guardado con la clave
      anterior ya no sirve (con drive.file no vería lo de Sentinel), así que se pide el de Sentinel. */
   var CLAVE_CLIENT_ID = 'bpa-plus-sentinel-client-id';
+  /* El Client ID de Sentinel es público (va en la página) y es el mismo en todas las apps
+     (DataBase, Cosing): va por defecto para no pedirlo en cada navegador. */
+  var SENTINEL_CLIENT_ID = '161641607766-vv5th22dmp45t78tlo7e7drtmr85p85j.apps.googleusercontent.com';
   function getClientId() {
     try {
       var id = localStorage.getItem(CLAVE_CLIENT_ID) || '';
-      return validClientId(id) ? id : '';
-    } catch (e) { return ''; }
+      return validClientId(id) ? id : SENTINEL_CLIENT_ID;
+    } catch (e) { return SENTINEL_CLIENT_ID; }
   }
   function setClientId(id) { try { localStorage.setItem(CLAVE_CLIENT_ID, id); } catch (e) {} }
 

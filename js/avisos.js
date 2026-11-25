@@ -61,12 +61,12 @@
      antes de cualquier otra espera. El Worker guarda el teléfono solo si le llega el aviso de prueba. */
   function activar() {
     return Notification.requestPermission().then(function (permiso) {
-      if (permiso !== 'granted') throw new Error('Notificaciones bloqueadas: actívalas en los ajustes del teléfono para BPA Plus.');
+      if (permiso !== 'granted') throw new Error('Notificaciones bloqueadas: permítelas para BPA Plus en los ajustes del navegador o del teléfono.');
       return navigator.serviceWorker.ready;
     }).then(function (reg) {
       var key = Uint8Array.from(atob(VAPID_KEY.replace(/-/g, '+').replace(/_/g, '/')), function (ch) { return ch.charCodeAt(0); });
       return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }).catch(function () {
-        throw new Error('El teléfono no aceptó la suscripción. En el iPhone, abre BPA Plus desde la pantalla de inicio.');
+        throw new Error('El navegador no aceptó la suscripción. En el iPhone, abre BPA Plus desde la pantalla de inicio.');
       });
     }).then(function (sub) {
       return cloud().callFn('push/subscribe', sub.toJSON());

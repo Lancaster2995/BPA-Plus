@@ -4,10 +4,10 @@
    de la caché y se actualizan por detrás para la próxima apertura. Un despliegue
    cambia CACHE, el SW nuevo precarga todo y recarga las ventanas abiertas.
    ========================================================================== */
-var CACHE = 'bpa-plus-v82';
+var CACHE = 'bpa-plus-v83';
 var ASSETS = [
-  './', './index.html', './styles.css?v=56', './manifest.json',
-  './js/config.js', './js/cloud.js', './js/auth.js', './js/domain.js?v=2', './js/db.js?v=34', './js/ui.js?v=6', './js/formatos.js?v=51', './js/actas.js?v=48', './js/retiro.js?v=44', './js/views.js?v=64', './js/lock.js?v=6', './js/drive.js?v=57', './js/alerts.js?v=2', './js/avisos.js?v=1', './js/app.js?v=48',
+  './', './index.html', './styles.css?v=57', './manifest.json',
+  './js/config.js', './js/cloud.js', './js/auth.js', './js/domain.js?v=2', './js/db.js?v=34', './js/ui.js?v=6', './js/formatos.js?v=51', './js/actas.js?v=48', './js/retiro.js?v=44', './js/views.js?v=64', './js/lock.js?v=6', './js/drive.js?v=58', './js/alerts.js?v=3', './js/avisos.js?v=2', './js/app.js?v=49',
   './autoinspecciones/index.html', './autoinspecciones/main.js',
   './icons/icon-44.png?v=6', './icons/icon-192.png?v=6', './icons/icon-512.png?v=6', './icons/icon-maskable-512.png?v=6', './icons/apple-touch-icon.png?v=6'
 ];
@@ -30,6 +30,28 @@ self.addEventListener('activate', function (e) {
           clients.forEach(function (client) { client.navigate(client.url).catch(function () {}); });
         });
       });
+  }));
+});
+
+/* Avisos push del Worker (worker/avisos.js), como movil-app/public/push-sw.js. Se muestra SIEMPRE:
+   un push sin notificación hace que el navegador retire el permiso. */
+self.addEventListener('push', function (e) {
+  var d = {};
+  try { d = e.data.json(); } catch (err) {}
+  e.waitUntil(self.registration.showNotification(d.title || 'BPA Plus', {
+    body: d.body || 'Tienes vencimientos por revisar.', tag: d.tag, icon: 'icons/icon-192.png?v=6', data: { url: d.url || '#/' }
+  }));
+});
+
+/* Tocar el aviso: enfoca la web abierta y le pide abrir las alertas (sin recargar: recargar pediría el
+   PIN); si no hay ninguna, la abre. Las ventanas de /movil/ son de la app móvil, que tiene su propio SW. */
+self.addEventListener('notificationclick', function (e) {
+  e.notification.close();
+  var ruta = (e.notification.data && e.notification.data.url) || '#/';
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (ws) {
+    var w = ws.filter(function (c) { return new URL(c.url).pathname.indexOf('/movil/') < 0; })[0];
+    if (w) { w.postMessage({ ir: ruta }); return w.focus(); }
+    return self.clients.openWindow('./' + ruta);
   }));
 });
 
